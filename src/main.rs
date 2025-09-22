@@ -1,7 +1,6 @@
 //! R2C2 es un proyecto de Command & Control para red team engagements en Linux y Windows.
 
 mod encrypt;
-
 use std::env;
 use encrypt::generate_agent;
 use std::io::{self, Write};
@@ -42,7 +41,7 @@ fn main() {
             io::stdin().read_line(&mut agent_name).unwrap();
             let agent_name = agent_name.trim();
 
-            match generate_agent(shellcode_file, password, agent_name) {
+            match generate_agent(shellcode_file, password) {
                 Ok(_) => {
                     println!("✅ Agente generado exitosamente");
                     println!("🚀 Compila con: rustc {}.rs -o {}.exe", agent_name, agent_name);

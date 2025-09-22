@@ -10,6 +10,6 @@ pbkdf2 = "0.10"
 sha2 = "0.10"
 hex = "0.4"
 hmac = "0.12"
-winapi = { version = "0.3", features = ["winuser", "processthreadsapi", "memoryapi", "minwinbase", "synchapi", "handleapi", "errhandlingapi"] }
+winapi = { version = "0.3", features = ["winerror", "winnt", "winbase", "ntdef", "minwindef", "winuser", "processthreadsapi", "memoryapi", "minwinbase", "synchapi", "handleapi", "errhandlingapi", "wincrypt"] }
 rand = "0.8"
 cbc = "0.1.2"

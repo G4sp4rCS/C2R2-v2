@@ -1,6 +1,7 @@
 # C2R2
 C2 and Rat written in Rust
 
+## Educational purpose only, do not use it for illegal activities.
 
 ## ToDo
 

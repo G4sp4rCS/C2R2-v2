@@ -3,21 +3,6 @@
 version = 4
 
 [[package]]
-name = "C2R2"
-version = "0.1.0"
-dependencies = [
- "aes",
- "block-modes",
- "cbc",
- "hex",
- "hmac",
- "pbkdf2",
- "rand",
- "sha2",
- "winapi",
-]
-
-[[package]]
 name = "aes"
 version = "0.8.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -26,6 +11,15 @@ dependencies = [
  "cfg-if",
  "cipher 0.4.4",
  "cpufeatures",
+]
+
+[[package]]
+name = "agent"
+version = "0.1.0"
+dependencies = [
+ "aes",
+ "cbc",
+ "winapi",
 ]
 
 [[package]]
@@ -66,6 +60,21 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a8894febbff9f758034a5b8e12d87918f56dfc64a8e1fe757d65e29041538d93"
 dependencies = [
  "generic-array",
+]
+
+[[package]]
+name = "builder"
+version = "0.1.0"
+dependencies = [
+ "aes",
+ "block-modes",
+ "cbc",
+ "hex",
+ "hmac",
+ "pbkdf2",
+ "rand",
+ "sha2",
+ "winapi",
 ]
 
 [[package]]
@@ -180,9 +189,9 @@ dependencies = [
 
 [[package]]
 name = "libc"
-version = "0.2.175"
+version = "0.2.176"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6a82ae493e598baaea5209805c49bbf2ea7de956d50d7da0da1164f9c6d28543"
+checksum = "58f929b4d672ea937a23a1ab494143d968337a5f47e56d0815df1e0890ddf174"
 
 [[package]]
 name = "password-hash"

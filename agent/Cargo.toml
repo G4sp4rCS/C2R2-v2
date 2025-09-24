@@ -1,0 +1,23 @@
+[package]
+name = "agent"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+aes = "0.8"
+cbc = "0.1"
+winapi = { version = "0.3", features = [
+    "winnt",
+    "memoryapi",
+    "processthreadsapi",
+    "synchapi",
+    "winbase",
+    "minwindef",
+    "ntdef",
+    "handleapi"
+] }
+
+[[bin]]
+name = "agent"
+path = "src/main.rs"
+windows_subsystem = "windows"

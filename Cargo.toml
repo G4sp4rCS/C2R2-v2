@@ -2,4 +2,4 @@
 members = [
     "builder",
     "agent"
-]
+, "server"]

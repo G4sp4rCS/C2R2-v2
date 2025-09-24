@@ -14,7 +14,7 @@ Cargo.lock
 *.d
 
 # Config generado automáticamente por el builder
-agent/src/config.rs
+#agent/src/config.rs
 
 # Ejecutables finales
 *.exe

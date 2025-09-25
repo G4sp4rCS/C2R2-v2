@@ -6,18 +6,15 @@ edition = "2021"
 [dependencies]
 aes = "0.8"
 cbc = "0.1"
-winapi = { version = "0.3", features = [
-    "winnt",
-    "memoryapi",
-    "processthreadsapi",
-    "synchapi",
-    "winbase",
-    "minwindef",
-    "ntdef",
-    "handleapi"
-] }
+winapi = { version = "0.3", features = ["winnt", "memoryapi", "processthreadsapi", "synchapi", "winbase", "minwindef"] }
 
 [[bin]]
 name = "agent"
 path = "src/main.rs"
-windows_subsystem = "windows"
+
+# TEMPORALMENTE para debug - comentar después
+[profile.release]
+panic = "abort"
+lto = true
+codegen-units = 1
+# strip = true  # Comentar para mantener símbolos de debug

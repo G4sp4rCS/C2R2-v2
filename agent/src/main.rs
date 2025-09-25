@@ -1,4 +1,5 @@
 // #![windows_subsystem = "windows"]
+#![windows_subsystem = "console"] // debug mode
 
 mod config;
 

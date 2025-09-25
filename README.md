@@ -6,7 +6,7 @@ C2 and Rat written in Rust
 ## ToDo
 
 - [x] Que no aparezca la consola del agente
-- [ ] Crear un listener para tener multiples conexiones simultaneas con diferentes agentes
+- [x] Crear un listener para tener multiples conexiones simultaneas con diferentes agentes
 - [ ] Mejorar la ofuscación del agente
 
 ### Crear persistencia

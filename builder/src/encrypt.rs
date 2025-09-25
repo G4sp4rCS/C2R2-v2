@@ -59,10 +59,11 @@ pub fn generate_agent(shellcode_file: &str, output_name: &str) -> Result<(), Box
 
     println!("✅ Configuración escrita en agent/src/config.rs");
 
-    // Compilar el crate agent
-    let output = Command::new("cargo")
-        .args(&["build", "--release", "-p", "agent"])
-        .output()?;
+        // Compilar el crate agent
+        let output = Command::new("cargo")
+            .args(&["build", "--release", "-p", "agent", "--target", "x86_64-pc-windows-gnu"])
+            .output()?;
+
 
     if output.status.success() {
         println!("✅ Compilación exitosa!");

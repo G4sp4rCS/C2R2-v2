@@ -38,7 +38,7 @@ struct ClientHandle {
 // Maneja la comunicación con un cliente
 async fn handle_client(
     id: ClientId,
-    mut stream: TcpStream,
+    stream: TcpStream,
     clients: Arc<Mutex<HashMap<ClientId, ClientHandle>>>,
 ) {
     let addr = stream.peer_addr().unwrap().to_string();
@@ -103,7 +103,7 @@ async fn handle_client(
             if !response.is_empty() {
                 println!("\n📨 Respuesta del cliente [{}]:\n{}\n", id, response);
                 print!("> ");
-                io::stdout().flush().unwrap();
+                let _ = io::stdout().flush();
             }
         }
     });
@@ -160,7 +160,7 @@ async fn main() {
 
     loop {
         print!("> ");
-        io::stdout().flush().unwrap();
+        let _ = io::stdout().flush();
 
         if let Some(Ok(line)) = lines.next() {
             let parts: Vec<&str> = line.trim().split_whitespace().collect();
@@ -185,10 +185,10 @@ async fn main() {
                         println!("  No hay clientes conectados");
                     } else {
                         println!("📋 Clientes conectados:");
-                        println!("{:<5} {:<18}", "ID", "Dirección");
-                        println!("{}", "-".repeat(30));
+                        println!("{:<5} {:<25}", "ID", "Dirección");
+                        println!("{}", "-".repeat(35));
                         for (id, client) in clients.iter() {
-                            println!("{:<5} {:<18}", id, client.addr);
+                            println!("{:<5} {:<25}", id, client.addr);
                         }
                     }
                 }
@@ -203,9 +203,9 @@ async fn main() {
                         if clients.contains_key(&id) {
                             *selected_client.lock().unwrap() = Some(id);
                             println!("✅ Cliente [{}] seleccionado", id);
-                            println!("ℹ️ Ahora puedes usar /cmd <comando> para enviar comandos a este cliente");
+                            println!("ℹ️ Ahora puedes usar /cmd <comando>");
                         } else {
-                            println!("❌ Cliente no encontrado");
+                            println!("❌ Cliente {} no encontrado", id);
                         }
                     } else {
                         println!("❌ ID inválido");
@@ -217,9 +217,10 @@ async fn main() {
                         continue;
                     }
                     
-                    let selected = selected_client.lock().unwrap();
-                    if let Some(id) = *selected {
-                        let command = parts[1..].join(" ");
+                    let command = parts[1..].join(" ");
+                    let selected = *selected_client.lock().unwrap();
+                    
+                    if let Some(id) = selected {
                         let clients = clients.lock().unwrap();
                         
                         if let Some(client) = clients.get(&id) {
@@ -229,12 +230,11 @@ async fn main() {
                                 println!("📤 Comando enviado a [{}]: {}", id, command);
                             }
                         } else {
-                            println!("❌ Cliente no encontrado");
-                            drop(selected); // Liberar el lock antes de modificar
+                            println!("❌ Cliente {} no encontrado, deseleccionando", id);
                             *selected_client.lock().unwrap() = None;
                         }
                     } else {
-                        println!("❌ No hay cliente seleccionado. Use /select <id> primero");
+                        println!("❌ No hay cliente seleccionado. Use /select <id>");
                     }
                 }
                 "/cmd_all" => {
@@ -249,13 +249,14 @@ async fn main() {
                     if clients.is_empty() {
                         println!("❌ No hay clientes conectados");
                     } else {
+                        let mut count = 0;
                         for (id, client) in clients.iter() {
-                            if let Err(e) = client.tx.send(command.clone()) {
-                                println!("❌ Error enviando a [{}]: {}", id, e);
-                            } else {
-                                println!("📤 Comando enviado a [{}]: {}", id, command);
+                            if client.tx.send(command.clone()).is_ok() {
+                                println!("📤 Comando enviado a [{}]", id);
+                                count += 1;
                             }
                         }
+                        println!("✅ Comando enviado a {} cliente(s)", count);
                     }
                 }
                 "/exit" | "/quit" => {

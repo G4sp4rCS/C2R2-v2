@@ -45,11 +45,34 @@ pub fn generate_agent(
     // Compilar el agente
     println!("🔨 Compilando agente para Windows...");
     
+    // Verificar que el manifest existe
+    if !std::path::Path::new(agent_path).exists() {
+        return Err(format!("❌ No se encontró el directorio del agente: {}", agent_path).into());
+    }
+    
     // Convertir el path relativo a absoluto
     let agent_absolute = std::fs::canonicalize(agent_path)?;
     let manifest_path = agent_absolute.join("Cargo.toml");
     
+    if !manifest_path.exists() {
+        return Err(format!("❌ No se encontró Cargo.toml en: {}", manifest_path.display()).into());
+    }
+    
     println!("📁 Manifest path: {}", manifest_path.display());
+    
+    // Verificar que el target está instalado
+    println!("🔍 Verificando target x86_64-pc-windows-gnu...");
+    let check_target = Command::new("rustup")
+        .args(&["target", "list", "--installed"])
+        .output()?;
+    
+    let installed_targets = String::from_utf8_lossy(&check_target.stdout);
+    if !installed_targets.contains("x86_64-pc-windows-gnu") {
+        eprintln!("\n⚠️  El target x86_64-pc-windows-gnu NO está instalado.");
+        eprintln!("📦 Instálalo con: rustup target add x86_64-pc-windows-gnu");
+        return Err("Target no instalado".into());
+    }
+    println!("✅ Target x86_64-pc-windows-gnu instalado");
     
     let output = Command::new("cargo")
         .args(&[
@@ -63,9 +86,13 @@ pub fn generate_agent(
         .output()?;
 
     if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        eprintln!("STDOUT:\n{}", stdout);
+        eprintln!("STDERR:\n{}", stderr);
         return Err(format!(
             "Error compilando el agente:\n{}",
-            String::from_utf8_lossy(&output.stderr)
+            stderr
         )
         .into());
     }

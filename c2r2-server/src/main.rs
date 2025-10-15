@@ -630,7 +630,7 @@ async fn main() {
                         match fs::read(local_path) {
                             Ok(file_data) => {
                                 let encoded = base64_encode(&file_data);
-                                let command = format!("__UPLOAD__:{}:{}", remote_path, encoded);
+                                let command = format!("__UPLOAD__|{}|{}", remote_path, encoded);
                                 
                                 let clients = clients.lock().unwrap();
                                 if let Some(client) = clients.get(&id) {

@@ -56,8 +56,8 @@ fn handle_connection(stream: TcpStream) {
                     let response = download_file(path);
                     writer.write_all(response.as_bytes()).ok();
                     writer.flush().ok();
-                } else if command.starts_with("__UPLOAD__:") {
-                    // Formato: __UPLOAD__:ruta_destino:datos_base64
+                } else if command.starts_with("__UPLOAD__|") {
+                    // Formato: __UPLOAD__|ruta_destino|datos_base64
                     println!("DEBUG: Procesando upload...");
                     let response = upload_file(command);
                     writer.write_all(response.as_bytes()).ok();
@@ -148,17 +148,18 @@ fn download_file(file_path: &str) -> String {
 }
 
 fn upload_file(command: &str) -> String {
-    // Formato: __UPLOAD__:ruta_destino:datos_base64
-    let parts: Vec<&str> = command.splitn(3, ':').collect();
+    // Formato: __UPLOAD__|ruta_destino|datos_base64
+    let parts: Vec<&str> = command.splitn(3, '|').collect();
     
     if parts.len() != 3 {
         return format!("__ERROR__:Formato de upload inválido{}", DELIMITER);
     }
     
     let dest_path = parts[1];
-    let encoded_data = parts[2];
+    let encoded_data = parts[2].trim(); // TRIM para eliminar \n y espacios
     
     println!("DEBUG: Decodificando {} bytes de base64", encoded_data.len());
+    println!("DEBUG: Ruta destino: {}", dest_path);
     
     match base64_decode(encoded_data) {
         Ok(file_data) => {

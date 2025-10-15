@@ -57,8 +57,9 @@ C2R2 v2.0 ahora incluye capacidades completas de transferencia de archivos entre
 ```
 
 ### Flujo
+
 1. Servidor lee archivo local y lo codifica en Base64
-2. Servidor envía: `__UPLOAD__:ruta_destino:datos_base64`
+2. Servidor envía: `__UPLOAD__|ruta_destino|datos_base64` (usa pipe `|` en vez de `:`)
 3. Agente decodifica los datos
 4. Agente escribe el archivo en la ruta especificada
 5. Agente responde: `__SUCCESS__:Archivo guardado en ruta<<END>>`
@@ -84,16 +85,20 @@ Archivo guardado en C:\Users\Public\svchost.exe
 ### Protocolo de Comunicación
 
 #### Download
-```
+
+```text
 Servidor → Agente: __DOWNLOAD__:C:\path\file.txt
 Agente → Servidor: __FILE__:file.txt:1024:SGVsbG8gV29ybGQ=\n<<END>>\n
 ```
 
 #### Upload
-```
-Servidor → Agente: __UPLOAD__:C:\path\file.txt:SGVsbG8gV29ybGQ=
+
+```text
+Servidor → Agente: __UPLOAD__|C:\path\file.txt|SGVsbG8gV29ybGQ=
 Agente → Servidor: __SUCCESS__:Archivo guardado en C:\path\file.txt\n<<END>>\n
 ```
+
+**Nota**: Upload usa `|` (pipe) como delimitador en lugar de `:` para evitar conflictos con rutas de Windows (`C:\`).
 
 ### Base64 Encoding/Decoding
 

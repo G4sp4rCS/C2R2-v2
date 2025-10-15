@@ -1,20 +1,17 @@
 [package]
 name = "agent"
-version = "0.1.0"
+version = "2.0.0"
 edition = "2021"
 
 [dependencies]
-aes = "0.8"
-cbc = "0.1"
-winapi = { version = "0.3", features = ["winnt", "memoryapi", "processthreadsapi", "synchapi", "winbase", "minwindef"] }
+# Ya no necesitamos AES - conexión directa sin shellcode
 
 [[bin]]
 name = "agent"
 path = "src/main.rs"
 
-# TEMPORALMENTE para debug - comentar después
 [profile.release]
 panic = "abort"
 lto = true
 codegen-units = 1
-# strip = true  # Comentar para mantener símbolos de debug
+# strip = true  # Descomentar para producción

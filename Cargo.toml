@@ -1,5 +1,7 @@
 [workspace]
 members = [
     "builder",
-    "agent"
-, "c2r2-server"]
+    "agent",
+    "c2r2-server",
+    "stealer-dll"
+]

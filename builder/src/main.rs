@@ -1,57 +1,42 @@
 //! R2C2 es un proyecto de Command & Control para red team engagements en Linux y Windows.
 
 mod encrypt;
-use std::env;
+
+use clap::Parser;
 use encrypt::generate_agent;
-use std::io::{self, Write};
+
+#[derive(Parser)]
+#[command(name = "c2r2-builder")]
+#[command(about = "C2R2 Agent Builder - Genera agentes encriptados", long_about = None)]
+struct Args {
+    /// Archivo de shellcode a encriptar
+    shellcode: String,
+    
+    /// Nombre del agente generado (sin extensión .exe)
+    #[arg(short, long)]
+    name: String,
+    
+    /// Servidor C2 (IP:Puerto)
+    #[arg(short, long, default_value = "127.0.0.1:4444")]
+    server: String,
+}
 
 fn main() {
-    let args: Vec<String> = env::args().collect();
+    let args = Args::parse();
 
-    if args.len() < 2 {
-        println!("R2C2 - Red Team Command & Control");
-        println!("Uso:");
-        println!("  {} --encrypt <shellcode.bin>", args[0]);
-        return;
-    }
+    println!("🔧 C2R2 Agent Builder v1.0");
+    println!("📁 Shellcode: {}", args.shellcode);
+    println!("🏷️  Agente: {}", args.name);
+    println!("🌐 Servidor C2: {}", args.server);
+    println!("{}", "-".repeat(50));
 
-    match args[1].as_str() {
-        "--encrypt" => {
-            if args.len() < 3 {
-                println!("❌ Error: Especifica el archivo de shellcode");
-                println!("Uso: {} --encrypt shellcode.bin", args[0]);
-                return;
-            }
-
-            let shellcode_file = &args[2];
-            
-            // Solicitar contraseña
-            print!("🔐 Ingresa la contraseña para encriptar: ");
-            io::stdout().flush().unwrap();
-            
-            let mut password = String::new();
-            io::stdin().read_line(&mut password).unwrap();
-            let password = password.trim();
-
-            // Solicitar nombre del agente
-            print!("📝 Nombre del agente (sin extensión): ");
-            io::stdout().flush().unwrap();
-            
-            let mut agent_name = String::new();
-            io::stdin().read_line(&mut agent_name).unwrap();
-            let agent_name = agent_name.trim();
-
-            match generate_agent(shellcode_file, password) {
-                Ok(_) => {
-                    println!("✅ Agente generado exitosamente");
-                    println!("🚀 Compila con: rustc {}.rs -o {}.exe", agent_name, agent_name);
-                }
-                Err(e) => println!("❌ Error: {}", e),
-            }
+    match generate_agent(&args.shellcode, &args.name, &args.server) {
+        Ok(_) => {
+            println!("✅ Agente generado exitosamente");
         }
-        _ => {
-            println!("❌ Opción no reconocida: {}", args[1]);
-            println!("Opciones disponibles: --encrypt");
+        Err(e) => {
+            eprintln!("❌ Error: {}", e);
+            std::process::exit(1);
         }
     }
 }

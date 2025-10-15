@@ -161,6 +161,7 @@ dependencies = [
  "aes",
  "block-modes",
  "cbc",
+ "clap",
  "hex",
  "hmac",
  "pbkdf2",

@@ -74,6 +74,24 @@ pub fn generate_agent(
     }
     println!("✅ Target x86_64-pc-windows-gnu instalado");
     
+    // Verificar que mingw-w64 está instalado (linker necesario)
+    println!("🔍 Verificando linker mingw-w64...");
+    let check_linker = Command::new("which")
+        .arg("x86_64-w64-mingw32-gcc")
+        .output();
+    
+    match check_linker {
+        Ok(output) if output.status.success() => {
+            println!("✅ Linker x86_64-w64-mingw32-gcc encontrado");
+        }
+        _ => {
+            eprintln!("\n⚠️  El linker x86_64-w64-mingw32-gcc NO está instalado.");
+            eprintln!("📦 Instálalo con: sudo apt install mingw-w64");
+            eprintln!("💡 Este linker es necesario para compilar para Windows desde Linux");
+            return Err("Linker mingw-w64 no instalado".into());
+        }
+    }
+    
     let output = Command::new("cargo")
         .args(&[
             "build",

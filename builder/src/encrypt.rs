@@ -92,7 +92,23 @@ pub fn generate_agent(
         }
     }
     
-    let output = Command::new("cargo")
+    // Obtener el path de cargo desde rustup (más confiable que buscar en PATH)
+    let cargo_path = Command::new("rustup")
+        .args(&["which", "cargo"])
+        .output()
+        .ok()
+        .and_then(|out| {
+            if out.status.success() {
+                String::from_utf8(out.stdout).ok().map(|s| s.trim().to_string())
+            } else {
+                None
+            }
+        })
+        .unwrap_or_else(|| "cargo".to_string());
+    
+    println!("🔧 Usando cargo: {}", cargo_path);
+    
+    let output = Command::new(cargo_path)
         .args(&[
             "build",
             "--release",

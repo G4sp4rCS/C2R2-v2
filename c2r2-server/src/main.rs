@@ -4,7 +4,7 @@ use tokio::sync::mpsc;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::io::{self, BufRead};
+use std::io::{self, BufRead, Write};
 use clap::Parser;
 
 type ClientId = u64;
@@ -55,7 +55,7 @@ async fn handle_client(
         });
     }
 
-    let (reader, mut writer) = stream.split();
+    let (reader, mut writer) = stream.into_split();
     let mut reader = BufReader::new(reader);
 
     // Tarea para enviar comandos al cliente

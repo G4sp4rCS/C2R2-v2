@@ -11,9 +11,16 @@ pub fn generate_agent(
 ) -> Result<(), Box<dyn std::error::Error>> {
     println!("🔧 Generando configuración del agente...");
 
+    // Detectar si estamos en target/release o en raíz
+    let base_path = if std::path::Path::new("../../agent").exists() {
+        "../../agent"
+    } else {
+        "agent"
+    };
+
     // Crear config.rs
-    let config_file_path = "agent/src/config.rs";
-    let mut config_file = File::create(config_file_path)?;
+    let config_file_path = format!("{}/src/config.rs", base_path);
+    let mut config_file = File::create(&config_file_path)?;
 
     writeln!(
         config_file,
@@ -31,10 +38,15 @@ pub fn generate_agent(
     // Compilar el agente
     println!("🔨 Compilando agente para Windows...");
 
-    let agent_path = "agent";
     let output = Command::new("cargo")
-        .args(&["build", "--release", "--target", "x86_64-pc-windows-gnu"])
-        .current_dir(agent_path)
+        .args(&[
+            "build",
+            "--release",
+            "--target",
+            "x86_64-pc-windows-gnu",
+            "--manifest-path",
+            &format!("{}/Cargo.toml", base_path),
+        ])
         .output()?;
 
     if !output.status.success() {
@@ -46,10 +58,10 @@ pub fn generate_agent(
     }
 
     // Copiar el ejecutable
-    let src_exe = "agent/target/x86_64-pc-windows-gnu/release/agent.exe";
+    let src_exe = format!("{}/target/x86_64-pc-windows-gnu/release/agent.exe", base_path);
     let dest_exe = format!("{}.exe", output_name);
 
-    std::fs::copy(src_exe, &dest_exe)?;
+    std::fs::copy(&src_exe, &dest_exe)?;
 
     println!("✅ Agente compilado: {}", dest_exe);
     println!("📦 Listo para despliegue");

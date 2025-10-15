@@ -4,12 +4,13 @@ use tokio::sync::mpsc;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::io::{self, BufRead, Write};
 use clap::Parser;
 use chrono::Local;
 use colored::*;
 use prettytable::{Table, Row, Cell, format};
 use std::fs;
+use rustyline::error::ReadlineError;
+use rustyline::DefaultEditor;
 
 type ClientId = u64;
 
@@ -443,26 +444,32 @@ async fn main() {
         }
     });
 
-    // Loop para comandos del usuario
-    let stdin = io::stdin();
-    let mut lines = stdin.lock().lines();
+    // Loop para comandos del usuario con rustyline
+    let mut rl = DefaultEditor::new().expect("No se pudo inicializar rustyline");
+    
+    // Intentar cargar historial
+    let history_file = ".c2r2_history";
+    let _ = rl.load_history(history_file);
 
     loop {
         // Mostrar prompt con cliente seleccionado
         let selected = *selected_client.lock().unwrap();
-        if let Some(id) = selected {
-            print!("{} ", format!("C2R2[{}]>", id).bright_green().bold());
+        let prompt = if let Some(id) = selected {
+            format!("{} ", format!("C2R2[{}]>", id).bright_green().bold())
         } else {
-            print!("{} ", "C2R2>".bright_blue().bold());
-        }
-        let _ = io::stdout().flush();
+            format!("{} ", "C2R2>".bright_blue().bold())
+        };
 
-        if let Some(Ok(line)) = lines.next() {
-            let parts: Vec<&str> = line.trim().split_whitespace().collect();
-            
-            if parts.is_empty() {
-                continue;
-            }
+        match rl.readline(&prompt) {
+            Ok(line) => {
+                // Agregar al historial
+                let _ = rl.add_history_entry(line.as_str());
+                
+                let parts: Vec<&str> = line.trim().split_whitespace().collect();
+                
+                if parts.is_empty() {
+                    continue;
+                }
 
             match parts[0] {
                 "/help" => {
@@ -732,6 +739,8 @@ async fn main() {
                     println!();
                     println!("{}", "👋 Cerrando C2R2 Server...".bright_yellow().bold());
                     println!();
+                    // Guardar historial antes de salir
+                    let _ = rl.save_history(history_file);
                     std::process::exit(0);
                 }
                 _ => {
@@ -741,6 +750,25 @@ async fn main() {
                         "/help".bright_cyan()
                     );
                 }
+            }
+            },
+            Err(ReadlineError::Interrupted) => {
+                // Ctrl+C presionado
+                println!();
+                println!("{}", "👋 Cerrando C2R2 Server...".bright_yellow().bold());
+                let _ = rl.save_history(history_file);
+                std::process::exit(0);
+            },
+            Err(ReadlineError::Eof) => {
+                // Ctrl+D presionado
+                println!();
+                println!("{}", "👋 Cerrando C2R2 Server...".bright_yellow().bold());
+                let _ = rl.save_history(history_file);
+                std::process::exit(0);
+            },
+            Err(err) => {
+                eprintln!("{} Error: {:?}", "❌".bright_red(), err);
+                break;
             }
         }
     }

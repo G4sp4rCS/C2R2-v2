@@ -131,79 +131,81 @@ async fn handle_client(
     // Tarea para recibir respuestas del cliente
     let info = client_info.clone();
     let recv_task = tokio::spawn(async move {
-        let mut buffer = String::new();
-        let mut last_command = String::new();
+        let mut command_buffer = String::new();
         
         loop {
-            buffer.clear();
-            
-            // Leer hasta encontrar el delimitador
-            loop {
-                let mut line = String::new();
-                match reader.read_line(&mut line).await {
-                    Ok(0) => {
-                        if verbose {
-                            println!("🔌 Cliente {} cerró la conexión", id);
-                        }
-                        return;
+            let mut line = String::new();
+            match reader.read_line(&mut line).await {
+                Ok(0) => {
+                    if verbose {
+                        println!("🔌 Cliente {} cerró la conexión", id);
                     }
-                    Ok(_) => {
-                        buffer.push_str(&line);
-                        if buffer.contains(DELIMITER) {
-                            break;
+                    return;
+                }
+                Ok(_) => {
+                    // Si es sysinfo, procesar inmediatamente
+                    if line.starts_with("__SYSINFO__:") {
+                        // Formato: __SYSINFO__:tipo:valor
+                        let parts: Vec<&str> = line.trim().splitn(3, ':').collect();
+                        if parts.len() >= 3 {
+                            let mut info = info.lock().unwrap();
+                            match parts[1] {
+                                "hostname" => {
+                                    info.hostname = Some(parts[2].to_string());
+                                    if verbose {
+                                        println!("📝 Cliente [{}] hostname: {}", id, parts[2]);
+                                    }
+                                }
+                                "username" => {
+                                    info.username = Some(parts[2].to_string());
+                                    if verbose {
+                                        println!("📝 Cliente [{}] username: {}", id, parts[2]);
+                                    }
+                                }
+                                "os" => {
+                                    info.os_version = Some(parts[2].to_string());
+                                    if verbose {
+                                        println!("📝 Cliente [{}] OS: {}", id, parts[2]);
+                                    }
+                                }
+                                "privileges" => {
+                                    info.privileges = Some(parts[2].to_string());
+                                    if verbose {
+                                        println!("📝 Cliente [{}] privileges: {}", id, parts[2]);
+                                    }
+                                }
+                                _ => {}
+                            }
                         }
+                        continue;
                     }
-                    Err(e) => {
+                    
+                    // Si es pong, ignorar
+                    if line.trim() == "pong" {
                         if verbose {
-                            eprintln!("⚠️ Error leyendo de cliente {}: {}", id, e);
+                            println!("🏓 Pong recibido de cliente [{}]", id);
                         }
-                        return;
+                        continue;
+                    }
+                    
+                    // Para comandos, acumular hasta encontrar delimitador
+                    command_buffer.push_str(&line);
+                    if command_buffer.contains(DELIMITER) {
+                        let response = command_buffer.replace(DELIMITER, "").trim().to_string();
+                        if !response.is_empty() {
+                            println!("\n📨 Respuesta del cliente [{}]:", id);
+                            println!("{}", response);
+                            println!();
+                        }
+                        command_buffer.clear();
                     }
                 }
-            }
-            
-            // Remover delimitador y mostrar respuesta
-            let response = buffer.replace(DELIMITER, "").trim().to_string();
-            
-            // Detectar respuestas de recon automático
-            if response.starts_with("__SYSINFO__") {
-                let parts: Vec<&str> = response.split("::").collect();
-                if parts.len() >= 2 {
-                    let mut info = info.lock().unwrap();
-                    match parts[0] {
-                        "__SYSINFO__HOSTNAME" => {
-                            info.hostname = Some(parts[1].to_string());
-                            if verbose {
-                                println!("📝 Cliente [{}] hostname: {}", id, parts[1]);
-                            }
-                        }
-                        "__SYSINFO__USERNAME" => {
-                            info.username = Some(parts[1].to_string());
-                            if verbose {
-                                println!("📝 Cliente [{}] username: {}", id, parts[1]);
-                            }
-                        }
-                        "__SYSINFO__OS" => {
-                            info.os_version = Some(parts[1].to_string());
-                            if verbose {
-                                println!("📝 Cliente [{}] OS: {}", id, parts[1]);
-                            }
-                        }
-                        "__SYSINFO__PRIV" => {
-                            info.privileges = Some(parts[1].to_string());
-                            if verbose {
-                                println!("📝 Cliente [{}] privileges: {}", id, parts[1]);
-                            }
-                        }
-                        _ => {}
+                Err(e) => {
+                    if verbose {
+                        eprintln!("⚠️ Error leyendo de cliente {}: {}", id, e);
                     }
+                    return;
                 }
-            } else if !response.is_empty() && response != "pong" {
-                println!("\n📨 Respuesta del cliente [{}]:\n{}\n", id, response);
-                print!("> ");
-                let _ = io::stdout().flush();
-            } else if verbose && response == "pong" {
-                println!("🏓 Pong recibido de cliente [{}]", id);
             }
         }
     });

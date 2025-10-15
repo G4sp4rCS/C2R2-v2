@@ -591,7 +591,7 @@ async fn main() {
                         continue;
                     }
                     
-                    let remote_path = parts[1..].join(" ");
+                    let remote_path = parts[1..].join(" ").trim_matches('"').to_string(); // Remove quotes
                     let selected = *selected_client.lock().unwrap();
                     
                     if let Some(id) = selected {
@@ -621,16 +621,28 @@ async fn main() {
                         continue;
                     }
                     
-                    let local_path = parts[1];
-                    let remote_path = parts[2..].join(" ");
+                    let local_path = parts[1].trim_matches('"'); // Remove quotes
+                    let remote_path = parts[2..].join(" ").trim_matches('"').to_string(); // Remove quotes and join
                     let selected = *selected_client.lock().unwrap();
                     
                     if let Some(id) = selected {
+                        // Verificar si el path remoto es un directorio (termina en \)
+                        let final_remote_path = if remote_path.ends_with('\\') || remote_path.ends_with('/') {
+                            // Si es directorio, agregar el nombre del archivo local
+                            let filename = std::path::Path::new(local_path)
+                                .file_name()
+                                .and_then(|n| n.to_str())
+                                .unwrap_or("uploaded_file");
+                            format!("{}{}", remote_path, filename)
+                        } else {
+                            remote_path
+                        };
+                        
                         // Leer archivo local
                         match fs::read(local_path) {
                             Ok(file_data) => {
                                 let encoded = base64_encode(&file_data);
-                                let command = format!("__UPLOAD__|{}|{}", remote_path, encoded);
+                                let command = format!("__UPLOAD__|{}|{}", final_remote_path, encoded);
                                 
                                 let clients = clients.lock().unwrap();
                                 if let Some(client) = clients.get(&id) {
@@ -643,7 +655,7 @@ async fn main() {
                                         println!("{}", "╚═══════════════════════════════════════════════════════════╝".bright_cyan());
                                         println!();
                                         println!("  {} {}", "📄 Local:".bright_green().bold(), local_path.bright_white());
-                                        println!("  {} {}", "🎯 Remoto:".bright_green().bold(), remote_path.bright_white());
+                                        println!("  {} {}", "🎯 Remoto:".bright_green().bold(), final_remote_path.bright_white());
                                         println!("  {} {}", "📊 Tamaño:".bright_green().bold(), format!("{} bytes", file_data.len()).bright_white());
                                         println!();
                                     }
@@ -653,7 +665,7 @@ async fn main() {
                                 }
                             }
                             Err(e) => {
-                                println!("{} Error leyendo archivo local: {}", "❌".bright_red(), e);
+                                println!("{} Error leyendo archivo local '{}': {}", "❌".bright_red(), local_path, e);
                             }
                         }
                     } else {

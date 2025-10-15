@@ -37,9 +37,10 @@ struct ClientHandle {
 
 // Maneja la comunicación con un cliente
 async fn handle_client(
-    id: ClientId,
+    id: ClientId, 
     stream: TcpStream,
     clients: Arc<Mutex<HashMap<ClientId, ClientHandle>>>,
+    verbose: bool,
 ) {
     let addr = stream.peer_addr().unwrap().to_string();
     println!("🔗 Nuevo cliente [{}] desde {}", id, addr);
@@ -58,17 +59,43 @@ async fn handle_client(
     let (reader, mut writer) = stream.into_split();
     let mut reader = BufReader::new(reader);
 
-    // Tarea para enviar comandos al cliente
+    // Tarea para enviar comandos al cliente con keep-alive
     let send_task = tokio::spawn(async move {
-        while let Some(cmd) = rx.recv().await {
-            let message = format!("{}\n", cmd);
-            if let Err(e) = writer.write_all(message.as_bytes()).await {
-                eprintln!("❌ Error enviando a cliente: {}", e);
-                break;
-            }
-            if let Err(e) = writer.flush().await {
-                eprintln!("❌ Error en flush: {}", e);
-                break;
+        let mut ping_interval = tokio::time::interval(tokio::time::Duration::from_secs(30));
+        ping_interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+        
+        loop {
+            tokio::select! {
+                Some(cmd) = rx.recv() => {
+                    let message = format!("{}\n", cmd);
+                    if let Err(e) = writer.write_all(message.as_bytes()).await {
+                        if verbose {
+                            eprintln!("❌ Error enviando a cliente {}: {}", id, e);
+                        }
+                        break;
+                    }
+                    if let Err(e) = writer.flush().await {
+                        if verbose {
+                            eprintln!("❌ Error en flush cliente {}: {}", id, e);
+                        }
+                        break;
+                    }
+                }
+                _ = ping_interval.tick() => {
+                    // Enviar ping silencioso para mantener conexión viva
+                    if verbose {
+                        println!("🏓 Enviando ping a cliente [{}]", id);
+                    }
+                    if let Err(_) = writer.write_all(b"ping\n").await {
+                        if verbose {
+                            eprintln!("❌ Error en ping a cliente {}", id);
+                        }
+                        break;
+                    }
+                    if let Err(_) = writer.flush().await {
+                        break;
+                    }
+                }
             }
         }
     });
@@ -84,7 +111,12 @@ async fn handle_client(
             loop {
                 let mut line = String::new();
                 match reader.read_line(&mut line).await {
-                    Ok(0) => return,
+                    Ok(0) => {
+                        if verbose {
+                            println!("🔌 Cliente {} cerró la conexión", id);
+                        }
+                        return;
+                    }
                     Ok(_) => {
                         buffer.push_str(&line);
                         if buffer.contains(DELIMITER) {
@@ -92,7 +124,9 @@ async fn handle_client(
                         }
                     }
                     Err(e) => {
-                        eprintln!("⚠️ Error leyendo de cliente {}: {}", id, e);
+                        if verbose {
+                            eprintln!("⚠️ Error leyendo de cliente {}: {}", id, e);
+                        }
                         return;
                     }
                 }
@@ -100,10 +134,14 @@ async fn handle_client(
             
             // Remover delimitador y mostrar respuesta
             let response = buffer.replace(DELIMITER, "").trim().to_string();
-            if !response.is_empty() {
+            
+            // No mostrar respuestas de pong (keep-alive)
+            if !response.is_empty() && response != "pong" {
                 println!("\n📨 Respuesta del cliente [{}]:\n{}\n", id, response);
                 print!("> ");
                 let _ = io::stdout().flush();
+            } else if verbose && response == "pong" {
+                println!("🏓 Pong recibido de cliente [{}]", id);
             }
         }
     });
@@ -126,6 +164,9 @@ async fn main() {
     println!("🚀 C2R2 Server v1.0");
     println!("🔗 Escuchando en {}:{}", args.bind, args.port);
     println!("📝 Use /help para ver comandos disponibles");
+    if args.verbose {
+        println!("🔍 Modo verbose activado");
+    }
     println!("{}", "-".repeat(50));
 
     let listener = TcpListener::bind(format!("{}:{}", args.bind, args.port))
@@ -139,13 +180,14 @@ async fn main() {
     // Tarea para aceptar conexiones
     let clients_clone = clients.clone();
     let next_id_clone = next_id.clone();
+    let verbose = args.verbose;
     tokio::spawn(async move {
         loop {
             match listener.accept().await {
                 Ok((stream, _)) => {
                     let id = next_id_clone.fetch_add(1, Ordering::SeqCst);
                     let clients = clients_clone.clone();
-                    tokio::spawn(handle_client(id, stream, clients));
+                    tokio::spawn(handle_client(id, stream, clients, verbose));
                 }
                 Err(e) => {
                     eprintln!("❌ Error aceptando conexión: {}", e);

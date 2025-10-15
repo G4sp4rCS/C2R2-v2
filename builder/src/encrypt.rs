@@ -45,7 +45,12 @@ pub fn generate_agent(
     // Compilar el agente
     println!("🔨 Compilando agente para Windows...");
     
-    let manifest_path = format!("{}/Cargo.toml", agent_path);
+    // Convertir el path relativo a absoluto
+    let agent_absolute = std::fs::canonicalize(agent_path)?;
+    let manifest_path = agent_absolute.join("Cargo.toml");
+    
+    println!("📁 Manifest path: {}", manifest_path.display());
+    
     let output = Command::new("cargo")
         .args(&[
             "build",
@@ -53,8 +58,8 @@ pub fn generate_agent(
             "--target",
             "x86_64-pc-windows-gnu",
             "--manifest-path",
-            &manifest_path,
         ])
+        .arg(&manifest_path)
         .output()?;
 
     if !output.status.success() {

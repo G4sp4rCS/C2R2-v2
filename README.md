@@ -1,9 +1,45 @@
-# C2R2
-C2 and Rat written in Rust
+# C2R2 v2.0 - Direct Connection
+Command & Control Framework written in Rust
 
-## Educational purpose only, do not use it for illegal activities.
+[![Rust](https://img.shields.io/badge/Rust-1.90.0-orange.svg)](https://www.rust-lang.org/)
+[![License](https://img.shields.io/badge/License-Educational-red.svg)](LICENSE)
+[![Platform](https://img.shields.io/badge/Platform-Windows-blue.svg)](https://www.microsoft.com/windows)
 
-## How to Use (Linux)
+## ⚠️ Educational Purpose Only
+**Do not use this tool for illegal activities. This project is for educational and authorized security testing purposes only.**
+
+---
+
+## 🚀 Features
+
+### v2.0 - Direct Connection (Current)
+- ✅ **Direct TCP Connection** - No shellcode, no encryption overhead
+- ✅ **Multi-Client Support** - Handle multiple agents simultaneously
+- ✅ **System Information** - Auto-collect hostname, username, OS, privileges
+- ✅ **Remote Command Execution** - Execute arbitrary commands via cmd
+- ✅ **File Transfer** - Download/Upload files with Base64 encoding
+- ✅ **Keep-Alive** - 30-second ping/pong mechanism
+- ✅ **Colored CLI** - Beautiful terminal interface with tables
+- ✅ **Cross-Compilation** - Build Windows agents from Linux (Kali)
+- ✅ **Lightweight Agent** - ~60KB binary, zero dependencies
+
+### Available Commands
+```
+📋 /list                      - List all connected clients
+🎯 /select <id>               - Select a client by ID
+📤 /cmd <command>             - Send command to selected client
+📡 /cmd_all <command>         - Send command to ALL clients
+📥 /download <remote_path>    - Download file from agent
+📤 /upload <local> <remote>   - Upload file to agent
+ℹ️  /info <id>                - Show detailed client information
+🔄 /deselect                  - Deselect current client
+❓ /help                      - Show help menu
+👋 /exit, /quit               - Close server
+```
+
+---
+
+## 🔧 Installation & Usage
 
 ### Prerequisites
 - Rust toolchain installed (`curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh`)

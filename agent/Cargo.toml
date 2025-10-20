@@ -8,7 +8,15 @@ edition = "2021"
 obfstr = "0.4"
 
 [target.'cfg(windows)'.dependencies]
-winapi = { version = "0.3", features = ["dpapi", "wincrypt", "errhandlingapi", "libloaderapi", "memoryapi", "winnt"] }
+winapi = { version = "0.3", features = [
+    "dpapi", 
+    "wincrypt", 
+    "errhandlingapi", 
+    "libloaderapi", 
+    "memoryapi", 
+    "winnt",
+    "processthreadsapi"  # Para GetCurrentProcess (syscalls)
+] }
 
 [[bin]]
 name = "agent"

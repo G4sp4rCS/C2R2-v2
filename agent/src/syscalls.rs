@@ -3,14 +3,49 @@
 
 use std::arch::asm;
 use winapi::shared::ntdef::{NTSTATUS, HANDLE, PVOID};
+use winapi::um::libloaderapi::{GetModuleHandleA, GetProcAddress};
+use std::ffi::CString;
 
-/// Syscall numbers para Windows 10/11 (x64)
-/// Estos números cambian entre versiones de Windows
-#[repr(u32)]
-#[derive(Debug, Clone, Copy)]
-pub enum SyscallNumber {
-    NtAllocateVirtualMemory = 0x18,
-    NtProtectVirtualMemory = 0x50,
+/// Extrae el syscall number de ntdll.dll dinámicamente
+/// Esto es más confiable que hardcodear porque cambia entre versiones de Windows
+#[cfg(target_arch = "x86_64")]
+unsafe fn get_syscall_number(func_name: &str) -> Option<u32> {
+    let ntdll = CString::new("ntdll.dll").ok()?;
+    let func = CString::new(func_name).ok()?;
+    
+    let ntdll_handle = GetModuleHandleA(ntdll.as_ptr());
+    if ntdll_handle.is_null() {
+        return None;
+    }
+    
+    let func_addr = GetProcAddress(ntdll_handle, func.as_ptr());
+    if func_addr.is_null() {
+        return None;
+    }
+    
+    // Parsear el syscall stub de ntdll
+    // Formato típico en x64:
+    // 4C 8B D1           mov r10, rcx
+    // B8 XX 00 00 00     mov eax, SYSCALL_NUMBER
+    // 0F 05              syscall
+    // C3                 ret
+    let bytes = std::slice::from_raw_parts(func_addr as *const u8, 32);
+    
+    // Buscar patrón: B8 XX 00 00 00 (mov eax, imm32)
+    for i in 0..24 {
+        if bytes[i] == 0xB8 {
+            // Syscall number está en little-endian después de 0xB8
+            let syscall_num = u32::from_le_bytes([
+                bytes[i + 1],
+                bytes[i + 2],
+                bytes[i + 3],
+                bytes[i + 4],
+            ]);
+            return Some(syscall_num);
+        }
+    }
+    
+    None
 }
 
 /// Ejecuta NtAllocateVirtualMemory via syscall directo
@@ -24,10 +59,16 @@ pub unsafe fn nt_allocate_virtual_memory(
     allocation_type: u32,
     protect: u32,
 ) -> NTSTATUS {
+    // Obtener syscall number dinámicamente
+    let syscall_num = match get_syscall_number("NtAllocateVirtualMemory") {
+        Some(num) => num,
+        None => return -1073741795, // STATUS_INVALID_PARAMETER (0xC000000D como signed)
+    };
+    
     // Wrapper interno que ejecuta el syscall
-    // Esta función DEBE ser extern "system" para que respete la calling convention de Windows
     #[allow(improper_ctypes_definitions)]
     unsafe extern "system" fn syscall_wrapper(
+        syscall_num: u32,
         process_handle: HANDLE,
         base_address: *mut PVOID,
         zero_bits: usize,
@@ -35,29 +76,31 @@ pub unsafe fn nt_allocate_virtual_memory(
         allocation_type: u32,
         protect: u32,
     ) -> NTSTATUS {
-        let syscall_num: u32 = 0x18;
         let mut status: i32;
         
-        // Ahora allocation_type y protect están CORRECTAMENTE en el stack
+        // allocation_type y protect DEBEN estar en el stack
         asm!(
-            "mov r10, rcx",         // Syscall convention
-            "mov eax, {syscall:e}", // Load syscall number
+            "mov r10, rcx",         // Syscall convention (r10 = process_handle)
+            "mov eax, edx",         // Syscall number (ya está en edx por calling convention)
+            "mov rcx, r8",          // rcx = base_address (era 3er arg, ahora 1er)
+            "mov rdx, r9",          // rdx = zero_bits (era 4to arg, ahora 2do)
+            "mov r8, [rsp+0x28]",   // r8 = region_size (5to arg del wrapper)
+            "mov r9d, [rsp+0x30]",  // r9 = allocation_type (6to arg)
+            // protect queda en [rsp+0x38]
             "syscall",              // Execute
-            syscall = in(reg) syscall_num,
             in("rcx") process_handle,
-            in("rdx") base_address,
-            in("r8") zero_bits,
-            in("r9") region_size,
-            // allocation_type en [rsp+0x28]
-            // protect en [rsp+0x30]
+            in("edx") syscall_num,
+            in("r8") base_address,
+            in("r9") zero_bits,
             lateout("eax") status,
         );
         
         status
     }
     
-    // Llamar al wrapper (esto garantiza el stack layout correcto)
+    // Llamar al wrapper
     syscall_wrapper(
+        syscall_num,
         process_handle,
         base_address,
         zero_bits,
@@ -76,7 +119,12 @@ pub unsafe fn nt_protect_virtual_memory(
     new_protect: u32,
     old_protect: *mut u32,
 ) -> NTSTATUS {
-    let syscall_num = SyscallNumber::NtProtectVirtualMemory as u32;
+    // Obtener syscall number dinámicamente
+    let syscall_num = match get_syscall_number("NtProtectVirtualMemory") {
+        Some(num) => num,
+        None => return -1073741795, // STATUS_INVALID_PARAMETER (0xC000000D como signed)
+    };
+
     let mut status: i32;
 
     asm!(

@@ -1316,19 +1316,30 @@ where
         Err(e) => return Err(format!("Base64 decode failed: {}", e))
     };
     
-    // Buscar nss3.dll en el perfil de Firefox
-    let nss_dll = profile_path.parent()
-        .and_then(|p| p.parent())
-        .map(|firefox_root| firefox_root.join("nss3.dll"))
-        .ok_or("No se pudo construir path a nss3.dll")?;
+    // Buscar nss3.dll en ubicaciones comunes de Firefox
+    let possible_paths = vec![
+        // Program Files (x64)
+        std::path::PathBuf::from(r"C:\Program Files\Mozilla Firefox\nss3.dll"),
+        // Program Files (x86)
+        std::path::PathBuf::from(r"C:\Program Files (x86)\Mozilla Firefox\nss3.dll"),
+        // Intentar desde el perfil (Profiles/../../nss3.dll)
+        profile_path.parent()
+            .and_then(|p| p.parent())
+            .map(|p| p.join("nss3.dll"))
+            .unwrap_or_default(),
+    ];
     
-    log(&format!("      🔍 Buscando NSS3: {}", nss_dll.display()));
+    log("      🔍 Buscando nss3.dll en ubicaciones comunes...");
     
-    if !nss_dll.exists() {
-        return Err(format!("nss3.dll no encontrado en: {}", nss_dll.display()));
-    }
+    let nss_dll = possible_paths.iter()
+        .find(|path| {
+            let exists = path.exists();
+            log(&format!("        Intentando: {} - {}", path.display(), if exists { "✅" } else { "❌" }));
+            exists
+        })
+        .ok_or("nss3.dll no encontrado en ninguna ubicación común")?;
     
-    log("      ✅ nss3.dll ENCONTRADO");
+    log(&format!("      ✅ nss3.dll ENCONTRADO: {}", nss_dll.display()));
     
     // Cargar biblioteca
     let lib = unsafe {

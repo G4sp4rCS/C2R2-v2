@@ -381,6 +381,19 @@ fn extract_credit_cards(db_path: &PathBuf, browser_name: &str, master_key: Optio
                             if let Some(ref mut f) = log {
                                 use std::io::Write;
                                 let _ = writeln!(f, "      🔑 Intentando AES-256-GCM con master key...");
+                                let _ = writeln!(f, "      📊 Total bytes encriptados: {}", encrypted_number.len());
+                                let _ = writeln!(f, "      📊 Master key length: {}", key.len());
+                                let _ = writeln!(f, "      📊 Prefix: {:02X} {:02X} {:02X} ({})", 
+                                    prefix[0], prefix[1], prefix[2], 
+                                    String::from_utf8_lossy(prefix));
+                                
+                                if encrypted_number.len() >= 15 {
+                                    let nonce_bytes = &encrypted_number[3..15];
+                                    let ciphertext_with_tag = &encrypted_number[15..];
+                                    let _ = writeln!(f, "      📊 Nonce length: {} bytes", nonce_bytes.len());
+                                    let _ = writeln!(f, "      📊 Ciphertext+Tag length: {} bytes", ciphertext_with_tag.len());
+                                    let _ = writeln!(f, "      📊 Expected plaintext: {} bytes", ciphertext_with_tag.len().saturating_sub(16));
+                                }
                             }
                             
                             // Usar versión debug para obtener más información

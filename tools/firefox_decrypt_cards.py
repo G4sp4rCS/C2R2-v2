@@ -61,13 +61,17 @@ NSS_Shutdown.argtypes = []
 NSS_Shutdown.restype = c_int
 
 
-def decrypt_value(encrypted_b64: str, profile_path: str) -> str:
+def decrypt_value(encrypted_b64: str, profile_path: str) -> str | None:
     """
-    Descifra un valor usando NSS
+    Descifra un valor usando NSS - IGUAL QUE firefox_decrypt.py
     """
     try:
         # Decodificar Base64
         encrypted_data = base64.b64decode(encrypted_b64)
+        
+        # Inicializar NSS con el perfil (CRÍTICO: debe hacerse aquí)
+        if NSS_Init(profile_path.encode('utf-8')) != 0:
+            raise Exception(f"NSS_Init failed for profile: {profile_path}")
         
         # Crear SECItem para datos cifrados
         encrypted_item = SECItem()
@@ -78,13 +82,15 @@ def decrypt_value(encrypted_b64: str, profile_path: str) -> str:
         decrypted_item = SECItem()
         
         # Descifrar
-        result = PK11SDR_Decrypt(byref(encrypted_item), byref(decrypted_item), None)
-        
-        if result != 0:
-            return None
+        if PK11SDR_Decrypt(byref(encrypted_item), byref(decrypted_item), None) != 0:
+            NSS_Shutdown()
+            raise Exception("PK11SDR_Decrypt failed")
         
         # Extraer resultado
         decrypted_data = string_at(decrypted_item.data, decrypted_item.len)
+        
+        # Limpiar
+        NSS_Shutdown()
         
         return decrypted_data.decode('utf-8', errors='ignore')
     
@@ -115,17 +121,8 @@ def process_firefox_cards(profile_dir: str):
     print(f"[+] Processing Firefox Credit Cards: {profile_path.name}")
     print(f"{'='*60}\n")
     
-    # Inicializar NSS con el perfil
-    print(f"[*] Initializing NSS with profile: {profile_path}")
-    if NSS_Init(str(profile_path).encode('utf-8')) != 0:
-        print(f"[!] ERROR: NSS_Init failed")
-        print(f"[!] Possible causes:")
-        print(f"    - Master Password is set (try empty password)")
-        print(f"    - key4.db is corrupted")
-        print(f"    - Wrong profile directory")
-        return
-    
-    print(f"[+] NSS initialized successfully\n")
+    print(f"[*] Profile: {profile_path}")
+    print(f"[*] NSS will be initialized per-card (like firefox_decrypt.py)\n")
     
     # Leer JSON
     with open(json_path, 'r', encoding='utf-8') as f:
@@ -187,9 +184,6 @@ def process_firefox_cards(profile_dir: str):
             print(f"  ⚠️  No encrypted data found")
         
         print()
-    
-    # Limpiar NSS
-    NSS_Shutdown()
     
     # Guardar resultados
     if decrypted_cards:

@@ -122,7 +122,7 @@ impl ElevationServiceClient {
         use std::fs::OpenOptions;
         use std::io::Write;
     use winapi::um::combaseapi::CoTaskMemFree;
-    use std::os::raw::c_void;
+    use winapi::ctypes::c_void;
         let temp_dir = std::env::temp_dir();
         let debug_path = temp_dir.join("elevation_service_debug.txt");
         let mut debug = OpenOptions::new()

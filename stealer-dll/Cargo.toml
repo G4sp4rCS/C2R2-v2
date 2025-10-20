@@ -27,6 +27,9 @@ base64 = "0.21"
 # Windows Registry (extension installer)
 winreg = "0.52"
 
+# Dynamic library loading (para memory injection en Edge)
+libloading = "0.8"
+
 [target.'cfg(windows)'.dependencies]
 winapi = { version = "0.3", features = [
     "dpapi", 

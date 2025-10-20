@@ -8,7 +8,7 @@ edition = "2021"
 obfstr = "0.4"
 
 [target.'cfg(windows)'.dependencies]
-winapi = { version = "0.3", features = ["dpapi", "wincrypt", "errhandlingapi", "libloaderapi"] }
+winapi = { version = "0.3", features = ["dpapi", "wincrypt", "errhandlingapi", "libloaderapi", "memoryapi", "winnt"] }
 
 [[bin]]
 name = "agent"

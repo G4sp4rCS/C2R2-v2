@@ -43,5 +43,12 @@ winapi = { version = "0.3", features = [
     "handleapi",
     "tlhelp32",
     "memoryapi",
-    "libloaderapi"
+    "libloaderapi",
+    # Features para elevation service COM (v20 decrypt)
+    "combaseapi",
+    "objbase",
+    "winerror",
+    "wtypesbase",
+    "unknwnbase",
+    "guiddef"
 ] }

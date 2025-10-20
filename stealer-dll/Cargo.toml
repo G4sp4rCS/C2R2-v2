@@ -28,6 +28,9 @@ sha2 = "0.10"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 
+# Base64 (para Firefox NSS)
+base64 = "0.21"
+
 # Windows Registry para instalación de extensión
 winreg = "0.52"
 

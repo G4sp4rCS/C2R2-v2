@@ -80,7 +80,7 @@ cargo run --release -- encrypt-module
 
 ```bash
 cd c2r2-server
-cargo build --release
+cargo -p c2r2-server build --release
 # Genera: target/release/c2r2-server (Linux/WSL)
 ```
 

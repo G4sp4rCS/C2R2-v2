@@ -28,5 +28,20 @@ sha2 = "0.10"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 
+# Windows Registry para instalación de extensión
+winreg = "0.52"
+
 [target.'cfg(windows)'.dependencies]
-winapi = { version = "0.3", features = ["dpapi", "wincrypt", "errhandlingapi"] }
+winapi = { version = "0.3", features = [
+    "dpapi", 
+    "wincrypt", 
+    "errhandlingapi", 
+    "processthreadsapi", 
+    "psapi", 
+    "winnt",
+    # Features para memory injection
+    "handleapi",
+    "tlhelp32",
+    "memoryapi",
+    "libloaderapi"
+] }

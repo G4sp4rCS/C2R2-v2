@@ -1,0 +1,20 @@
+// Placeholder para iconos - Reemplazar con iconos PNG reales
+// Por ahora, podemos usar iconos del sistema de Windows
+
+// Para crear iconos falsos convincentes:
+// 1. Usar iconos de Windows Defender
+// 2. Usar iconos de Windows Update
+// 3. Usar iconos de Microsoft Edge
+
+// Herramientas para crear:
+// - Icon Extractor (extraer de shell32.dll, imageres.dll)
+// - ImageMagick (convert a diferentes tamaños)
+// - GIMP (editar si es necesario)
+
+// Rutas de iconos útiles en Windows:
+// C:\Windows\System32\shell32.dll
+// C:\Windows\System32\imageres.dll
+// C:\Windows\System32\compstui.dll
+
+// Comandos para extraer:
+// ResourceHacker.exe -open shell32.dll -save icon.ico -action extract -mask ICONGROUP,,,

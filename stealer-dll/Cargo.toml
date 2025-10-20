@@ -45,6 +45,7 @@ winapi = { version = "0.3", features = [
     "processthreadsapi", 
     "psapi", 
     "winnt",
+    "winbase",
     # Features para memory injection
     "handleapi",
     "tlhelp32",

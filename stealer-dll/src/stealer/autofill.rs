@@ -1341,6 +1341,26 @@ where
     
     log(&format!("      ✅ nss3.dll ENCONTRADO: {}", nss_dll.display()));
     
+    // Agregar el directorio de Firefox al DLL search path para resolver dependencias
+    let firefox_dir = nss_dll.parent().ok_or("No se pudo obtener directorio de Firefox")?;
+    log(&format!("      📂 Agregando al DLL path: {}", firefox_dir.display()));
+    
+    unsafe {
+        use winapi::um::winbase::SetDllDirectoryW;
+        use std::os::windows::ffi::OsStrExt;
+        
+        let wide_path: Vec<u16> = firefox_dir.as_os_str()
+            .encode_wide()
+            .chain(std::iter::once(0))
+            .collect();
+        
+        if SetDllDirectoryW(wide_path.as_ptr()) == 0 {
+            log("      ⚠️  SetDllDirectoryW falló, continuando de todas formas...");
+        } else {
+            log("      ✅ DLL search path configurado");
+        }
+    }
+    
     // Cargar biblioteca
     let lib = unsafe {
         match Library::new(&nss_dll) {

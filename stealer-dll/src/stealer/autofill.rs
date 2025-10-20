@@ -1054,10 +1054,82 @@ where
     
     if !table_exists {
         log("      ⚠️  Tabla credit_cards_data NO EXISTE");
-        return Ok(cards);
+        
+        // INTENTO 2: Tabla alternativa credit_cards_encrypted
+        log("      🔍 Buscando tabla credit_cards_encrypted...");
+        let alt_table_exists: bool = conn
+            .query_row(
+                "SELECT name FROM sqlite_master WHERE type='table' AND name='credit_cards_encrypted'",
+                [],
+                |_| Ok(true)
+            )
+            .unwrap_or(false);
+        
+        if !alt_table_exists {
+            log("      ❌ Ninguna tabla de tarjetas encontrada");
+            
+            // DEBUG: Listar TODAS las tablas
+            log("      📋 TODAS LAS TABLAS EN LA DB:");
+            if let Ok(mut stmt) = conn.prepare("SELECT name FROM sqlite_master WHERE type='table'") {
+                if let Ok(table_iter) = stmt.query_map([], |row| row.get::<_, String>(0)) {
+                    for (idx, table_result) in table_iter.enumerate() {
+                        if let Ok(table_name) = table_result {
+                            log(&format!("        {}. {}", idx + 1, table_name));
+                        }
+                    }
+                }
+            }
+            
+            return Ok(cards);
+        }
     }
     
     log("      ✅ Tabla credit_cards_data existe");
+    
+    // DEBUG: Mostrar estructura de la tabla
+    log("      📋 COLUMNAS DE credit_cards_data:");
+    if let Ok(mut stmt) = conn.prepare("PRAGMA table_info(credit_cards_data)") {
+        if let Ok(col_iter) = stmt.query_map([], |row| {
+            Ok((
+                row.get::<_, String>(1)?,  // column name
+                row.get::<_, String>(2)?,  // column type
+            ))
+        }) {
+            for (idx, col_result) in col_iter.enumerate() {
+                if let Ok((col_name, col_type)) = col_result {
+                    log(&format!("        {}. {} ({})", idx + 1, col_name, col_type));
+                }
+            }
+        }
+    }
+    
+    // DEBUG: Mostrar una fila de ejemplo (data RAW)
+    log("      📄 EJEMPLO DE FILA (raw data):");
+    if let Ok(mut stmt) = conn.prepare("SELECT * FROM credit_cards_data LIMIT 1") {
+        if let Ok(mut rows) = stmt.query([]) {
+            if let Ok(Some(row)) = rows.next() {
+                let col_count = row.as_ref().column_count();
+                for i in 0..col_count {
+                    let col_name = row.as_ref().column_name(i).unwrap_or("unknown");
+                    
+                    // Intentar leer como texto
+                    if let Ok(val) = row.get::<_, String>(i) {
+                        log(&format!("        {}: '{}'", col_name, val));
+                    }
+                    // Intentar leer como binario
+                    else if let Ok(val) = row.get::<_, Vec<u8>>(i) {
+                        log(&format!("        {}: <{} bytes binarios>", col_name, val.len()));
+                    }
+                    // Intentar leer como número
+                    else if let Ok(val) = row.get::<_, i64>(i) {
+                        log(&format!("        {}: {}", col_name, val));
+                    }
+                }
+            } else {
+                log("        (sin filas)");
+            }
+        }
+    }
     
     // Contar filas
     let row_count: i64 = conn

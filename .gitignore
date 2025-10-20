@@ -24,6 +24,9 @@ agent/encrypted_stealer.bin
 agent/dll_key.bin
 *.bin
 
+# Agent stealer module (copied from stealer-dll for standalone mode)
+agent/src/stealer/
+
 # JetBrains IDE (RustRover, IntelliJ, CLion, etc.)
 .idea/
 

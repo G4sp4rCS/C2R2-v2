@@ -41,16 +41,7 @@ dependencies = [
 name = "agent"
 version = "2.0.0"
 dependencies = [
- "aes-gcm",
- "block-padding",
- "cbc",
- "des",
- "hmac",
  "obfstr",
- "pbkdf2",
- "rusqlite",
- "sha1",
- "sha2",
  "winapi",
 ]
 

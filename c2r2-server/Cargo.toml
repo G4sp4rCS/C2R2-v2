@@ -13,6 +13,3 @@ rustyline = "14.0"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt", "time", "local-time"] }
 tracing-appender = "0.2"
-
-[target.aarch64-unknown-linux-gnu]
-linker = "aarch64-linux-gnu-gcc"

@@ -13,9 +13,3 @@ winapi = { version = "0.3", features = ["dpapi", "wincrypt", "errhandlingapi", "
 [[bin]]
 name = "agent"
 path = "src/main.rs"
-
-[profile.release]
-panic = "abort"
-lto = true
-codegen-units = 1
-# strip = true  # Descomentar para producción

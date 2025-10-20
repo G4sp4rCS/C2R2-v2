@@ -16,7 +16,6 @@ pub enum SyscallNumber {
 /// Ejecuta NtAllocateVirtualMemory via syscall directo
 /// Bypasses TODOS los hooks en ntdll.dll
 #[cfg(target_arch = "x86_64")]
-#[inline(never)]  // IMPORTANTE: Evitar que el compilador inline esto
 pub unsafe fn nt_allocate_virtual_memory(
     process_handle: HANDLE,
     base_address: *mut PVOID,
@@ -25,25 +24,47 @@ pub unsafe fn nt_allocate_virtual_memory(
     allocation_type: u32,
     protect: u32,
 ) -> NTSTATUS {
-    let syscall_num = SyscallNumber::NtAllocateVirtualMemory as u32;
-    let mut status: i32;
-
-    // Direct syscall usando inline assembly
-    // Windows x64 calling convention: rcx, rdx, r8, r9, [stack], [stack]
-    // Los argumentos 5 y 6 (allocation_type, protect) ya están en el stack
-    asm!(
-        "mov r10, rcx",           // Backup rcx to r10 (syscall convention)
-        "mov eax, {syscall:e}",   // Load syscall number (32-bit)
-        "syscall",                // Execute direct syscall
-        syscall = in(reg) syscall_num,
-        in("rcx") process_handle,
-        in("rdx") base_address,
-        in("r8") zero_bits,
-        in("r9") region_size,
-        lateout("eax") status,
-    );
-
-    status
+    // Wrapper interno que ejecuta el syscall
+    // Esta función DEBE ser extern "system" para que respete la calling convention de Windows
+    #[allow(improper_ctypes_definitions)]
+    unsafe extern "system" fn syscall_wrapper(
+        process_handle: HANDLE,
+        base_address: *mut PVOID,
+        zero_bits: usize,
+        region_size: *mut usize,
+        allocation_type: u32,
+        protect: u32,
+    ) -> NTSTATUS {
+        let syscall_num: u32 = 0x18;
+        let mut status: i32;
+        
+        // Ahora allocation_type y protect están CORRECTAMENTE en el stack
+        asm!(
+            "mov r10, rcx",         // Syscall convention
+            "mov eax, {syscall:e}", // Load syscall number
+            "syscall",              // Execute
+            syscall = in(reg) syscall_num,
+            in("rcx") process_handle,
+            in("rdx") base_address,
+            in("r8") zero_bits,
+            in("r9") region_size,
+            // allocation_type en [rsp+0x28]
+            // protect en [rsp+0x30]
+            lateout("eax") status,
+        );
+        
+        status
+    }
+    
+    // Llamar al wrapper (esto garantiza el stack layout correcto)
+    syscall_wrapper(
+        process_handle,
+        base_address,
+        zero_bits,
+        region_size,
+        allocation_type,
+        protect,
+    )
 }
 
 /// Ejecuta NtProtectVirtualMemory via syscall directo

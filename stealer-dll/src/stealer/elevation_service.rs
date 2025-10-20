@@ -70,6 +70,7 @@ pub struct IElevatorVtbl {
 /// Estructura para manejar la conexión con Elevation Service
 pub struct ElevationServiceClient {
     elevator: *mut IElevator,
+    com_initialized: bool,  // Track if we initialized COM
 }
 
 impl ElevationServiceClient {
@@ -78,7 +79,9 @@ impl ElevationServiceClient {
         unsafe {
             // Inicializar COM
             let hr = CoInitializeEx(ptr::null_mut(), COINIT_MULTITHREADED);
-            if hr < 0 && hr != 0x00000001 { // S_FALSE = ya inicializado
+            let com_initialized = hr >= 0 || hr == 0x00000001; // S_OK or S_FALSE
+            
+            if !com_initialized {
                 return Err(format!("CoInitializeEx failed: 0x{:08X}", hr));
             }
 
@@ -97,16 +100,20 @@ impl ElevationServiceClient {
             );
 
             if hr != S_OK {
-                CoUninitialize();
+                if com_initialized {
+                    CoUninitialize();
+                }
                 return Err(format!("CoCreateInstance failed: 0x{:08X} - Elevation Service no disponible", hr));
             }
 
             if elevator.is_null() {
-                CoUninitialize();
+                if com_initialized {
+                    CoUninitialize();
+                }
                 return Err("Elevation Service pointer is null".to_string());
             }
 
-            Ok(Self { elevator })
+            Ok(Self { elevator, com_initialized })
         }
     }
 
@@ -161,8 +168,10 @@ impl Drop for ElevationServiceClient {
                 ((*(*self.elevator).lpVtbl).Release)(self.elevator);
             }
             
-            // Uninitialize COM
-            CoUninitialize();
+            // Only uninitialize COM if we initialized it
+            if self.com_initialized {
+                CoUninitialize();
+            }
         }
     }
 }
@@ -174,18 +183,21 @@ pub fn try_decrypt_with_elevation_service(encrypted_data: &[u8]) -> Option<Strin
         return None;
     }
 
-    match ElevationServiceClient::new() {
-        Ok(client) => {
-            // Extraer solo los datos encriptados (sin el prefijo v20)
-            let encrypted_payload = &encrypted_data[3..];
-            
-            match client.decrypt_password(encrypted_payload) {
-                Ok(password) => Some(password),
-                Err(_) => None,
-            }
-        },
-        Err(_) => None,
-    }
+    // Wrap everything in catch_unwind to prevent crashes
+    std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        match ElevationServiceClient::new() {
+            Ok(client) => {
+                // Extraer solo los datos encriptados (sin el prefijo v20)
+                let encrypted_payload = &encrypted_data[3..];
+                
+                match client.decrypt_password(encrypted_payload) {
+                    Ok(password) => Some(password),
+                    Err(_) => None,
+                }
+            },
+            Err(_) => None,
+        }
+    })).unwrap_or(None)
 }
 
 #[cfg(test)]

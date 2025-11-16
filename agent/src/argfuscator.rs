@@ -47,6 +47,16 @@ impl ObfuscatorConfig {
             env_var_substitution: false,
         }
     }
+
+    /// Creates a disabled obfuscation config (for testing/debugging)
+    pub fn disabled() -> Self {
+        Self {
+            random_case_prob: 0.0,
+            char_insertion_prob: 0.0,
+            quote_insertion: false,
+            env_var_substitution: false,
+        }
+    }
 }
 
 /// Applies random case changes to a string
@@ -134,6 +144,18 @@ fn substitute_env_vars(command: &str) -> String {
 
 /// Main obfuscation function
 /// Applies various obfuscation techniques to a Windows command
+/// 
+/// # Examples
+/// 
+/// ```
+/// let obfuscated = obfuscate_command("whoami", &ObfuscatorConfig::default());
+/// // Result might be: "wH^o^A^mi" (varies due to randomization)
+/// ```
+/// 
+/// ```
+/// let obfuscated = obfuscate_command("curl http://example.com", &ObfuscatorConfig::high());
+/// // Result might be: "cU^r^L \"http://example.com\"" (varies due to randomization)
+/// ```
 pub fn obfuscate_command(command: &str, config: &ObfuscatorConfig) -> String {
     let mut result = command.to_string();
     

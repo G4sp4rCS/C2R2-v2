@@ -18,7 +18,8 @@ Command & Control Framework written in Rust
 - ✅ **System Information** - Auto-collect hostname, username, OS, privileges
 - ✅ **Remote Command Execution** - Execute arbitrary commands via cmd
 - ✅ **File Transfer** - Download/Upload files with Base64 encoding
-- ✅ **Keep-Alive** - 30-second ping/pong mechanism
+- ✅ **Beacon Communication** - Configurable intervals with jitter to evade detection
+- ✅ **Persistence Mechanisms** - Registry, Scheduled Tasks, WMI Events (APT-like)
 - ✅ **Colored CLI** - Beautiful terminal interface with tables
 - ✅ **Cross-Compilation** - Build Windows agents from Linux (Kali)
 - ✅ **Lightweight Agent** - ~60KB binary, zero dependencies
@@ -31,6 +32,10 @@ Command & Control Framework written in Rust
 📡 /cmd_all <command>         - Send command to ALL clients
 📥 /download <remote_path>    - Download file from agent
 📤 /upload <local> <remote>   - Upload file to agent
+🔑 /harvest                   - Steal credentials from browsers
+📌 /persist <method>          - Establish persistence (registry|task|wmi|startup)
+🧹 /persist_remove            - Remove persistence from agent
+📡 /beacon <int:jit>          - Configure beacon interval (e.g., 60:30 = 60s ±30%)
 ℹ️  /info <id>                - Show detailed client information
 🔄 /deselect                  - Deselect current client
 ❓ /help                      - Show help menu
@@ -123,16 +128,19 @@ https://github.com/1N73LL1G3NC3x/Nightmangle/tree/master?tab=readme-ov-file
 
 - [x] Que no aparezca la consola del agente
 - [x] Crear un listener para tener multiples conexiones simultaneas con diferentes agentes
+- [x] Implementar comunicación tipo beacon con jitter para evasión
+- [x] Crear persistencia en Windows (Registry, Scheduled Tasks, WMI Events)
 - [ ] Mejorar la ofuscación del agente
 
 ### Crear persistencia
-- [ ] Cuando se ejecute el agente, que se copie a %APPDATA% y se añada al registro para que se ejecute al iniciar sesión o al iniciar el sistema.
+- [x] Cuando se ejecute el agente, que se copie a %APPDATA% y se añada al registro para que se ejecute al iniciar sesión o al iniciar el sistema.
 - [ ] Que se pueda inyectar en un proceso legítimo (explorer.exe, svchost.exe, etc)
 
 
 ### Listener
-- [ ] Crear un listener con sockets para tener multiples conexiones simultaneas con diferentes agentes
-- [x] Cuando se manda un comando que se haga de manera asíncrona para no bloquear la comunicación con el agente y además de una manera más sigilosa (threads, async/await, sleep, etc)
+- [x] Crear un listener con sockets para tener multiples conexiones simultaneas con diferentes agentes
+- [x] Implementar comunicación asíncrona con beacon/jitter para evasión
+- [x] Sleep con jitter y exponential backoff para evitar detección heurística
 - [ ] Crear un servidor que se encargue de recibir las conexiones de los agentes y enviarles comandos y que este servidor se comunique con la interfaz C2 (Telegram bot, web, etc)
 
 ### Interfaz C2

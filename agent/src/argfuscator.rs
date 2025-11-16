@@ -1,6 +1,27 @@
-// ArgFuscator - Command-line obfuscation module
-// Implements command-line obfuscation techniques similar to Invoke-ArgFuscator
-// https://github.com/wietze/Invoke-ArgFuscator
+//! Command-line obfuscation module (ArgFuscator).
+//!
+//! This module implements command-line obfuscation techniques similar to Invoke-ArgFuscator
+//! to evade detection by security products that monitor command execution.
+//!
+//! # Techniques
+//!
+//! - **Random Case**: `whoami` → `wHoAmI`
+//! - **Caret Insertion**: `whoami` → `who^am^i`
+//! - **Quote Wrapping**: `whoami` → `"w"h"o"ami`
+//! - **Environment Variables**: `cmd` → `%COMSPEC%`
+//!
+//! # References
+//!
+//! Based on: <https://github.com/wietze/Invoke-ArgFuscator>
+//!
+//! # Examples
+//!
+//! ```no_run
+//! use agent::argfuscator::obfuscate;
+//!
+//! let obfuscated = obfuscate("whoami");
+//! // Possible output: "wHo^Am^I"
+//! ```
 
 use rand::Rng;
 

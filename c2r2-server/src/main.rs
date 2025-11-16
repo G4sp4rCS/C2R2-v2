@@ -134,14 +134,12 @@ async fn handle_client(
     let (reader, mut writer) = stream.into_split();
     let mut reader = BufReader::new(reader);
 
-    // Tarea para enviar comandos al cliente con keep-alive
+    // Tarea para enviar comandos al cliente (sin keep-alive ping)
     let send_task = tokio::spawn(async move {
-        let mut ping_interval = tokio::time::interval(tokio::time::Duration::from_secs(30));
-        ping_interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
-        
         loop {
-            tokio::select! {
-                Some(cmd) = rx.recv() => {
+            // Esperar comandos del canal
+            match rx.recv().await {
+                Some(cmd) => {
                     let message = format!("{}\n", cmd);
                     if let Err(e) = writer.write_all(message.as_bytes()).await {
                         if verbose {
@@ -156,21 +154,7 @@ async fn handle_client(
                         break;
                     }
                 }
-                _ = ping_interval.tick() => {
-                    // Enviar ping silencioso para mantener conexión viva
-                    if verbose {
-                        println!("{} Ping → {}", "🏓".bright_yellow(), format!("[{}]", id).bright_cyan());
-                    }
-                    if let Err(_) = writer.write_all(b"ping\n").await {
-                        if verbose {
-                            eprintln!("{} Error ping [{}]", "❌".bright_red(), id);
-                        }
-                        break;
-                    }
-                    if let Err(_) = writer.flush().await {
-                        break;
-                    }
-                }
+                None => break, // Canal cerrado
             }
         }
     });
@@ -248,14 +232,6 @@ async fn handle_client(
                                 }
                                 _ => {}
                             }
-                        }
-                        continue;
-                    }
-                    
-                    // Si es pong, ignorar
-                    if line.trim() == "pong" {
-                        if verbose {
-                            println!("{} Pong ← {}", "🏓".bright_yellow(), format!("[{}]", id).bright_cyan());
                         }
                         continue;
                     }

@@ -6,6 +6,8 @@ edition = "2021"
 [dependencies]
 # Ofuscación de strings en compile-time
 obfstr = "0.4"
+# Random number generation for obfuscation
+rand = "0.8"
 
 [target.'cfg(windows)'.dependencies]
 winapi = { version = "0.3", features = [

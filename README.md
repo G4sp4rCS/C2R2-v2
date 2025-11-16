@@ -17,6 +17,7 @@ Command & Control Framework written in Rust
 - ✅ **Multi-Client Support** - Handle multiple agents simultaneously
 - ✅ **System Information** - Auto-collect hostname, username, OS, privileges
 - ✅ **Remote Command Execution** - Execute arbitrary commands via cmd
+- ✅ **Command Obfuscation** - Automatic ArgFuscator-style obfuscation for all commands
 - ✅ **File Transfer** - Download/Upload files with Base64 encoding
 - ✅ **Beacon Communication** - Configurable intervals with jitter to evade detection
 - ✅ **Persistence Mechanisms** - Registry, Scheduled Tasks, WMI Events (APT-like)
@@ -130,7 +131,19 @@ https://github.com/1N73LL1G3NC3x/Nightmangle/tree/master?tab=readme-ov-file
 - [x] Crear un listener para tener multiples conexiones simultaneas con diferentes agentes
 - [x] Implementar comunicación tipo beacon con jitter para evasión
 - [x] Crear persistencia en Windows (Registry, Scheduled Tasks, WMI Events)
+- [x] Implementar ofuscación de comandos con ArgFuscator
 - [ ] Mejorar la ofuscación del agente
+
+### Command Obfuscation (ArgFuscator)
+- [x] Implementar ofuscación automática de comandos
+- [x] Random case changes (wHoAmI)
+- [x] Character insertion with carets (who^ami)
+- [x] Quote insertion around arguments
+- [x] Environment variable substitution (%windir%)
+- [x] Aplicar ofuscación a todos los comandos (/cmd, /cmd_all)
+- [x] Aplicar ofuscación a comandos de persistencia (registry, task, wmi)
+
+Ver [ARGFUSCATOR_IMPLEMENTATION.md](ARGFUSCATOR_IMPLEMENTATION.md) para más detalles y ejemplos.
 
 ### Crear persistencia
 - [x] Cuando se ejecute el agente, que se copie a %APPDATA% y se añada al registro para que se ejecute al iniciar sesión o al iniciar el sistema.

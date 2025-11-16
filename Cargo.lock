@@ -42,6 +42,7 @@ name = "agent"
 version = "2.0.0"
 dependencies = [
  "obfstr",
+ "rand",
  "winapi",
  "winres",
 ]

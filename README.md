@@ -44,6 +44,7 @@ By using C2R2-v2, you agree to:
 - **[Network Deployment](docs/NETWORK_DEPLOYMENT.md)** - Complete guide for LAN/WAN deployments
 - **[Raspberry Pi Setup](RASPBERRY_PI_SETUP.md)** - Step-by-step guide for Raspberry Pi with port forwarding
 - **[Troubleshooting](docs/NETWORK_DEPLOYMENT.md#troubleshooting)** - Connection issues and solutions
+- **[Solución de Problemas (Español)](SOLUCION_PROBLEMAS_ES.md)** - Guía de problemas de conexión en español
 
 ---
 

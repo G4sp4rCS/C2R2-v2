@@ -656,8 +656,14 @@ fn decrypt_files(params: &str) -> String {
             return format!("__ERROR__:Parámetros inválidos. Uso: __DECRYPT__:ruta|key|max_depth{}", DELIMITER);
         }
         
+        // Limpiar caracteres de escape que pueden venir del terminal
         let path = parts[0].trim();
-        let key_hex = parts[1].trim();
+        let key_hex = parts[1]
+            .trim()
+            .replace("\x1b[200~", "")
+            .replace("\x1b[201~", "")
+            .replace("←[200~", "")
+            .replace("←[201~", "");
         let max_depth: u32 = parts[2].trim().parse().unwrap_or(5);
         
         println!("DEBUG: decrypt_files - path='{}', key_hex='{}', max_depth={}", path, key_hex, max_depth);

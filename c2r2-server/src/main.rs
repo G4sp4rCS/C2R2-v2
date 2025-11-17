@@ -646,10 +646,18 @@ async fn main() {
 
         match rl.readline(&prompt) {
             Ok(line) => {
-                // Agregar al historial
-                let _ = rl.add_history_entry(line.as_str());
+                // Limpiar caracteres de escape de bracketed paste mode
+                // Formato: ESC[200~ (inicio) y ESC[201~ (fin)
+                let clean_line = line
+                    .replace("\x1b[200~", "")
+                    .replace("\x1b[201~", "")
+                    .replace("←[200~", "")  // Algunas terminales lo muestran así
+                    .replace("←[201~", "");
                 
-                let parts: Vec<&str> = line.trim().split_whitespace().collect();
+                // Agregar al historial
+                let _ = rl.add_history_entry(clean_line.as_str());
+                
+                let parts: Vec<&str> = clean_line.trim().split_whitespace().collect();
                 
                 if parts.is_empty() {
                     continue;

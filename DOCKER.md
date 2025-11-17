@@ -2,6 +2,24 @@
 
 Este directorio contiene la configuración de Docker para compilar todos los componentes de C2R2-v2 de forma automática.
 
+## ⚡ TL;DR - Compilación Rápida
+
+```bash
+# 1. Configurar (opcional, usa valores por defecto si se omite)
+cp .env.example .env
+nano .env  # Configura SERVER_IP y SERVER_PORT
+
+# 2. Compilar TODO con un solo comando
+docker-compose up --build
+
+# 3. Tus binarios están en dist/
+ls dist/
+```
+
+¡Eso es todo! Todos los binarios (servidor, agente, builder, DLLs) están listos en `dist/`.
+
+---
+
 ## 📦 ¿Qué compila?
 
 El sistema de Docker compila y entrega:

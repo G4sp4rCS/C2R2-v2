@@ -32,6 +32,7 @@ By using C2R2-v2, you agree to:
 ### Core Documentation
 - **[Getting Started](docs/README.md)** - Overview and introduction
 - **[Installation Guide](docs/INSTALLATION.md)** - Build and setup instructions
+- **[Docker Build Guide](DOCKER.md)** - 🐳 Quick build with Docker (recommended)
 - **[Usage Guide](docs/USAGE.md)** - Command reference and examples
 - **[Architecture](docs/ARCHITECTURE.md)** - System design and components
 - **[Modules](docs/MODULES.md)** - Module documentation and development
@@ -67,6 +68,7 @@ C2R2-v2 (Command & Control Rust Reloaded) is a modular offensive security suite 
 - ✅ **Credential Harvesting** - Multi-browser and application credential stealing
 - ✅ **Cross-Compilation** - Build Windows agents from Linux/WSL
 - ✅ **Modular Architecture** - Load capabilities on-demand via encrypted modules
+- 🐳 **Docker Build System** - One-command compilation of all components
 
 ### Advanced Features
 
@@ -156,6 +158,25 @@ For detailed architecture documentation, see [Architecture Guide](docs/ARCHITECT
 **Full installation instructions:** [Installation Guide](docs/INSTALLATION.md)
 
 ### Building
+
+#### Option 1: Docker (Recommended - Easiest)
+
+The fastest way to build everything:
+
+```bash
+# Quick build with Docker
+./docker-build.sh --ip 192.168.1.10 --port 4444
+
+# Production build (stealthy)
+./docker-build.sh --ip 192.168.1.10 --production
+
+# Or use docker-compose directly
+docker-compose up --build
+```
+
+All binaries will be in the `dist/` directory. See **[Docker Guide (DOCKER.md)](DOCKER.md)** for detailed instructions.
+
+#### Option 2: Manual Build
 
 ```bash
 # 1. Build stealer module

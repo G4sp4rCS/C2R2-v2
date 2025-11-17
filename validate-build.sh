@@ -19,7 +19,9 @@ check_file() {
     
     if [ -f "$file" ]; then
         echo -e "${GREEN}✓${NC} $description: ${GREEN}OK${NC}"
-        ls -lh "$file" | awk '{print "  Tamaño:", $5}'
+        stat -c "  Tamaño: %s bytes" "$file" 2>/dev/null || \
+        stat -f "  Tamaño: %z bytes" "$file" 2>/dev/null || \
+        echo "  Tamaño: $(wc -c < "$file") bytes"
         return 0
     else
         echo -e "${RED}✗${NC} $description: ${RED}NO ENCONTRADO${NC}"

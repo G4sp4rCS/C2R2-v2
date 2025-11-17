@@ -76,7 +76,7 @@ echo ""
 # Confirmar
 read -p "¿Continuar con la compilación? [Y/n] " -n 1 -r
 echo
-if [[ ! $REPLY =~ ^[Yy]$ ]] && [[ ! -z $REPLY ]]; then
+if [[ ! $REPLY =~ ^[Yy]$ ]] && [[ -n $REPLY ]]; then
     echo -e "${YELLOW}⚠️  Compilación cancelada${NC}"
     exit 0
 fi
@@ -100,7 +100,7 @@ echo ""
 echo -e "${GREEN}✅ Compilación completada!${NC}"
 echo ""
 echo -e "${YELLOW}📦 Binarios generados en dist/:${NC}"
-ls -lh dist/ | tail -n +2 | while read line; do
+find dist/ -maxdepth 1 -type f -exec ls -lh {} \; | while read -r line; do
     echo -e "   ${BLUE}•${NC} $line"
 done
 
@@ -108,7 +108,7 @@ done
 if [ -f dist/BUILD_INFO.txt ]; then
     echo ""
     echo -e "${YELLOW}📋 Información de compilación:${NC}"
-    cat dist/BUILD_INFO.txt | sed 's/^/   /'
+    sed 's/^/   /' < dist/BUILD_INFO.txt
 fi
 
 echo ""

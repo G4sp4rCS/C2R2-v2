@@ -34,3 +34,7 @@ agent/src/stealer/
 .vscode/
 c2r2-server/modules/stealer.enc
 c2r2-server/modules/stealer.key
+
+# Docker build output
+dist/
+.env

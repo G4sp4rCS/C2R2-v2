@@ -1,7 +1,7 @@
 # Dockerfile para compilar todos los componentes de C2R2-v2
 # Genera binarios listos para usar: servidor, agente, builder, y DLLs
 
-FROM rust:1.70-slim
+FROM rust:1.75-slim
 
 # Instalar dependencias para compilación cruzada a Windows
 RUN apt-get update && apt-get install -y \

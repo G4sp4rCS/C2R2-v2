@@ -158,7 +158,7 @@ Contact EMAIL.
 
 ⚠️  DO NOT delete encrypted files or this note.
 ⚠️  DO NOT attempt to decrypt files manually.
-"#, &key_hex[..16]); // Only show first 16 chars for reference
+"#); // Only show first 16 chars for reference
     
     let mut file = fs::File::create(&note_path)?;
     file.write_all(note_content.as_bytes())?;

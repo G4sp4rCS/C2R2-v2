@@ -66,7 +66,7 @@ C2R2-v2 (Command & Control Rust Reloaded) is a modular offensive security suite 
 - 🔒 **Direct Syscalls** - Bypass userland hooks (EDR evasion)
 - 🎭 **Command Obfuscation** - ArgFuscator-style obfuscation for all commands
 - 🔐 **Module Encryption** - AES-256-GCM encrypted capability modules
-- 🎯 **Anti-Analysis** - Debugger, VM, and sandbox detection
+- 🎯 **Anti-Analysis** - Comprehensive VM, sandbox, and debugger detection (production mode only)
 - 📊 **Structured Logging** - Comprehensive activity logging
 - 🎨 **Colored CLI** - Beautiful terminal interface with tables
 

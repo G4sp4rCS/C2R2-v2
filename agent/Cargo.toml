@@ -3,6 +3,11 @@ name = "agent"
 version = "2.0.0"
 edition = "2021"
 
+[features]
+default = ["dev"]
+dev = []  # Development mode: console window + debug prints
+production = []  # Production mode: no console, no debug prints, fully stealthy
+
 [dependencies]
 # Ofuscación de strings en compile-time
 obfstr = "0.4"

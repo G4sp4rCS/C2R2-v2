@@ -337,4 +337,59 @@ mod tests {
         // Should be different but still a valid command
         assert!(!output.is_empty());
     }
+
+    #[test]
+    fn test_parse_command_args_with_double_quotes() {
+        let input = r#"dir "C:\Program Files""#;
+        let args = parse_command_args(input);
+        assert_eq!(args.len(), 2);
+        assert_eq!(args[0], "dir");
+        assert_eq!(args[1], "C:\\Program Files");
+    }
+
+    #[test]
+    fn test_parse_command_args_with_single_quotes() {
+        let input = r"dir 'C:\Program Files (x86)'";
+        let args = parse_command_args(input);
+        assert_eq!(args.len(), 2);
+        assert_eq!(args[0], "dir");
+        assert_eq!(args[1], "C:\\Program Files (x86)");
+    }
+
+    #[test]
+    fn test_parse_command_args_no_quotes() {
+        let input = "dir C:\\Windows";
+        let args = parse_command_args(input);
+        assert_eq!(args.len(), 2);
+        assert_eq!(args[0], "dir");
+        assert_eq!(args[1], "C:\\Windows");
+    }
+
+    #[test]
+    fn test_reconstruct_command_with_spaces() {
+        let args = vec![
+            "dir".to_string(),
+            "C:\\Program Files".to_string(),
+        ];
+        let output = reconstruct_command_args(&args);
+        assert_eq!(output, r#"dir "C:\Program Files""#);
+    }
+
+    #[test]
+    fn test_reconstruct_command_without_spaces() {
+        let args = vec![
+            "dir".to_string(),
+            "C:\\Windows".to_string(),
+        ];
+        let output = reconstruct_command_args(&args);
+        assert_eq!(output, "dir C:\\Windows");
+    }
+
+    #[test]
+    fn test_obfuscate_with_quoted_path() {
+        let input = r#"dir "C:\Program Files""#;
+        let output = obfuscate_command(input, &ObfuscatorConfig::disabled());
+        // With disabled config, should preserve the path with quotes
+        assert!(output.contains("C:\\Program Files") || output.contains(r#""C:\Program Files""#));
+    }
 }

@@ -89,6 +89,7 @@ C2R2-v2 (Command & Control Rust Reloaded) is a modular offensive security suite 
 
 🔧 Advanced Operations:
    /harvest                   - Harvest credentials from browsers/apps
+   /elevate <command>         - Execute command with admin privileges (UAC prompt)
    /persist <method>          - Establish persistence (registry|task|wmi|startup)
    /persist_remove            - Remove all persistence mechanisms
    /beacon <int:jit>          - Configure beacon timing (e.g., 60:30)

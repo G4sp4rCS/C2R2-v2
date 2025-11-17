@@ -1,0 +1,9 @@
+# Configuración de cross-compilation para Windows desde Linux
+
+[target.x86_64-pc-windows-gnu]
+linker = "x86_64-w64-mingw32-gcc"
+ar = "x86_64-w64-mingw32-ar"
+
+[build]
+# Target por defecto para ransomware-dll
+# (El agent y servidor se compilan nativo)

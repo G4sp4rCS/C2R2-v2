@@ -22,6 +22,7 @@ SERVER_IP=${SERVER_IP:-127.0.0.1}
 SERVER_PORT=${SERVER_PORT:-4444}
 AGENT_NAME=${AGENT_NAME:-agent}
 PRODUCTION_MODE=${PRODUCTION_MODE:-false}
+NO_CACHE=${NO_CACHE:-false}
 
 # Parsear argumentos
 while [[ $# -gt 0 ]]; do
@@ -42,6 +43,10 @@ while [[ $# -gt 0 ]]; do
             PRODUCTION_MODE=true
             shift
             ;;
+        --no-cache)
+            NO_CACHE=true
+            shift
+            ;;
         --help)
             echo "Uso: $0 [opciones]"
             echo ""
@@ -50,6 +55,7 @@ while [[ $# -gt 0 ]]; do
             echo "  --port PORT       Puerto del servidor C2 (default: 4444)"
             echo "  --name NAME       Nombre del agente (default: agent)"
             echo "  --production      Compilar en modo producción (stealthy)"
+            echo "  --no-cache        Forzar rebuild sin usar caché de Docker"
             echo "  --help            Mostrar esta ayuda"
             echo ""
             echo "Ejemplos:"
@@ -89,11 +95,18 @@ echo ""
 echo -e "${BLUE}🔨 Compilando componentes...${NC}"
 echo ""
 
+# Añadir flag --no-cache si está activado
+BUILD_FLAGS="--build"
+if [ "$NO_CACHE" = "true" ]; then
+    echo -e "${YELLOW}⚠️  Modo --no-cache activado (se ignorará caché de Docker)${NC}"
+    BUILD_FLAGS="$BUILD_FLAGS --no-cache"
+fi
+
 SERVER_IP=$SERVER_IP \
 SERVER_PORT=$SERVER_PORT \
 AGENT_NAME=$AGENT_NAME \
 PRODUCTION_MODE=$PRODUCTION_MODE \
-docker-compose up --build
+docker-compose up $BUILD_FLAGS
 
 # Verificar resultados
 echo ""

@@ -1,11 +1,15 @@
 /// Cryptographic operations module
-/// This module handles all encryption and decryption operations using AES-256-CBC
+/// This module handles encryption and decryption operations using AES-256-CBC and ChaCha20-Poly1305
 
 use aes::Aes256;
 use aes::cipher::{
     BlockEncrypt, BlockDecrypt, KeyInit,
 };
 use rand::Rng;
+use chacha20poly1305::{
+    aead::{Aead, OsRng},
+    ChaCha20Poly1305, Nonce
+};
 
 /// Generate a random 32-byte encryption key
 pub fn generate_key() -> [u8; 32] {
@@ -21,6 +25,49 @@ pub fn generate_iv() -> [u8; 16] {
     let mut iv = [0u8; 16];
     rng.fill(&mut iv);
     iv
+}
+
+/// Generate a random 12-byte nonce for ChaCha20-Poly1305
+pub fn generate_nonce() -> [u8; 12] {
+    let mut rng = rand::thread_rng();
+    let mut nonce = [0u8; 12];
+    rng.fill(&mut nonce);
+    nonce
+}
+
+/// Encrypt data using ChaCha20-Poly1305 (AEAD - more modern and secure)
+/// Returns the encrypted data with nonce prepended
+pub fn encrypt_data_chacha(data: &[u8], key: &[u8; 32]) -> Result<Vec<u8>, String> {
+    let cipher = ChaCha20Poly1305::new(key.into());
+    let nonce_bytes = generate_nonce();
+    let nonce = Nonce::from_slice(&nonce_bytes);
+    
+    let ciphertext = cipher.encrypt(nonce, data)
+        .map_err(|e| format!("ChaCha20 encryption failed: {:?}", e))?;
+    
+    // Prepend nonce to ciphertext
+    let mut result = nonce_bytes.to_vec();
+    result.extend_from_slice(&ciphertext);
+    
+    Ok(result)
+}
+
+/// Decrypt data using ChaCha20-Poly1305
+/// Expects nonce to be prepended to the encrypted data
+pub fn decrypt_data_chacha(encrypted: &[u8], key: &[u8; 32]) -> Result<Vec<u8>, String> {
+    if encrypted.len() < 12 {
+        return Err("Data too short".to_string());
+    }
+    
+    // Extract nonce from the beginning
+    let nonce = Nonce::from_slice(&encrypted[..12]);
+    let ciphertext = &encrypted[12..];
+    
+    let cipher = ChaCha20Poly1305::new(key.into());
+    let plaintext = cipher.decrypt(nonce, ciphertext)
+        .map_err(|e| format!("ChaCha20 decryption failed: {:?}", e))?;
+    
+    Ok(plaintext)
 }
 
 /// Encrypt data using AES-256-CBC

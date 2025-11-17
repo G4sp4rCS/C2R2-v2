@@ -262,10 +262,34 @@ fn get_system_info(info_type: &str) -> String {
         "os" => {
             #[cfg(target_os = "windows")]
             {
-                // Método 1: Intentar leer desde el registro (más preciso)
-                let registry_output = Command::new("cmd")
-                    .args(&["/C", r#"reg query "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion" /v ProductName"#])
+                debug_print!("DEBUG: Intentando obtener OS info...");
+                
+                // Usar PowerShell para obtener el OS (más confiable)
+                let ps_output = Command::new("powershell")
+                    .args(&[
+                        "-NoProfile",
+                        "-NonInteractive",
+                        "-WindowStyle", "Hidden",
+                        "-Command",
+                        "(Get-CimInstance Win32_OperatingSystem).Caption"
+                    ])
                     .creation_flags(0x08000000) // CREATE_NO_WINDOW
+                    .output();
+                
+                if let Ok(out) = ps_output {
+                    let os_name = String::from_utf8_lossy(&out.stdout).trim().to_string();
+                    debug_print!("DEBUG: PowerShell OS output: '{}'", os_name);
+                    if !os_name.is_empty() && os_name.to_lowercase().contains("windows") {
+                        debug_print!("DEBUG: ✅ OS detectado: {}", os_name);
+                        return os_name;
+                    }
+                }
+                debug_print!("DEBUG: PowerShell falló, intentando registry...");
+                
+                // Fallback 1: Registry
+                let registry_output = Command::new("cmd")
+                    .args(&["/C", r#"reg query "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion" /v ProductName 2>nul"#])
+                    .creation_flags(0x08000000)
                     .output();
                 
                 if let Ok(out) = registry_output {
@@ -275,50 +299,37 @@ fn get_system_info(info_type: &str) -> String {
                             if let Some(os_name) = line.split("REG_SZ").nth(1) {
                                 let trimmed = os_name.trim().to_string();
                                 if !trimmed.is_empty() {
+                                    debug_print!("DEBUG: ✅ OS detectado (registry): {}", trimmed);
                                     return trimmed;
                                 }
                             }
                         }
                     }
                 }
+                debug_print!("DEBUG: Registry falló, intentando WMIC...");
                 
-                // Método 2: Fallback con wmic (más compatible pero más lento)
-                let wmic_output = Command::new("wmic")
-                    .args(&["os", "get", "Caption", "/value"])
-                    .creation_flags(0x08000000) // CREATE_NO_WINDOW
+                // Fallback 2: WMIC
+                let wmic_output = Command::new("cmd")
+                    .args(&["/C", "wmic os get Caption /value 2>nul"])
+                    .creation_flags(0x08000000)
                     .output();
                 
                 if let Ok(out) = wmic_output {
                     let full_output = String::from_utf8_lossy(&out.stdout);
                     for line in full_output.lines() {
+                        let line = line.trim();
                         if line.starts_with("Caption=") {
                             let os_name = line.strip_prefix("Caption=").unwrap_or("").trim();
                             if !os_name.is_empty() {
+                                debug_print!("DEBUG: ✅ OS detectado (wmic): {}", os_name);
                                 return os_name.to_string();
                             }
                         }
                     }
                 }
+                debug_print!("DEBUG: ❌ Todos los métodos fallaron");
                 
-                // Método 3: Último fallback con systeminfo (más lento)
-                let systeminfo_output = Command::new("cmd")
-                    .args(&["/C", "systeminfo | findstr /B /C:\"OS Name\""])
-                    .creation_flags(0x08000000) // CREATE_NO_WINDOW
-                    .output();
-                
-                if let Ok(out) = systeminfo_output {
-                    let full_output = String::from_utf8_lossy(&out.stdout);
-                    if let Some(line) = full_output.lines().next() {
-                        if let Some(os_name) = line.split(':').nth(1) {
-                            let trimmed = os_name.trim().to_string();
-                            if !trimmed.is_empty() {
-                                return trimmed;
-                            }
-                        }
-                    }
-                }
-                
-                return "Windows (version unknown)".to_string();
+                return "Windows".to_string(); // Fallback genérico
             }
             #[cfg(not(target_os = "windows"))]
             {

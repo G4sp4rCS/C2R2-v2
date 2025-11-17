@@ -1,0 +1,30 @@
+# .dockerignore - Excluir archivos innecesarios del build context
+
+# Git
+.git/
+.gitattributes
+
+# Build artifacts (will be built inside container)
+target/
+dist/
+*.exe
+*.dll
+*.bin
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Docker files (not needed inside container)
+.dockerignore
+Dockerfile
+docker-compose.yml
+.env
+.env.example
+
+# Temporary files
+*.log
+

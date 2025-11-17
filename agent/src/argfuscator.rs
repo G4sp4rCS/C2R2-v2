@@ -118,22 +118,88 @@ fn insert_obfuscation_chars(input: &str, probability: f32) -> String {
     result
 }
 
+/// Parses a command line string respecting quotes (both single and double)
+/// Returns a Vec of arguments with quotes removed
+fn parse_command_args(command: &str) -> Vec<String> {
+    let mut args = Vec::new();
+    let mut current_arg = String::new();
+    let mut in_double_quotes = false;
+    let mut in_single_quotes = false;
+    let mut chars = command.chars().peekable();
+    
+    while let Some(ch) = chars.next() {
+        match ch {
+            '"' if !in_single_quotes => {
+                in_double_quotes = !in_double_quotes;
+                // Don't include the quote character itself
+            }
+            '\'' if !in_double_quotes => {
+                in_single_quotes = !in_single_quotes;
+                // Don't include the quote character itself
+            }
+            ' ' | '\t' if !in_double_quotes && !in_single_quotes => {
+                // Whitespace outside quotes: end current argument
+                if !current_arg.is_empty() {
+                    args.push(current_arg.clone());
+                    current_arg.clear();
+                }
+            }
+            _ => {
+                // Regular character or whitespace inside quotes
+                current_arg.push(ch);
+            }
+        }
+    }
+    
+    // Add final argument if any
+    if !current_arg.is_empty() {
+        args.push(current_arg);
+    }
+    
+    args
+}
+
+/// Reconstructs a command line from parsed arguments, adding quotes where needed
+fn reconstruct_command_args(args: &[String]) -> String {
+    if args.is_empty() {
+        return String::new();
+    }
+    
+    let mut result = String::new();
+    
+    for (i, arg) in args.iter().enumerate() {
+        if i > 0 {
+            result.push(' ');
+        }
+        
+        // Quote if argument contains spaces
+        if arg.contains(' ') {
+            result.push('"');
+            result.push_str(arg);
+            result.push('"');
+        } else {
+            result.push_str(arg);
+        }
+    }
+    
+    result
+}
+
 /// Adds quotes around arguments
 /// Example: "curl http://example.com" -> "curl \"http://example.com\""
 fn add_quotes_to_args(command: &str) -> String {
-    let parts: Vec<&str> = command.split_whitespace().collect();
-    if parts.is_empty() {
+    let args = parse_command_args(command);
+    if args.is_empty() {
         return command.to_string();
     }
     
-    let mut result = parts[0].to_string();
-    for part in parts.iter().skip(1) {
+    let mut result = args[0].to_string();
+    for arg in args.iter().skip(1) {
         // Add quotes if not already quoted and contains special chars
-        if !part.starts_with('"') && !part.starts_with('\'') && 
-           (part.contains('/') || part.contains(':') || part.contains('\\')) {
-            result.push_str(&format!(" \"{}\"", part));
+        if arg.contains('/') || arg.contains(':') || arg.contains('\\') || arg.contains(' ') {
+            result.push_str(&format!(" \"{}\"", arg));
         } else {
-            result.push_str(&format!(" {}", part));
+            result.push_str(&format!(" {}", arg));
         }
     }
     
@@ -185,35 +251,34 @@ pub fn obfuscate_command(command: &str, config: &ObfuscatorConfig) -> String {
         result = substitute_env_vars(&result);
     }
     
-    // Split command to apply different obfuscation to different parts
-    let parts: Vec<&str> = result.split_whitespace().collect();
-    if parts.is_empty() {
+    // Parse command respecting quotes to get proper arguments
+    let args = parse_command_args(&result);
+    if args.is_empty() {
         return result;
     }
     
-    let mut obfuscated_parts = Vec::new();
+    let mut obfuscated_args = Vec::new();
     
-    for (i, part) in parts.iter().enumerate() {
-        let mut obfuscated_part = part.to_string();
+    for (i, arg) in args.iter().enumerate() {
+        let mut obfuscated_arg = arg.to_string();
         
         // Apply random case (except for paths and quoted strings)
-        if !part.contains('\\') && !part.contains('/') && 
-           !part.starts_with('"') && !part.starts_with('\'') &&
-           !part.starts_with('%') {
-            obfuscated_part = apply_random_case(&obfuscated_part, config.random_case_prob);
+        if !arg.contains('\\') && !arg.contains('/') && !arg.starts_with('%') {
+            obfuscated_arg = apply_random_case(&obfuscated_arg, config.random_case_prob);
         }
         
         // Apply character insertion to the command name and some arguments
-        if i == 0 || (i > 0 && !part.contains(':') && !part.contains('\\') && !part.contains('/')) {
-            obfuscated_part = insert_obfuscation_chars(&obfuscated_part, config.char_insertion_prob);
+        if i == 0 || (i > 0 && !arg.contains(':') && !arg.contains('\\') && !arg.contains('/')) {
+            obfuscated_arg = insert_obfuscation_chars(&obfuscated_arg, config.char_insertion_prob);
         }
         
-        obfuscated_parts.push(obfuscated_part);
+        obfuscated_args.push(obfuscated_arg);
     }
     
-    result = obfuscated_parts.join(" ");
+    // Reconstruct command with proper quoting
+    result = reconstruct_command_args(&obfuscated_args);
     
-    // Apply quote insertion
+    // Apply quote insertion for paths if enabled
     if config.quote_insertion {
         result = add_quotes_to_args(&result);
     }

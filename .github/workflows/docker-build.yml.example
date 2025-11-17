@@ -1,0 +1,62 @@
+# GitHub Actions workflow para compilar con Docker (opcional)
+# Este archivo es un ejemplo de cómo automatizar la compilación con CI/CD
+# Renombrar a docker-build.yml para habilitarlo
+
+name: Docker Build
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+    inputs:
+      server_ip:
+        description: 'IP del servidor C2'
+        required: false
+        default: '127.0.0.1'
+      server_port:
+        description: 'Puerto del servidor C2'
+        required: false
+        default: '4444'
+      agent_name:
+        description: 'Nombre del agente'
+        required: false
+        default: 'agent'
+      production_mode:
+        description: 'Modo producción (true/false)'
+        required: false
+        default: 'false'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout código
+      uses: actions/checkout@v4
+    
+    - name: Configurar variables
+      run: |
+        echo "SERVER_IP=${{ github.event.inputs.server_ip || '127.0.0.1' }}" >> $GITHUB_ENV
+        echo "SERVER_PORT=${{ github.event.inputs.server_port || '4444' }}" >> $GITHUB_ENV
+        echo "AGENT_NAME=${{ github.event.inputs.agent_name || 'agent' }}" >> $GITHUB_ENV
+        echo "PRODUCTION_MODE=${{ github.event.inputs.production_mode || 'false' }}" >> $GITHUB_ENV
+    
+    - name: Crear directorio dist
+      run: mkdir -p dist
+    
+    - name: Compilar con Docker
+      run: docker-compose up --build
+    
+    - name: Verificar binarios
+      run: |
+        ls -lh dist/
+        cat dist/BUILD_INFO.txt
+    
+    - name: Subir artefactos
+      uses: actions/upload-artifact@v4
+      with:
+        name: c2r2-binaries
+        path: dist/
+        retention-days: 7

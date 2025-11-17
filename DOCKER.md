@@ -74,6 +74,9 @@ Todos los binarios compilados estarán en el directorio `dist/`:
 
 ```bash
 ls -lh dist/
+
+# Validar que todo esté correcto
+./validate-build.sh
 ```
 
 Verás:
@@ -256,6 +259,21 @@ file dist/ransomware.dll
 # Verificar módulos encriptados
 ls -lh dist/modules/
 ```
+
+### Script de validación
+
+Para verificar que todos los binarios se generaron correctamente:
+
+```bash
+./validate-build.sh
+```
+
+Este script verifica:
+- ✅ Todos los binarios principales existen
+- ✅ DLLs compiladas correctamente
+- ✅ Módulos encriptados generados
+- ✅ Permisos de ejecución correctos
+- ✅ Muestra el tamaño de cada archivo
 
 ## 🐛 Troubleshooting
 

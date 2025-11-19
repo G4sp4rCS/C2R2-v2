@@ -5,6 +5,39 @@ All notable changes to C2R2-v2 will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+- **Critical: Persistence mechanism failures after reboot** ([#persistence-fix])
+  - Fixed issue where persistence entries pointed to non-existent executable paths
+  - Agent now intelligently detects if running from temporary location (Downloads, Desktop, USB)
+  - Automatically copies to persistent AppData location only when needed
+  - Uses anti-AV techniques for file copying (chunk-based, hidden attributes)
+  - Prevents "Windows cannot find executable" errors after system reboot
+  - See [PERSISTENCE_FIX.md](PERSISTENCE_FIX.md) for detailed documentation
+
+- **Critical: Immediate connection disconnection issue** ([#connection-stability])
+  - Fixed issue where agents connected but disconnected immediately
+  - Added TCP keepalive configuration to prevent NAT/firewall timeouts
+  - Added read/write timeouts for better error detection (5min read, 30sec write)
+  - Improved connection stability through routers and firewalls
+  - See [CONNECTION_STABILITY_FIX.md](CONNECTION_STABILITY_FIX.md) for detailed documentation
+
+### Added
+- Smart executable location detection in persistence module
+- Functions: `is_persistent_location()` and `is_temporary_location()`
+- Intelligent file relocation with `ensure_persistent_location()`
+- Anti-AV file copy technique using variable-sized chunks
+- TCP keepalive configuration function `configure_tcp_keepalive()`
+- Connection timeout configuration (read and write timeouts)
+- Comprehensive documentation in PERSISTENCE_FIX.md and CONNECTION_STABILITY_FIX.md
+
+### Changed
+- `get_current_exe_path()` now ensures executable is in persistent location before establishing persistence
+- Persistence mechanism only copies executable when actually needed (reduces AV detection)
+- TCP connection setup now includes keepalive and timeout configuration
+- Added `winsock2` and `ws2def` features to winapi dependency for socket configuration
+
 ## [2.0.0] - 2024-01-15
 
 ### Added

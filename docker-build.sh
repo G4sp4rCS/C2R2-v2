@@ -99,14 +99,16 @@ echo ""
 BUILD_FLAGS="--build"
 if [ "$NO_CACHE" = "true" ]; then
     echo -e "${YELLOW}⚠️  Modo --no-cache activado (se ignorará caché de Docker)${NC}"
-    BUILD_FLAGS="$BUILD_FLAGS --no-cache"
+    COMPOSE_BUILD_FLAGS="--no-cache"
+else
+    COMPOSE_BUILD_FLAGS=""
 fi
 
 SERVER_IP=$SERVER_IP \
 SERVER_PORT=$SERVER_PORT \
 AGENT_NAME=$AGENT_NAME \
 PRODUCTION_MODE=$PRODUCTION_MODE \
-docker-compose up $BUILD_FLAGS
+docker-compose build $COMPOSE_BUILD_FLAGS && docker-compose up
 
 # Verificar resultados
 echo ""

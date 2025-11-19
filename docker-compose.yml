@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   # Servicio para compilar todos los componentes de C2R2-v2
   builder:

@@ -41,8 +41,7 @@ fn configure_tcp_keepalive(stream: &TcpStream) -> std::io::Result<()> {
     #[cfg(target_os = "windows")]
     {
         use std::os::windows::io::AsRawSocket;
-        use winapi::um::winsock2::{setsockopt, SOL_SOCKET, SO_KEEPALIVE};
-        use winapi::shared::ws2def::SOCKET;
+        use winapi::um::winsock2::{setsockopt, SOL_SOCKET, SO_KEEPALIVE, SOCKET};
         
         unsafe {
             let socket = stream.as_raw_socket() as SOCKET;

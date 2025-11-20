@@ -103,13 +103,10 @@ fn main() {
                     debug_print!("DEBUG: Warning - No se pudo configurar TCP keepalive: {}", e);
                 }
                 
-                // Configurar timeouts para evitar cuelgues indefinidos
-                let read_timeout = Duration::from_secs(300); // 5 minutos
+                // Configurar write timeout para detectar problemas de red al enviar
+                // NO configurar read timeout - el agente debe esperar comandos indefinidamente
+                // El TCP keepalive se encarga de detectar conexiones muertas
                 let write_timeout = Duration::from_secs(30);  // 30 segundos
-                
-                if let Err(e) = stream.set_read_timeout(Some(read_timeout)) {
-                    debug_print!("DEBUG: Warning - No se pudo configurar read timeout: {}", e);
-                }
                 
                 if let Err(e) = stream.set_write_timeout(Some(write_timeout)) {
                     debug_print!("DEBUG: Warning - No se pudo configurar write timeout: {}", e);

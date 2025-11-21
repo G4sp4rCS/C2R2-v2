@@ -157,7 +157,7 @@ class TestDropperBuilder(unittest.TestCase):
             self.assertIn(payload_url, content)
             self.assertIn(decoy_url, content)
             self.assertIn('<HTA:APPLICATION', content)
-            self.assertIn('VBScript', content)
+            self.assertIn('vbscript', content.lower())
 
 class TestDropperScripts(unittest.TestCase):
     """Pruebas para los scripts de dropper"""

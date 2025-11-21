@@ -22,10 +22,10 @@ import sys
 
 try:
     from PIL import Image
+    PIL_AVAILABLE = True
 except ImportError:
-    print("[!] Error: Pillow no está instalado")
-    print("[*] Instalar con: pip install pillow")
-    sys.exit(1)
+    PIL_AVAILABLE = False
+    Image = None
 
 # URLs de iconos de alta calidad (256x256)
 ICON_URLS = {
@@ -46,6 +46,11 @@ def download_icon(icon_type, output_path='icon.ico'):
         icon_type: Tipo de icono (pdf, word, excel, etc.)
         output_path: Ruta de salida del archivo .ico
     """
+    if not PIL_AVAILABLE:
+        print("[!] Error: Pillow no está instalado")
+        print("[*] Instalar con: pip install pillow")
+        return False
+    
     if icon_type not in ICON_URLS:
         print(f"[!] Error: Tipo de icono '{icon_type}' no soportado")
         print(f"[*] Tipos disponibles: {', '.join(ICON_URLS.keys())}")
@@ -104,6 +109,11 @@ def create_custom_ico(image_path, output_path='icon.ico'):
         image_path: Ruta de la imagen de entrada
         output_path: Ruta de salida del archivo .ico
     """
+    if not PIL_AVAILABLE:
+        print("[!] Error: Pillow no está instalado")
+        print("[*] Instalar con: pip install pillow")
+        return False
+    
     try:
         print(f"[*] Convirtiendo {image_path} a {output_path}...")
         

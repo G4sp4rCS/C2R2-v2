@@ -38,3 +38,11 @@ c2r2-server/modules/stealer.key
 # Docker build output
 dist/
 .env
+
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+

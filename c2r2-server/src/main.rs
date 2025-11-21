@@ -183,7 +183,14 @@ async fn handle_client(
     clients: Arc<Mutex<HashMap<ClientId, ClientHandle>>>,
     verbose: bool,
 ) {
-    let addr = stream.peer_addr().unwrap().to_string();
+    let addr = match stream.peer_addr() {
+        Ok(addr) => addr.to_string(),
+        Err(e) => {
+            warn!("Cliente [{}] desconectado antes de obtener dirección: {}", id, e);
+            return; // Cliente ya desconectado, salir
+        }
+    };
+    
     info!("Nueva conexión: [{}] desde {}", id, addr);
     println!("{} {} {} {}", 
         "🔗".bright_green(), 

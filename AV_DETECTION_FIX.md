@@ -81,17 +81,14 @@ pub unsafe fn bypass_amsi() -> bool {
 ### After (Undetected)
 
 ```rust
-pub unsafe fn bypass_amsi() -> bool {
-    // REMOVED: Direct AMSI patching is detected by Windows Defender as AMSI_Patch_T.B1
-    // Modern approach: Don't patch AMSI at all. Instead:
-    // - Use obfuscated strings throughout the code
-    // - Avoid suspicious memory operations
-    // - Let the payload handle its own evasion
-    // - Use legitimate Windows APIs
-    
-    // Return true to indicate "bypass not needed" rather than "bypass failed"
-    true
-}
+// FUNCTIONS COMPLETELY REMOVED
+// The bypass_amsi() and bypass_etw() functions have been completely removed.
+// No aggressive patching is performed.
+// Evasion is achieved through:
+// - String obfuscation (obfstr)
+// - Anti-sandbox checks (production mode)
+// - Encrypted module loading
+// - Legitimate Windows APIs only
 ```
 
 ## Why This Works

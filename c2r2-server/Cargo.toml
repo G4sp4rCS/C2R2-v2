@@ -5,6 +5,10 @@ edition = "2021"
 
 [dependencies]
 tokio = { version = "1", features = ["full"] }
+tokio-rustls = "0.26"
+rustls = "0.23"
+rustls-pemfile = "2.0"
+rcgen = "0.13"
 clap = { version = "4.0", features = ["derive"] }
 chrono = "0.4"
 colored = "2.1"

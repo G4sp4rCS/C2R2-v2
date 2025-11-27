@@ -177,7 +177,13 @@ fn load_tls_config() -> Result<ServerConfig, String> {
         .map_err(|e| format!("Error abriendo certificado: {}", e))?;
     let mut cert_reader = StdBufReader::new(cert_file);
     let certs: Vec<CertificateDer<'static>> = rustls_pemfile::certs(&mut cert_reader)
-        .filter_map(|r| r.ok())
+        .filter_map(|r| match r {
+            Ok(cert) => Some(cert),
+            Err(e) => {
+                eprintln!("⚠️  Warning: Error parseando certificado: {}", e);
+                None
+            }
+        })
         .collect();
     
     if certs.is_empty() {

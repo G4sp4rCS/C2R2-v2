@@ -1,0 +1,3 @@
+# Dependencias para add_icon.py
+Pillow>=10.0.0
+requests>=2.31.0

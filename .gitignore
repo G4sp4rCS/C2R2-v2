@@ -63,6 +63,7 @@ dist/
 dropper/build/
 dropper/dist/
 dropper/*.exe
+dropper/*.exe.bak
 dropper/*.lnk
 dropper/rcedit.exe
 dropper/default_icon.ico
@@ -70,6 +71,10 @@ dropper/temp_*.png
 dropper/temp_*.ico
 dropper/*.pdf
 dropper/*.zip
+dropper/*_dropper.py
+dropper/*_wrapper.py
+dropper/_runtime_hook*.py
+dropper/sample_invoice.pdf
 
 # ===========================
 # IDEs

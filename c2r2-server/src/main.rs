@@ -505,6 +505,13 @@ async fn handle_client(
                                 println!("{}", error.bright_red());
                                 println!("{}", "─".repeat(60).bright_black());
                                 println!();
+                                
+                                // Broadcast to API clients
+                                api_state_recv.broadcast_event(crate::api::ServerEvent::CommandOutput {
+                                    agent_id: id,
+                                    output: error.to_string(),
+                                    is_error: true,
+                                });
                             } else if response.starts_with("__SUCCESS__:") {
                                 let msg = response.strip_prefix("__SUCCESS__:").unwrap_or(&response);
                                 info!("[{}] Éxito: {}", id, msg);
@@ -518,6 +525,13 @@ async fn handle_client(
                                 println!("{}", msg.bright_green());
                                 println!("{}", "─".repeat(60).bright_black());
                                 println!();
+                                
+                                // Broadcast to API clients
+                                api_state_recv.broadcast_event(crate::api::ServerEvent::CommandOutput {
+                                    agent_id: id,
+                                    output: msg.to_string(),
+                                    is_error: false,
+                                });
                             } else {
                                 // Respuesta normal de comando - LOGUEAR OUTPUT COMPLETO
                                 info!("[{}] OUTPUT:\n{}", id, response);
@@ -532,6 +546,13 @@ async fn handle_client(
                                 println!("{}", response);
                                 println!("{}", "─".repeat(60).bright_black());
                                 println!();
+                                
+                                // Broadcast to API clients
+                                api_state_recv.broadcast_event(crate::api::ServerEvent::CommandOutput {
+                                    agent_id: id,
+                                    output: response.clone(),
+                                    is_error: false,
+                                });
                             }
                         }
                         command_buffer.clear();

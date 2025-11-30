@@ -600,18 +600,20 @@ class C2R2TeamClient:
         except Exception:
             pass
         
-        # Dark theme colors
+        # Matrix/Hacker theme colors - Neon green on black
         self.colors = {
-            'bg': '#1e1e1e',
-            'fg': '#d4d4d4',
-            'accent': '#007acc',
-            'accent_hover': '#1c97ea',
-            'panel_bg': '#252526',
-            'input_bg': '#3c3c3c',
-            'success': '#4ec9b0',
-            'warning': '#dcdcaa',
-            'error': '#f14c4c',
-            'info': '#569cd6',
+            'bg': '#000000',           # Pure black background
+            'fg': '#00FF41',           # Neon green text (Matrix green)
+            'accent': '#39FF14',       # Bright neon green accent
+            'accent_hover': '#00FF00', # Pure green hover
+            'panel_bg': '#0a0a0a',     # Very dark gray panels
+            'input_bg': '#0d0d0d',     # Slightly lighter for inputs
+            'success': '#00FF41',      # Matrix green for success
+            'warning': '#FFFF00',      # Yellow for warnings
+            'error': '#FF0000',        # Red for errors
+            'info': '#00FFFF',         # Cyan for info
+            'border': '#00FF41',       # Neon green borders
+            'grid': '#003300',         # Dark green for grid lines
         }
         
         # Configure root

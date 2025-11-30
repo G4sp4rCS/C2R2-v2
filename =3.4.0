@@ -1,0 +1,25 @@
+Defaulting to user installation because normal site-packages is not writeable
+Collecting paramiko
+  Downloading paramiko-4.0.0-py3-none-any.whl.metadata (3.9 kB)
+Requirement already satisfied: bcrypt>=3.2 in /usr/lib/python3/dist-packages (from paramiko) (3.2.2)
+Requirement already satisfied: cryptography>=3.3 in /usr/lib/python3/dist-packages (from paramiko) (41.0.7)
+Collecting invoke>=2.0 (from paramiko)
+  Downloading invoke-2.2.1-py3-none-any.whl.metadata (3.3 kB)
+Collecting pynacl>=1.5 (from paramiko)
+  Downloading pynacl-1.6.1-cp38-abi3-manylinux_2_34_x86_64.whl.metadata (9.8 kB)
+Collecting cffi>=2.0.0 (from pynacl>=1.5->paramiko)
+  Downloading cffi-2.0.0-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.whl.metadata (2.6 kB)
+Collecting pycparser (from cffi>=2.0.0->pynacl>=1.5->paramiko)
+  Downloading pycparser-2.23-py3-none-any.whl.metadata (993 bytes)
+Downloading paramiko-4.0.0-py3-none-any.whl (223 kB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 223.9/223.9 kB 7.7 MB/s eta 0:00:00
+Downloading invoke-2.2.1-py3-none-any.whl (160 kB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 160.3/160.3 kB 47.0 MB/s eta 0:00:00
+Downloading pynacl-1.6.1-cp38-abi3-manylinux_2_34_x86_64.whl (1.4 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 1.4/1.4 MB 49.6 MB/s eta 0:00:00
+Downloading cffi-2.0.0-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.whl (219 kB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 219.6/219.6 kB 57.5 MB/s eta 0:00:00
+Downloading pycparser-2.23-py3-none-any.whl (118 kB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 118.1/118.1 kB 35.1 MB/s eta 0:00:00
+Installing collected packages: pycparser, invoke, cffi, pynacl, paramiko
+Successfully installed cffi-2.0.0 invoke-2.2.1 paramiko-4.0.0 pycparser-2.23 pynacl-1.6.1

@@ -19,6 +19,7 @@ import socket
 import threading
 import re
 from datetime import datetime
+from pathlib import Path
 
 # Tkinter imports (cross-platform GUI)
 import tkinter as tk
@@ -32,6 +33,10 @@ except ImportError:
     sys.exit(1)
 
 
+# Pre-compiled regex for ANSI code stripping (performance optimization)
+ANSI_ESCAPE_PATTERN = re.compile(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])')
+
+
 class SSHConnection:
     """Manages SSH connection and port forwarding to C2R2 server."""
     
@@ -43,6 +48,7 @@ class SSHConnection:
         self.transport = None
         self.forwarded_port = None
         self.local_socket = None
+        self._known_hosts_path = Path.home() / ".ssh" / "known_hosts"
         
     def connect(self, host, ssh_port, username, password=None, key_path=None, c2_port=4444):
         """
@@ -58,7 +64,14 @@ class SSHConnection:
         """
         try:
             self.ssh_client = paramiko.SSHClient()
-            self.ssh_client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+            
+            # Load known hosts for better security (warn on unknown hosts)
+            # Use RejectPolicy by default, but allow user to accept new hosts
+            if self._known_hosts_path.exists():
+                self.ssh_client.load_host_keys(str(self._known_hosts_path))
+            # For red team tools, we use WarningPolicy to alert but allow connection
+            # This is a balance between security and usability in operational environments
+            self.ssh_client.set_missing_host_key_policy(paramiko.WarningPolicy())
             
             # Connect with either password or key
             connect_params = {
@@ -115,6 +128,32 @@ class SSHConnection:
         except Exception as e:
             return False, f"Error executing command: {str(e)}"
     
+    @staticmethod
+    def _validate_port(port):
+        """Validate that a port number is valid and safe."""
+        try:
+            port_int = int(port)
+            if 1 <= port_int <= 65535:
+                return True, port_int
+            return False, None
+        except (ValueError, TypeError):
+            return False, None
+    
+    @staticmethod
+    def _validate_path(path):
+        """Validate that a path contains only safe characters."""
+        # Allow alphanumeric, /, ., -, _, and ~
+        if not path:
+            return True
+        safe_pattern = re.compile(r'^[a-zA-Z0-9/_.\-~]+$')
+        return bool(safe_pattern.match(path))
+    
+    @staticmethod
+    def _validate_ip(ip):
+        """Validate that an IP address is safe."""
+        safe_pattern = re.compile(r'^[0-9.]+$')
+        return bool(safe_pattern.match(ip))
+    
     def start_c2_interaction(self, c2_path, c2_port, bind_addr="0.0.0.0"):
         """
         Start an interactive session with the C2R2 server.
@@ -127,6 +166,17 @@ class SSHConnection:
         """
         if not self.connected or not self.ssh_client:
             return False, "Not connected", None
+        
+        # Validate inputs to prevent command injection
+        valid, c2_port_int = self._validate_port(c2_port)
+        if not valid:
+            return False, "Invalid port number", None
+        
+        if c2_path and not self._validate_path(c2_path):
+            return False, "Invalid path (contains unsafe characters)", None
+        
+        if not self._validate_ip(bind_addr):
+            return False, "Invalid bind address", None
         
         try:
             # Get a shell channel for interactive use
@@ -149,8 +199,8 @@ class SSHConnection:
             
             # Start C2R2 server if provided path
             if c2_path:
-                # First check if server is already running
-                cmd = f"pgrep -f 'c2r2-server.*{c2_port}' >/dev/null 2>&1 && echo 'RUNNING' || echo 'NOT_RUNNING'\n"
+                # First check if server is already running (using validated port)
+                cmd = f"pgrep -f 'c2r2-server.*{c2_port_int}' >/dev/null 2>&1 && echo 'RUNNING' || echo 'NOT_RUNNING'\n"
                 self.channel.send(cmd)
                 time.sleep(0.5)
                 
@@ -161,10 +211,10 @@ class SSHConnection:
                 except Exception:
                     pass
                 
-                # If not running, start it
+                # If not running, start it (using validated inputs)
                 if 'NOT_RUNNING' in response:
-                    # Start the server
-                    start_cmd = f"{c2_path} --bind {bind_addr} --port {c2_port}\n"
+                    # Start the server with validated parameters
+                    start_cmd = f"{c2_path} --bind {bind_addr} --port {c2_port_int}\n"
                     self.channel.send(start_cmd)
                     time.sleep(2)  # Wait for server to start
             
@@ -247,9 +297,11 @@ class C2R2TeamClient:
         # Initialize connection
         self.ssh = SSHConnection()
         self.output_queue = queue.Queue()
+        self._stop_event = threading.Event()  # Thread-safe stop signal
         self.running = True
         self.selected_client = None
         self.agents = {}  # Dictionary to store connected agents
+        self._agent_tree_items = {}  # Mapping of agent_id to tree item for O(1) lookup
         
         # Create UI
         self._setup_styles()
@@ -359,13 +411,14 @@ class C2R2TeamClient:
         form_frame = ttk.Frame(center_frame, style='Panel.TFrame', padding=30)
         form_frame.pack(padx=20, pady=10)
         
-        # SSH Host
+        # SSH Host (empty by default to force user input)
         row = 0
         ttk.Label(form_frame, text="SSH Host:", style='Panel.TLabel').grid(
             row=row, column=0, sticky='e', padx=5, pady=8)
         self.host_entry = ttk.Entry(form_frame, width=40, style='Dark.TEntry')
         self.host_entry.grid(row=row, column=1, padx=5, pady=8)
-        self.host_entry.insert(0, "192.168.1.100")
+        # Placeholder text as hint
+        self.host_entry.insert(0, "")
         
         # SSH Port
         row += 1
@@ -375,13 +428,13 @@ class C2R2TeamClient:
         self.ssh_port_entry.grid(row=row, column=1, padx=5, pady=8)
         self.ssh_port_entry.insert(0, "22")
         
-        # Username
+        # Username (empty by default to force user input)
         row += 1
         ttk.Label(form_frame, text="Username:", style='Panel.TLabel').grid(
             row=row, column=0, sticky='e', padx=5, pady=8)
         self.username_entry = ttk.Entry(form_frame, width=40, style='Dark.TEntry')
         self.username_entry.grid(row=row, column=1, padx=5, pady=8)
-        self.username_entry.insert(0, "operator")
+        self.username_entry.insert(0, "")
         
         # Password
         row += 1
@@ -705,6 +758,7 @@ class C2R2TeamClient:
         self._log_console("Type /help for available commands\n", 'info')
         
         # Start receiver thread
+        self._stop_event.clear()  # Reset stop event
         self.receiver_thread = threading.Thread(target=self._receive_data, daemon=True)
         self.receiver_thread.start()
         
@@ -718,6 +772,10 @@ class C2R2TeamClient:
     
     def _disconnect(self):
         """Disconnect from SSH server."""
+        # Signal receiver thread to stop
+        self._stop_event.set()
+        self.running = False
+        
         self.ssh.disconnect()
         self.main_frame.pack_forget()
         self.login_frame.pack(fill=tk.BOTH, expand=True)
@@ -728,13 +786,17 @@ class C2R2TeamClient:
         for item in self.agents_tree.get_children():
             self.agents_tree.delete(item)
         self.agents.clear()
+        self._agent_tree_items.clear()
         self.selected_client = None
         self._update_prompt()
+        
+        # Reset running flag for next connection
+        self.running = True
     
     def _receive_data(self):
         """Thread to receive data from SSH channel."""
         buffer = ""
-        while self.running and self.ssh.connected:
+        while not self._stop_event.is_set() and self.ssh.connected:
             try:
                 data = self.ssh.recv_from_channel()
                 if data:
@@ -747,7 +809,7 @@ class C2R2TeamClient:
                 
                 time.sleep(0.1)
             except Exception as e:
-                if self.running:
+                if not self._stop_event.is_set():
                     self.output_queue.put(f"Error receiving data: {e}")
                 break
     
@@ -792,9 +854,8 @@ class C2R2TeamClient:
         self._log_console(line + '\n')
     
     def _strip_ansi(self, text):
-        """Remove ANSI escape codes from text."""
-        ansi_escape = re.compile(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])')
-        return ansi_escape.sub('', text)
+        """Remove ANSI escape codes from text (uses pre-compiled pattern for performance)."""
+        return ANSI_ESCAPE_PATTERN.sub('', text)
     
     def _log_console(self, text, tag=None):
         """Log text to the console output."""
@@ -810,11 +871,10 @@ class C2R2TeamClient:
         """Update or add an agent to the tree."""
         agent_id = agent_info['id']
         
-        # Check if agent already exists
-        for item in self.agents_tree.get_children():
-            values = self.agents_tree.item(item)['values']
-            if str(values[0]) == str(agent_id):
-                # Update existing
+        # Check if agent already exists (using agent_id to item mapping for efficiency)
+        if agent_id in self._agent_tree_items:
+            item = self._agent_tree_items[agent_id]
+            if self.agents_tree.exists(item):
                 self.agents_tree.item(item, values=(
                     agent_id,
                     agent_info.get('hostname', agent_info.get('addr', '...')),
@@ -826,14 +886,20 @@ class C2R2TeamClient:
                 return
         
         # Add new agent
-        self.agents_tree.insert('', tk.END, values=(
+        item = self.agents_tree.insert('', tk.END, values=(
             agent_id,
             agent_info.get('hostname', agent_info.get('addr', '...')),
             agent_info.get('username', '...'),
             agent_info.get('os', '...'),
             agent_info.get('privileges', '...')
         ))
+        self._agent_tree_items[agent_id] = item
         self.agents[agent_id] = agent_info
+    
+    @staticmethod
+    def _validate_agent_id(agent_id):
+        """Validate that agent_id contains only digits."""
+        return str(agent_id).isdigit()
     
     def _on_agent_select(self, event):
         """Handle agent selection in treeview."""
@@ -842,6 +908,10 @@ class C2R2TeamClient:
             item = selection[0]
             values = self.agents_tree.item(item)['values']
             agent_id = str(values[0])
+            
+            # Validate agent_id before sending command
+            if not self._validate_agent_id(agent_id):
+                return
             
             # Select the agent
             self._send_raw_command(f"/select {agent_id}\n")
@@ -855,6 +925,10 @@ class C2R2TeamClient:
             item = selection[0]
             values = self.agents_tree.item(item)['values']
             agent_id = str(values[0])
+            
+            # Validate agent_id before sending command
+            if not self._validate_agent_id(agent_id):
+                return
             
             # Show agent info
             self._send_raw_command(f"/info {agent_id}\n")
@@ -909,6 +983,7 @@ class C2R2TeamClient:
         for item in self.agents_tree.get_children():
             self.agents_tree.delete(item)
         self.agents.clear()
+        self._agent_tree_items.clear()
         
         # Request new list
         self._send_raw_command("/list\n")
@@ -995,6 +1070,7 @@ class C2R2TeamClient:
     
     def _on_close(self):
         """Handle window close."""
+        self._stop_event.set()
         self.running = False
         self.ssh.disconnect()
         self.root.destroy()

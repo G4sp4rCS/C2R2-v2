@@ -21,8 +21,7 @@ pub async fn events_handler(
     ws: WebSocketUpgrade,
     headers: HeaderMap,
 ) -> impl IntoResponse {
-    // Extract token from query string or header
-    // For WebSocket, we accept token in the Authorization header or as a query param
+    // Extract token from the Authorization header (Bearer token)
     let token = headers
         .get("Authorization")
         .and_then(|v| v.to_str().ok())

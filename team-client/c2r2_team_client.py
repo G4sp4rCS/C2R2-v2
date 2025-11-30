@@ -1,14 +1,16 @@
 #!/usr/bin/env python3
 """
-C2R2 Team Client - GUI Interface for C2R2 Server via HTTP/WebSocket API
+C2R2 Team Client - GUI Interface for C2R2 Server via SSH-Tunneled API
 
 This application provides a graphical interface for operators to connect
-to a C2R2 server using the REST/WebSocket API.
+to a C2R2 server using SSH tunneling + REST/WebSocket API.
 
-Architecture similar to Havoc C2, Sliver, and other modern C2 frameworks:
+Architecture similar to Havoc C2:
 - Server runs on red team infrastructure with a dedicated API port
-- Operators connect via HTTP/WebSocket from their machines
-- GUI displays connected agents, allows command execution, etc.
+- Operators connect via SSH from their machines
+- SSH tunnel forwards the API port to localhost
+- GUI communicates with the API through the encrypted tunnel
+- 100% tunneled and secure connection
 """
 
 import os
@@ -16,14 +18,23 @@ import sys
 import json
 import time
 import queue
+import socket
 import threading
+import select
 from datetime import datetime
 from pathlib import Path
-from typing import Optional, Dict, List, Any
+from typing import Optional, Dict, List, Any, Tuple
 
 # Tkinter imports (cross-platform GUI)
 import tkinter as tk
 from tkinter import ttk, messagebox, scrolledtext, filedialog
+
+# SSH library
+try:
+    import paramiko
+except ImportError:
+    print("Error: paramiko is required. Install with: pip install paramiko")
+    sys.exit(1)
 
 # HTTP/WebSocket libraries
 try:
@@ -39,8 +50,209 @@ except ImportError:
     sys.exit(1)
 
 
+class SSHTunnel:
+    """Manages SSH connection and port forwarding to C2R2 server API."""
+    
+    def __init__(self):
+        self.ssh_client: Optional[paramiko.SSHClient] = None
+        self.transport: Optional[paramiko.Transport] = None
+        self.connected = False
+        self.local_port: Optional[int] = None
+        self._tunnel_thread: Optional[threading.Thread] = None
+        self._stop_event = threading.Event()
+        self._tunnel_server: Optional[socket.socket] = None
+        self._known_hosts_path = Path.home() / ".ssh" / "known_hosts"
+    
+    def connect(self, host: str, ssh_port: int, username: str, 
+                password: Optional[str] = None, key_path: Optional[str] = None,
+                api_port: int = 5555) -> Tuple[bool, str, Optional[int]]:
+        """
+        Connect to the SSH server and create a tunnel to the API port.
+        
+        Args:
+            host: SSH server hostname/IP
+            ssh_port: SSH port (default 22)
+            username: SSH username
+            password: SSH password (if not using key)
+            key_path: Path to SSH private key (if not using password)
+            api_port: Remote API port to tunnel (default 5555)
+        
+        Returns:
+            Tuple of (success, message, local_port)
+        """
+        try:
+            self.ssh_client = paramiko.SSHClient()
+            
+            # Load known hosts
+            if self._known_hosts_path.exists():
+                self.ssh_client.load_host_keys(str(self._known_hosts_path))
+            self.ssh_client.set_missing_host_key_policy(paramiko.WarningPolicy())
+            
+            # Connect with either password or key
+            connect_params = {
+                'hostname': host,
+                'port': int(ssh_port),
+                'username': username,
+                'timeout': 30,
+            }
+            
+            if key_path and os.path.exists(key_path):
+                connect_params['key_filename'] = key_path
+            elif password:
+                connect_params['password'] = password
+            else:
+                return False, "Either password or SSH key is required", None
+            
+            self.ssh_client.connect(**connect_params)
+            self.transport = self.ssh_client.get_transport()
+            
+            if not self.transport:
+                return False, "Failed to get SSH transport", None
+            
+            # Find an available local port
+            self.local_port = self._find_free_port()
+            if not self.local_port:
+                return False, "Could not find a free local port", None
+            
+            # Start the tunnel
+            self._stop_event.clear()
+            self._tunnel_thread = threading.Thread(
+                target=self._run_tunnel,
+                args=(host, api_port, self.local_port),
+                daemon=True
+            )
+            self._tunnel_thread.start()
+            
+            # Wait a bit for the tunnel to be ready
+            time.sleep(0.5)
+            
+            self.connected = True
+            return True, f"SSH tunnel established: localhost:{self.local_port} -> {host}:{api_port}", self.local_port
+            
+        except paramiko.AuthenticationException:
+            return False, "Authentication failed. Check username/password/key.", None
+        except paramiko.SSHException as e:
+            return False, f"SSH error: {str(e)}", None
+        except socket.error as e:
+            return False, f"Connection error: {str(e)}", None
+        except Exception as e:
+            return False, f"Error: {str(e)}", None
+    
+    def _find_free_port(self) -> Optional[int]:
+        """Find a free local port for the tunnel."""
+        for port in range(10000, 11000):
+            try:
+                sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                sock.bind(('127.0.0.1', port))
+                sock.close()
+                return port
+            except OSError:
+                continue
+        return None
+    
+    def _run_tunnel(self, remote_host: str, remote_port: int, local_port: int):
+        """Run the SSH tunnel (port forward)."""
+        try:
+            # Create a local server socket
+            self._tunnel_server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            self._tunnel_server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            self._tunnel_server.bind(('127.0.0.1', local_port))
+            self._tunnel_server.listen(5)
+            self._tunnel_server.setblocking(False)
+            
+            connections = []
+            
+            while not self._stop_event.is_set():
+                # Check for new connections
+                try:
+                    readable, _, _ = select.select([self._tunnel_server], [], [], 0.1)
+                    if self._tunnel_server in readable:
+                        client_socket, _ = self._tunnel_server.accept()
+                        client_socket.setblocking(False)
+                        
+                        # Open a channel through SSH to the remote port
+                        try:
+                            channel = self.transport.open_channel(
+                                'direct-tcpip',
+                                ('127.0.0.1', remote_port),
+                                client_socket.getpeername()
+                            )
+                            if channel:
+                                connections.append((client_socket, channel))
+                            else:
+                                client_socket.close()
+                        except Exception:
+                            client_socket.close()
+                except Exception:
+                    pass
+                
+                # Handle existing connections
+                to_remove = []
+                for client_socket, channel in connections:
+                    try:
+                        # Forward data from client to channel
+                        readable, _, _ = select.select([client_socket], [], [], 0)
+                        if client_socket in readable:
+                            data = client_socket.recv(4096)
+                            if data:
+                                channel.send(data)
+                            else:
+                                to_remove.append((client_socket, channel))
+                                continue
+                        
+                        # Forward data from channel to client
+                        if channel.recv_ready():
+                            data = channel.recv(4096)
+                            if data:
+                                client_socket.send(data)
+                            else:
+                                to_remove.append((client_socket, channel))
+                                
+                    except Exception:
+                        to_remove.append((client_socket, channel))
+                
+                # Clean up closed connections
+                for item in to_remove:
+                    connections.remove(item)
+                    try:
+                        item[0].close()
+                        item[1].close()
+                    except Exception:
+                        pass
+                        
+        except Exception as e:
+            print(f"Tunnel error: {e}")
+        finally:
+            if self._tunnel_server:
+                self._tunnel_server.close()
+    
+    def disconnect(self):
+        """Disconnect SSH and close tunnel."""
+        self._stop_event.set()
+        
+        if self._tunnel_thread:
+            self._tunnel_thread.join(timeout=2)
+        
+        if self._tunnel_server:
+            try:
+                self._tunnel_server.close()
+            except Exception:
+                pass
+        
+        if self.ssh_client:
+            try:
+                self.ssh_client.close()
+            except Exception:
+                pass
+        
+        self.connected = False
+        self.local_port = None
+        self.ssh_client = None
+        self.transport = None
+
+
 class C2R2ApiClient:
-    """HTTP/WebSocket client for communicating with C2R2 server API."""
+    """HTTP/WebSocket client for communicating with C2R2 server API through SSH tunnel."""
     
     def __init__(self):
         self.base_url: Optional[str] = None
@@ -52,13 +264,13 @@ class C2R2ApiClient:
         self._ws_thread: Optional[threading.Thread] = None
         self._running = False
     
-    def connect(self, host: str, port: int, password: str, username: str = "operator") -> tuple[bool, str]:
+    def connect(self, host: str, port: int, password: str, username: str = "operator") -> Tuple[bool, str]:
         """
-        Connect to the C2R2 server API.
+        Connect to the C2R2 server API (through local tunnel port).
         
         Args:
-            host: Server hostname/IP
-            port: API port (default 5555)
+            host: Local tunnel host (usually 127.0.0.1)
+            port: Local tunnel port
             password: API password
             username: Username for login
         
@@ -405,7 +617,8 @@ class C2R2TeamClient:
         # Configure root
         self.root.configure(bg=self.colors['bg'])
         
-        # Initialize API client
+        # Initialize SSH tunnel and API client
+        self.ssh_tunnel = SSHTunnel()
         self.api = C2R2ApiClient()
         self.event_queue = queue.Queue()
         self.running = True
@@ -511,7 +724,7 @@ class C2R2TeamClient:
         
         subtitle = ttk.Label(
             center_frame,
-            text="Connect to C2R2 Server via API",
+            text="Connect to C2R2 Server via SSH Tunnel",
             style='Dark.TLabel',
             font=('Consolas', 12)
         )
@@ -521,42 +734,88 @@ class C2R2TeamClient:
         form_frame = ttk.Frame(center_frame, style='Panel.TFrame', padding=30)
         form_frame.pack(padx=20, pady=10)
         
-        # Server Host
+        # SSH Section Header
         row = 0
-        ttk.Label(form_frame, text="Server Host:", style='Panel.TLabel').grid(
-            row=row, column=0, sticky='e', padx=5, pady=8)
-        self.host_entry = ttk.Entry(form_frame, width=40, style='Dark.TEntry')
-        self.host_entry.grid(row=row, column=1, padx=5, pady=8)
-        self.host_entry.insert(0, "localhost")
+        ttk.Label(form_frame, text="─── SSH Connection ───", style='Panel.TLabel',
+                  font=('Consolas', 10, 'bold')).grid(row=row, column=0, columnspan=2, pady=(0, 10))
         
-        # API Port
+        # SSH Host
         row += 1
-        ttk.Label(form_frame, text="API Port:", style='Panel.TLabel').grid(
-            row=row, column=0, sticky='e', padx=5, pady=8)
+        ttk.Label(form_frame, text="SSH Host:", style='Panel.TLabel').grid(
+            row=row, column=0, sticky='e', padx=5, pady=5)
+        self.ssh_host_entry = ttk.Entry(form_frame, width=40, style='Dark.TEntry')
+        self.ssh_host_entry.grid(row=row, column=1, padx=5, pady=5)
+        self.ssh_host_entry.insert(0, "")
+        
+        # SSH Port
+        row += 1
+        ttk.Label(form_frame, text="SSH Port:", style='Panel.TLabel').grid(
+            row=row, column=0, sticky='e', padx=5, pady=5)
+        self.ssh_port_entry = ttk.Entry(form_frame, width=40, style='Dark.TEntry')
+        self.ssh_port_entry.grid(row=row, column=1, padx=5, pady=5)
+        self.ssh_port_entry.insert(0, "22")
+        
+        # SSH Username
+        row += 1
+        ttk.Label(form_frame, text="SSH User:", style='Panel.TLabel').grid(
+            row=row, column=0, sticky='e', padx=5, pady=5)
+        self.ssh_user_entry = ttk.Entry(form_frame, width=40, style='Dark.TEntry')
+        self.ssh_user_entry.grid(row=row, column=1, padx=5, pady=5)
+        self.ssh_user_entry.insert(0, "")
+        
+        # SSH Password
+        row += 1
+        ttk.Label(form_frame, text="SSH Password:", style='Panel.TLabel').grid(
+            row=row, column=0, sticky='e', padx=5, pady=5)
+        self.ssh_password_entry = ttk.Entry(form_frame, width=40, style='Dark.TEntry', show='*')
+        self.ssh_password_entry.grid(row=row, column=1, padx=5, pady=5)
+        
+        # SSH Key (optional)
+        row += 1
+        ttk.Label(form_frame, text="SSH Key (optional):", style='Panel.TLabel').grid(
+            row=row, column=0, sticky='e', padx=5, pady=5)
+        key_frame = ttk.Frame(form_frame, style='Panel.TFrame')
+        key_frame.grid(row=row, column=1, padx=5, pady=5, sticky='w')
+        self.ssh_key_entry = ttk.Entry(key_frame, width=32, style='Dark.TEntry')
+        self.ssh_key_entry.pack(side=tk.LEFT)
+        browse_btn = tk.Button(key_frame, text="Browse", bg=self.colors['panel_bg'], 
+                               fg=self.colors['fg'], relief=tk.FLAT,
+                               command=self._browse_ssh_key)
+        browse_btn.pack(side=tk.LEFT, padx=5)
+        
+        # API Section Header
+        row += 1
+        ttk.Label(form_frame, text="─── C2R2 API ───", style='Panel.TLabel',
+                  font=('Consolas', 10, 'bold')).grid(row=row, column=0, columnspan=2, pady=(15, 10))
+        
+        # Remote API Port
+        row += 1
+        ttk.Label(form_frame, text="Remote API Port:", style='Panel.TLabel').grid(
+            row=row, column=0, sticky='e', padx=5, pady=5)
         self.api_port_entry = ttk.Entry(form_frame, width=40, style='Dark.TEntry')
-        self.api_port_entry.grid(row=row, column=1, padx=5, pady=8)
+        self.api_port_entry.grid(row=row, column=1, padx=5, pady=5)
         self.api_port_entry.insert(0, "5555")
         
-        # Username
+        # Operator Username
         row += 1
-        ttk.Label(form_frame, text="Username:", style='Panel.TLabel').grid(
-            row=row, column=0, sticky='e', padx=5, pady=8)
+        ttk.Label(form_frame, text="Operator Name:", style='Panel.TLabel').grid(
+            row=row, column=0, sticky='e', padx=5, pady=5)
         self.username_entry = ttk.Entry(form_frame, width=40, style='Dark.TEntry')
-        self.username_entry.grid(row=row, column=1, padx=5, pady=8)
+        self.username_entry.grid(row=row, column=1, padx=5, pady=5)
         self.username_entry.insert(0, "operator")
         
         # API Password
         row += 1
         ttk.Label(form_frame, text="API Password:", style='Panel.TLabel').grid(
-            row=row, column=0, sticky='e', padx=5, pady=8)
+            row=row, column=0, sticky='e', padx=5, pady=5)
         self.password_entry = ttk.Entry(form_frame, width=40, style='Dark.TEntry', show='*')
-        self.password_entry.grid(row=row, column=1, padx=5, pady=8)
+        self.password_entry.grid(row=row, column=1, padx=5, pady=5)
         self.password_entry.insert(0, "c2r2-secret")
         
         row += 1
         hint_label = ttk.Label(
             form_frame, 
-            text="(Default password is 'c2r2-secret' - change with --api-password flag on server)",
+            text="(API password set on server with --api-password flag)",
             style='Panel.TLabel',
             font=('Consolas', 9)
         )
@@ -566,7 +825,7 @@ class C2R2TeamClient:
         row += 1
         self.connect_btn = tk.Button(
             form_frame,
-            text="🔗 Connect",
+            text="🔗 Connect via SSH Tunnel",
             font=('Consolas', 12, 'bold'),
             bg=self.colors['accent'],
             fg='white',
@@ -584,6 +843,21 @@ class C2R2TeamClient:
         row += 1
         self.login_status = ttk.Label(form_frame, text="", style='Panel.TLabel')
         self.login_status.grid(row=row, column=0, columnspan=2)
+    
+    def _browse_ssh_key(self):
+        """Open file dialog to select SSH private key."""
+        initial_dir = Path.home() / ".ssh"
+        if not initial_dir.exists():
+            initial_dir = Path.home()
+        
+        filepath = filedialog.askopenfilename(
+            title="Select SSH Private Key",
+            initialdir=str(initial_dir),
+            filetypes=[("All Files", "*"), ("PEM Files", "*.pem")]
+        )
+        if filepath:
+            self.ssh_key_entry.delete(0, tk.END)
+            self.ssh_key_entry.insert(0, filepath)
     
     def _create_main_frame(self):
         """Create the main application frame (shown after connection)."""
@@ -771,40 +1045,84 @@ class C2R2TeamClient:
             btn.pack(side=tk.LEFT, padx=2)
     
     def _connect(self):
-        """Handle connection to API server."""
-        host = self.host_entry.get().strip()
-        port = self.api_port_entry.get().strip()
+        """Handle connection via SSH tunnel to API server."""
+        # Get SSH connection details
+        ssh_host = self.ssh_host_entry.get().strip()
+        ssh_port = self.ssh_port_entry.get().strip()
+        ssh_user = self.ssh_user_entry.get().strip()
+        ssh_password = self.ssh_password_entry.get()
+        ssh_key = self.ssh_key_entry.get().strip()
+        
+        # Get API details
+        api_port = self.api_port_entry.get().strip()
         username = self.username_entry.get().strip()
-        password = self.password_entry.get()
+        api_password = self.password_entry.get()
         
-        if not host:
-            self.login_status.config(text="❌ Host is required", foreground=self.colors['error'])
+        # Validation
+        if not ssh_host:
+            self.login_status.config(text="❌ SSH Host is required", foreground=self.colors['error'])
             return
         
-        if not password:
-            self.login_status.config(text="❌ Password is required", foreground=self.colors['error'])
+        if not ssh_user:
+            self.login_status.config(text="❌ SSH User is required", foreground=self.colors['error'])
             return
         
-        self.login_status.config(text="⏳ Connecting...", foreground=self.colors['warning'])
+        if not ssh_password and not ssh_key:
+            self.login_status.config(text="❌ SSH Password or Key is required", foreground=self.colors['error'])
+            return
+        
+        if not api_password:
+            self.login_status.config(text="❌ API Password is required", foreground=self.colors['error'])
+            return
+        
+        self.login_status.config(text="⏳ Establishing SSH tunnel...", foreground=self.colors['warning'])
         self.connect_btn.config(state=tk.DISABLED)
         self.root.update()
         
         # Connect in a separate thread to avoid blocking UI
         def connect_thread():
             try:
-                port_int = int(port)
+                ssh_port_int = int(ssh_port)
+                api_port_int = int(api_port)
             except ValueError:
                 self.root.after(0, lambda: self._on_connect_fail("Invalid port number"))
                 return
             
-            success, message = self.api.connect(host, port_int, password, username)
+            # Step 1: Establish SSH tunnel
+            ssh_success, ssh_message, local_port = self.ssh_tunnel.connect(
+                host=ssh_host,
+                ssh_port=ssh_port_int,
+                username=ssh_user,
+                password=ssh_password if ssh_password else None,
+                key_path=ssh_key if ssh_key else None,
+                api_port=api_port_int
+            )
             
-            if success:
+            if not ssh_success:
+                self.root.after(0, lambda: self._on_connect_fail(f"SSH: {ssh_message}"))
+                return
+            
+            self.root.after(0, lambda: self.login_status.config(
+                text="⏳ SSH tunnel established. Connecting to API...", 
+                foreground=self.colors['warning']
+            ))
+            
+            # Step 2: Connect to API through the tunnel
+            api_success, api_message = self.api.connect(
+                host="127.0.0.1",
+                port=local_port,
+                password=api_password,
+                username=username
+            )
+            
+            if api_success:
                 # Start event listener
                 self.api.start_event_listener(self._on_server_event)
-                self.root.after(0, lambda: self._on_connect_success(host, port_int))
+                self.root.after(0, lambda: self._on_connect_success(ssh_host, local_port, api_port_int))
             else:
-                self.root.after(0, lambda: self._on_connect_fail(message))
+                # Disconnect SSH if API fails
+                self.ssh_tunnel.disconnect()
+                self.root.after(0, lambda: self._on_connect_fail(f"API: {api_message}"))
         
         thread = threading.Thread(target=connect_thread, daemon=True)
         thread.start()
@@ -878,18 +1196,20 @@ class C2R2TeamClient:
             tag = {'info': 'info', 'warning': 'warning', 'error': 'error'}.get(level, None)
             self._log_console(f"ℹ️ Server: {message}\n", tag)
     
-    def _on_connect_success(self, host: str, port: int):
+    def _on_connect_success(self, ssh_host: str, local_port: int, remote_api_port: int):
         """Handle successful connection."""
         self.login_frame.pack_forget()
         self.main_frame.pack(fill=tk.BOTH, expand=True)
         
         self.connection_label.config(
-            text=f"🔐 Connected to {host}:{port}",
+            text=f"🔐 SSH Tunnel: {ssh_host} (localhost:{local_port} → API:{remote_api_port})",
             foreground=self.colors['success']
         )
         
         # Log to console
-        self._log_console(f"✅ Connected to C2R2 Server at {host}:{port}\n", 'success')
+        self._log_console(f"✅ SSH tunnel established to {ssh_host}\n", 'success')
+        self._log_console(f"✅ Local port {local_port} tunneled to remote API port {remote_api_port}\n", 'success')
+        self._log_console("✅ Connected to C2R2 Server API\n", 'success')
         self._log_console("Type /help for available commands\n", 'info')
         
         # Load initial agent list
@@ -901,8 +1221,9 @@ class C2R2TeamClient:
         self.connect_btn.config(state=tk.NORMAL)
     
     def _disconnect(self):
-        """Disconnect from the server."""
+        """Disconnect from the server and SSH tunnel."""
         self.api.disconnect()
+        self.ssh_tunnel.disconnect()
         
         self.main_frame.pack_forget()
         self.login_frame.pack(fill=tk.BOTH, expand=True)
@@ -1286,6 +1607,7 @@ class C2R2TeamClient:
         """Handle window close."""
         self.running = False
         self.api.disconnect()
+        self.ssh_tunnel.disconnect()
         self.root.destroy()
     
     def run(self):

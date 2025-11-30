@@ -1,23 +1,32 @@
 # C2R2 Team Client
 
-A graphical user interface (GUI) for operators to connect to C2R2 Command & Control servers.
+A graphical user interface (GUI) for operators to connect to C2R2 Command & Control servers via SSH-tunneled API.
 
 ## Architecture
 
-Similar to Havoc C2's architecture:
+Similar to Havoc C2's architecture, all communication is 100% tunneled through SSH:
 - **C2R2 Server**: Runs on red team infrastructure with a dedicated API port
-- **Team Client**: Operators connect from their machines via HTTP/WebSocket API
-- **GUI Interface**: Visual display of connected agents, command execution, etc.
+- **Team Client**: Establishes SSH connection to the server
+- **SSH Tunnel**: Port forwards the API port to localhost
+- **API Communication**: All REST/WebSocket traffic goes through the encrypted SSH tunnel
 
 ```
 ┌─────────────────────┐                    ┌─────────────────────┐
-│   Operator Machine  │    HTTP/WebSocket  │  Red Team Server    │
-│  ┌───────────────┐  │                    │  ┌───────────────┐  │
-│  │ Team Client   │──┼────────────────────┼──│  C2R2 Server  │  │
-│  │   (GUI)       │  │    (API Port)      │  │               │  │
-│  └───────────────┘  │                    │  └───────────────┘  │
-└─────────────────────┘                    │         │          │
-                                           │         ▼          │
+│   Operator Machine  │                    │  Red Team Server    │
+│  ┌───────────────┐  │      SSH (22)      │  ┌───────────────┐  │
+│  │ Team Client   │──┼────────────────────┼──│  SSH Server   │  │
+│  │   (GUI)       │  │                    │  └───────┬───────┘  │
+│  └───────┬───────┘  │                    │          │          │
+│          │          │                    │   Port Forward      │
+│   localhost:10xxx   │                    │          │          │
+│          │          │  ═══ SSH Tunnel ══>│          ▼          │
+│          ▼          │                    │  ┌───────────────┐  │
+│  ┌───────────────┐  │                    │  │  C2R2 Server  │  │
+│  │ HTTP/WS API   │──┼── (through SSH) ──>│  │   API:5555    │  │
+│  └───────────────┘  │                    │  └───────┬───────┘  │
+└─────────────────────┘                    │          │          │
+                                           │   🔐 TLS Encrypted  │
+                                           │          ▼          │
                                            │  ┌───────────────┐  │
                                            │  │   Agents      │  │
                                            │  │  (Windows)    │  │
@@ -25,9 +34,17 @@ Similar to Havoc C2's architecture:
                                            └─────────────────────┘
 ```
 
+## Security Benefits
+
+✅ **100% Tunneled**: All API traffic encrypted through SSH  
+✅ **No Direct Exposure**: API port not exposed to the internet  
+✅ **SSH Authentication**: Use SSH keys or passwords  
+✅ **Double Encryption**: SSH tunnel + TLS for agent connections  
+
 ## Features
 
-- **API Connection**: Connect via HTTP/WebSocket to the C2R2 server API
+- **SSH Tunnel**: Automatic port forwarding through SSH
+- **REST/WebSocket API**: Clean API communication through the tunnel
 - **Real-time Updates**: WebSocket connection for live agent updates
 - **Cross-Platform**: Works on Windows and Linux (tkinter-based)
 - **Dark Theme**: Modern dark interface
@@ -40,6 +57,7 @@ Similar to Havoc C2's architecture:
 ## Requirements
 
 - Python 3.8+
+- paramiko (SSH library)
 - requests (HTTP client)
 - websocket-client (WebSocket client)
 - tkinter (usually included with Python)
@@ -50,7 +68,7 @@ Similar to Havoc C2's architecture:
 
 ```bash
 # Install Python dependencies
-pip install requests websocket-client
+pip install paramiko requests websocket-client
 
 # Run the client
 python c2r2_team_client.py
@@ -67,7 +85,7 @@ sudo apt-get install python3-tk
 sudo dnf install python3-tkinter
 
 # Install Python dependencies
-pip install requests websocket-client
+pip install paramiko requests websocket-client
 
 # Run the client
 python3 c2r2_team_client.py
@@ -85,8 +103,8 @@ cd c2r2-server
 ```
 
 Server will listen on:
-- **Port 4444**: TLS port for agent connections
-- **Port 5555**: HTTP/WebSocket API for team clients
+- **Port 4444**: TLS port for agent connections (exposed to agents)
+- **Port 5555**: HTTP/WebSocket API (only accessible locally or via SSH tunnel)
 
 ### 2. Launch the Team Client
 
@@ -94,18 +112,26 @@ Server will listen on:
 python c2r2_team_client.py
 ```
 
-### 3. Connect via API
+### 3. Connect via SSH Tunnel
 
 Enter the following details in the login screen:
-- **Server Host**: IP address or hostname of the red team server
-- **API Port**: API port (default 5555)
-- **Username**: Your operator username (any name for identification)
-- **API Password**: The password configured on the server (default: c2r2-secret)
+
+**SSH Connection:**
+- **SSH Host**: IP address or hostname of the red team server
+- **SSH Port**: SSH port (default 22)
+- **SSH User**: Your SSH username on the server
+- **SSH Password**: Your SSH password (or leave empty if using key)
+- **SSH Key**: Path to your SSH private key (optional, recommended)
+
+**API Connection:**
+- **Remote API Port**: API port on the server (default 5555)
+- **Operator Name**: Your operator name (for identification)
+- **API Password**: The password configured on the server (--api-password flag)
 
 ### 4. Interact with Agents
 
 Once connected, you'll see:
-- **Left Panel**: List of connected agents (auto-updated via WebSocket)
+- **Left Panel**: List of connected agents (auto-updated via WebSocket through the tunnel)
 - **Right Panel**: Console output and command input
 
 Select an agent by clicking on it, then use commands like:
@@ -139,38 +165,17 @@ Select an agent by clicking on it, then use commands like:
    /help                  - Show help
 ```
 
-## Server API Endpoints
+## How the SSH Tunnel Works
 
-The team client communicates with the server via these REST/WebSocket endpoints:
+1. **Client connects to SSH server** on the red team infrastructure
+2. **Port forward is established**: localhost:10xxx → server:5555 (API)
+3. **API calls go through tunnel**: HTTP/WebSocket traffic is encrypted in SSH
+4. **WebSocket for real-time events**: Also tunneled through SSH
 
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/api/auth/login` | POST | Authenticate and get token |
-| `/api/auth/logout` | POST | Invalidate token |
-| `/api/status` | GET | Server status |
-| `/api/agents` | GET | List all agents |
-| `/api/agents/:id` | GET | Get agent details |
-| `/api/agents/:id/cmd` | POST | Send command to agent |
-| `/api/agents/all/cmd` | POST | Send command to all agents |
-| `/api/agents/:id/download` | POST | Request file download |
-| `/api/agents/:id/harvest` | POST | Harvest credentials |
-| `/api/agents/:id/persist` | POST | Set persistence |
-| `/api/agents/:id/beacon` | POST | Configure beacon |
-| `/api/agents/:id/elevate` | POST | Elevate to admin |
-| `/api/events` | WS | WebSocket for real-time events |
-
-## WebSocket Events
-
-The `/api/events` WebSocket sends these event types:
-
-- `AgentConnected` - New agent connected
-- `AgentDisconnected` - Agent disconnected
-- `AgentUpdated` - Agent info updated
-- `CommandOutput` - Command output received
-- `FileDownloaded` - File download completed
-- `CredentialsHarvested` - Credentials harvested
-- `RansomwareResult` - Ransomware operation result
-- `ServerMessage` - Server info/warning/error
+This means:
+- The API port (5555) doesn't need to be exposed to the internet
+- Only SSH (22) and agent port (4444) need to be accessible
+- All operator traffic is encrypted via SSH
 
 ## Keyboard Shortcuts
 
@@ -182,22 +187,23 @@ The `/api/events` WebSocket sends these event types:
 
 ⚠️ **FOR AUTHORIZED SECURITY TESTING ONLY**
 
-- API connection uses HTTP (consider using a reverse proxy with TLS for production)
+- SSH connection encrypts all API traffic
+- Use SSH key authentication for better security (recommended)
 - Use a strong API password
-- Authentication tokens are session-based
 - Never share credentials
-
-## Legacy SSH Mode
-
-The old SSH-based team client is still available as `c2r2_team_client_ssh.py` for backwards compatibility. The API-based client (`c2r2_team_client.py`) is recommended for new deployments.
 
 ## Troubleshooting
 
-### Connection Issues
+### SSH Connection Issues
 
-1. **Connection Refused**: Check that the server is running and the API port is correct
-2. **Authentication Failed**: Verify the API password matches the server configuration
-3. **WebSocket Disconnects**: Check firewall rules for persistent connections
+1. **Connection Refused**: Check that SSH server is running on the specified port
+2. **Authentication Failed**: Verify SSH credentials or key path
+3. **Key Not Found**: Ensure the SSH key file exists and has correct permissions
+
+### API Connection Issues
+
+1. **Connection Refused after SSH**: Check that C2R2 server is running on the API port
+2. **Authentication Failed**: Verify the API password matches server configuration
 
 ### GUI Issues
 

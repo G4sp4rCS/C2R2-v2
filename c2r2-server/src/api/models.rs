@@ -15,6 +15,7 @@ pub struct AgentInfo {
     pub os_version: Option<String>,
     pub privileges: Option<String>,
     pub connected_at: String,
+    pub cwd: Option<String>,  // Current working directory
 }
 
 /// List of agents response
@@ -67,6 +68,12 @@ pub struct BeaconRequest {
 /// List directory request
 #[derive(Debug, Deserialize)]
 pub struct ListDirRequest {
+    pub path: String,
+}
+
+/// Change directory request
+#[derive(Debug, Deserialize)]
+pub struct CdRequest {
     pub path: String,
 }
 
@@ -151,6 +158,17 @@ pub enum ServerEvent {
         agent_id: u64,
         output: String,
         is_error: bool,
+    },
+    /// Directory listing received from agent
+    DirectoryListing {
+        agent_id: u64,
+        path: String,
+        entries: Vec<DirEntry>,
+    },
+    /// Current working directory changed
+    CwdChanged {
+        agent_id: u64,
+        cwd: String,
     },
     /// File download completed
     FileDownloaded {

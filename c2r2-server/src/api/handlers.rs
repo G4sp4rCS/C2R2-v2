@@ -204,11 +204,76 @@ pub async fn list_directory(
         return Err(StatusCode::UNAUTHORIZED);
     }
     
-    let command = format!("__LISTDIR__:{}", request.path);
+    // If path is empty, agent will list current directory
+    let command = if request.path.is_empty() {
+        "__LISTDIR__".to_string()
+    } else {
+        format!("__LISTDIR__:{}", request.path)
+    };
     match state.send_command(id, command).await {
         Ok(_) => Ok(Json(CommandResponse {
             success: true,
-            message: format!("List directory request sent for: {}", request.path),
+            message: format!("List directory request sent for: {}", if request.path.is_empty() { "current directory" } else { &request.path }),
+            agent_id: id,
+        })),
+        Err(e) => Ok(Json(CommandResponse {
+            success: false,
+            message: e,
+            agent_id: id,
+        })),
+    }
+}
+
+/// Change current directory on an agent
+pub async fn change_directory(
+    State(state): State<Arc<ApiState>>,
+    headers: HeaderMap,
+    Path(id): Path<u64>,
+    Json(request): Json<CdRequest>,
+) -> Result<Json<CommandResponse>, StatusCode> {
+    // Validate token
+    if let Some(token) = extract_token(&headers) {
+        if !state.validate_token(&token).await {
+            return Err(StatusCode::UNAUTHORIZED);
+        }
+    } else {
+        return Err(StatusCode::UNAUTHORIZED);
+    }
+    
+    let command = format!("__CD__:{}", request.path);
+    match state.send_command(id, command).await {
+        Ok(_) => Ok(Json(CommandResponse {
+            success: true,
+            message: format!("Change directory request sent for: {}", request.path),
+            agent_id: id,
+        })),
+        Err(e) => Ok(Json(CommandResponse {
+            success: false,
+            message: e,
+            agent_id: id,
+        })),
+    }
+}
+
+/// Get current working directory of an agent
+pub async fn get_cwd(
+    State(state): State<Arc<ApiState>>,
+    headers: HeaderMap,
+    Path(id): Path<u64>,
+) -> Result<Json<CommandResponse>, StatusCode> {
+    // Validate token
+    if let Some(token) = extract_token(&headers) {
+        if !state.validate_token(&token).await {
+            return Err(StatusCode::UNAUTHORIZED);
+        }
+    } else {
+        return Err(StatusCode::UNAUTHORIZED);
+    }
+    
+    match state.send_command(id, "__PWD__".to_string()).await {
+        Ok(_) => Ok(Json(CommandResponse {
+            success: true,
+            message: "Get current directory request sent".to_string(),
             agent_id: id,
         })),
         Err(e) => Ok(Json(CommandResponse {

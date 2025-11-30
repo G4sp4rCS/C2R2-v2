@@ -1,20 +1,20 @@
 # C2R2 Team Client
 
-A graphical user interface (GUI) for operators to connect to C2R2 Command & Control servers via SSH.
+A graphical user interface (GUI) for operators to connect to C2R2 Command & Control servers.
 
 ## Architecture
 
 Similar to Havoc C2's architecture:
-- **C2R2 Server**: Runs on red team infrastructure
-- **Team Client**: Operators connect from their machines via SSH
+- **C2R2 Server**: Runs on red team infrastructure with a dedicated API port
+- **Team Client**: Operators connect from their machines via HTTP/WebSocket API
 - **GUI Interface**: Visual display of connected agents, command execution, etc.
 
 ```
 ┌─────────────────────┐                    ┌─────────────────────┐
-│   Operator Machine  │     SSH Tunnel     │  Red Team Server    │
+│   Operator Machine  │    HTTP/WebSocket  │  Red Team Server    │
 │  ┌───────────────┐  │                    │  ┌───────────────┐  │
 │  │ Team Client   │──┼────────────────────┼──│  C2R2 Server  │  │
-│  │   (GUI)       │  │                    │  │               │  │
+│  │   (GUI)       │  │    (API Port)      │  │               │  │
 │  └───────────────┘  │                    │  └───────────────┘  │
 └─────────────────────┘                    │         │          │
                                            │         ▼          │
@@ -27,7 +27,8 @@ Similar to Havoc C2's architecture:
 
 ## Features
 
-- **SSH Connection**: Secure tunnel to the C2R2 server
+- **API Connection**: Connect via HTTP/WebSocket to the C2R2 server API
+- **Real-time Updates**: WebSocket connection for live agent updates
 - **Cross-Platform**: Works on Windows and Linux (tkinter-based)
 - **Dark Theme**: Modern dark interface
 - **Agent Management**: View connected agents in real-time
@@ -39,7 +40,8 @@ Similar to Havoc C2's architecture:
 ## Requirements
 
 - Python 3.8+
-- paramiko (SSH library)
+- requests (HTTP client)
+- websocket-client (WebSocket client)
 - tkinter (usually included with Python)
 
 ## Installation
@@ -48,7 +50,7 @@ Similar to Havoc C2's architecture:
 
 ```bash
 # Install Python dependencies
-pip install paramiko
+pip install requests websocket-client
 
 # Run the client
 python c2r2_team_client.py
@@ -65,7 +67,7 @@ sudo apt-get install python3-tk
 sudo dnf install python3-tkinter
 
 # Install Python dependencies
-pip install paramiko
+pip install requests websocket-client
 
 # Run the client
 python3 c2r2_team_client.py
@@ -76,10 +78,15 @@ python3 c2r2_team_client.py
 ### 1. Start the C2R2 Server (on red team infrastructure)
 
 ```bash
-# On the server
+# On the server (generates TLS certs first time)
 cd c2r2-server
-./target/release/c2r2-server --bind 0.0.0.0 --port 4444
+./target/release/c2r2-server --generate-certs
+./target/release/c2r2-server --bind 0.0.0.0 --port 4444 --api-port 5555 --api-password your-secret-password
 ```
+
+Server will listen on:
+- **Port 4444**: TLS port for agent connections
+- **Port 5555**: HTTP/WebSocket API for team clients
 
 ### 2. Launch the Team Client
 
@@ -87,20 +94,18 @@ cd c2r2-server
 python c2r2_team_client.py
 ```
 
-### 3. Connect via SSH
+### 3. Connect via API
 
 Enter the following details in the login screen:
-- **SSH Host**: IP address of the red team server
-- **SSH Port**: SSH port (default 22)
-- **Username**: Your SSH username
-- **Password/Key**: SSH password or path to private key
-- **C2 Server Port**: Port where C2R2 server is running (default 4444)
-- **C2 Binary Path**: (Optional) Path to c2r2-server binary to auto-start
+- **Server Host**: IP address or hostname of the red team server
+- **API Port**: API port (default 5555)
+- **Username**: Your operator username (any name for identification)
+- **API Password**: The password configured on the server (default: c2r2-secret)
 
 ### 4. Interact with Agents
 
 Once connected, you'll see:
-- **Left Panel**: List of connected agents
+- **Left Panel**: List of connected agents (auto-updated via WebSocket)
 - **Right Panel**: Console output and command input
 
 Select an agent by clicking on it, then use commands like:
@@ -116,7 +121,6 @@ Select an agent by clicking on it, then use commands like:
    /list                  - List all connected clients
    /select <id>           - Select a client by ID
    /deselect              - Deselect current client
-   /info <id>             - Show detailed client info
 
 💻 Command Execution:
    /cmd <command>         - Execute command on selected client
@@ -124,32 +128,49 @@ Select an agent by clicking on it, then use commands like:
 
 📁 File Operations:
    /download <path>       - Download file from agent
-   /upload <local> <remote> - Upload file to agent
 
 🔧 Advanced Operations:
    /harvest               - Harvest credentials
-   /elevate               - Elevate to admin (UAC)
-   /persist <method>      - Establish persistence
-   /persist_remove        - Remove persistence
-   /beacon <int:jit>      - Configure beacon timing
+   /persist <method>      - Establish persistence (registry|task|wmi|startup)
+   /beacon <int:jit>      - Configure beacon timing (e.g., 60:30)
+   /elevate               - Elevate to admin (UAC prompt)
 
-🔐 Ransomware (if module loaded):
-   /encrypt <path>        - Encrypt files
-   /decrypt <path> <key>  - Decrypt files
-
-ℹ️ Server:
+ℹ️ Other:
    /help                  - Show help
-   /exit, /quit           - Shutdown server
 ```
 
-## Screenshots
+## Server API Endpoints
 
-The Team Client features a modern dark theme with:
-- Connection status indicator
-- Agent list with detailed information
-- Scrollable console output
-- Command input with history
-- Quick action buttons
+The team client communicates with the server via these REST/WebSocket endpoints:
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/auth/login` | POST | Authenticate and get token |
+| `/api/auth/logout` | POST | Invalidate token |
+| `/api/status` | GET | Server status |
+| `/api/agents` | GET | List all agents |
+| `/api/agents/:id` | GET | Get agent details |
+| `/api/agents/:id/cmd` | POST | Send command to agent |
+| `/api/agents/all/cmd` | POST | Send command to all agents |
+| `/api/agents/:id/download` | POST | Request file download |
+| `/api/agents/:id/harvest` | POST | Harvest credentials |
+| `/api/agents/:id/persist` | POST | Set persistence |
+| `/api/agents/:id/beacon` | POST | Configure beacon |
+| `/api/agents/:id/elevate` | POST | Elevate to admin |
+| `/api/events` | WS | WebSocket for real-time events |
+
+## WebSocket Events
+
+The `/api/events` WebSocket sends these event types:
+
+- `AgentConnected` - New agent connected
+- `AgentDisconnected` - Agent disconnected
+- `AgentUpdated` - Agent info updated
+- `CommandOutput` - Command output received
+- `FileDownloaded` - File download completed
+- `CredentialsHarvested` - Credentials harvested
+- `RansomwareResult` - Ransomware operation result
+- `ServerMessage` - Server info/warning/error
 
 ## Keyboard Shortcuts
 
@@ -161,18 +182,22 @@ The Team Client features a modern dark theme with:
 
 ⚠️ **FOR AUTHORIZED SECURITY TESTING ONLY**
 
-- SSH connection is encrypted
-- Use key-based authentication for better security
+- API connection uses HTTP (consider using a reverse proxy with TLS for production)
+- Use a strong API password
+- Authentication tokens are session-based
 - Never share credentials
-- Always obtain proper authorization before testing
+
+## Legacy SSH Mode
+
+The old SSH-based team client is still available as `c2r2_team_client_ssh.py` for backwards compatibility. The API-based client (`c2r2_team_client.py`) is recommended for new deployments.
 
 ## Troubleshooting
 
 ### Connection Issues
 
-1. **SSH Connection Failed**: Check host/port, firewall rules
-2. **Authentication Failed**: Verify credentials/key path
-3. **C2R2 Server Not Responding**: Ensure server is running on the specified port
+1. **Connection Refused**: Check that the server is running and the API port is correct
+2. **Authentication Failed**: Verify the API password matches the server configuration
+3. **WebSocket Disconnects**: Check firewall rules for persistent connections
 
 ### GUI Issues
 

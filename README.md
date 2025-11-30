@@ -120,13 +120,14 @@ C2R2-v2 follows a modular client-server architecture with encrypted TLS communic
 
 ```
 ┌─────────────────────┐                    ┌─────────────────────┐
-│  Operator Machine   │     SSH Tunnel     │   Red Team Server   │
-│  ┌───────────────┐  │                    │  ┌───────────────┐  │
+│  Operator Machine   │   HTTP/WebSocket   │   Red Team Server   │
+│  ┌───────────────┐  │    (API Port)      │  ┌───────────────┐  │
 │  │ Team Client   │──┼────────────────────┼──│  C2 Server    │  │
 │  │   (GUI)       │  │                    │  │  (c2r2-server)│  │
 │  └───────────────┘  │                    │  └───────┬───────┘  │
 └─────────────────────┘                    │          │          │
                                            │   🔐 TLS Encrypted  │
+                                           │       (Agents)      │
                                            │          ▼          │
                                            │  ┌───────────────┐  │
                                            │  │    Agent      │  │
@@ -143,11 +144,15 @@ C2R2-v2 follows a modular client-server architecture with encrypted TLS communic
 ```
 
 **Components:**
-- **Team Client** - Python GUI for operators to connect via SSH (like Havoc Team Client)
-- **C2 Server** - Async multi-client TLS server with interactive CLI
+- **Team Client** - Python GUI for operators to connect via REST/WebSocket API (like Havoc Team Client)
+- **C2 Server** - Async multi-client TLS server with interactive CLI and REST/WebSocket API
 - **Agent** - Lightweight implant (60KB) with TLS-encrypted beacon communication
 - **Builder** - Tool for agent generation and module encryption
 - **Stealer** - Modular credential harvesting capability
+
+**Server Ports:**
+- **Port 4444** (default): TLS port for agent connections
+- **Port 5555** (default): HTTP/WebSocket API for team clients
 
 For detailed architecture documentation, see [Architecture Guide](docs/ARCHITECTURE.md).
 
@@ -279,10 +284,11 @@ See [Security Guide](docs/SECURITY.md) for:
 
 ## 🖥️ Team Client
 
-C2R2 includes a graphical Team Client for operators to connect to the C2 server remotely via SSH, similar to Havoc's Team Client architecture.
+C2R2 includes a graphical Team Client for operators to connect to the C2 server remotely via HTTP/WebSocket API, similar to Havoc's Team Client architecture.
 
 ### Features
-- **SSH Connection**: Secure tunnel to the C2R2 server
+- **REST/WebSocket API**: Direct API communication with the server
+- **Real-time Updates**: WebSocket connection for live agent status updates
 - **Cross-Platform**: Works on Windows and Linux (Python/tkinter)
 - **Dark Theme**: Modern dark interface
 - **Agent Management**: View connected agents in real-time
@@ -292,13 +298,27 @@ C2R2 includes a graphical Team Client for operators to connect to the C2 server 
 ### Quick Start
 
 ```bash
-# Install dependencies
+# Start the server with API enabled
+./c2r2-server --bind 0.0.0.0 --port 4444 --api-port 5555 --api-password your-secret
+
+# Install client dependencies
 cd team-client
 pip install -r requirements.txt
 
 # Run the Team Client
 python c2r2_team_client.py
 ```
+
+### Server API
+
+The team client communicates with the server via REST/WebSocket:
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/auth/login` | POST | Authenticate |
+| `/api/agents` | GET | List agents |
+| `/api/agents/:id/cmd` | POST | Send command |
+| `/api/events` | WS | Real-time events |
 
 For detailed instructions, see the [Team Client README](team-client/README.md).
 

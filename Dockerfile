@@ -4,7 +4,8 @@
 #   - Agente Windows
 #   - Builder y DLLs encriptadas
 
-FROM rust:1.90-slim
+# Usar Debian 12 (Bookworm) que tiene GLIBC 2.36 compatible con Raspberry Pi OS
+FROM rust:1.82-bookworm
 
 # Instalar dependencias para compilación cruzada a Windows y ARM
 RUN apt-get update && apt-get install -y \

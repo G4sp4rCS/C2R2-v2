@@ -1,2 +1,6 @@
 # C2R2 Team Client Dependencies
+# For SSH mode (legacy)
 paramiko>=3.4.0
+# For API mode (recommended)
+requests>=2.31.0
+websocket-client>=1.7.0

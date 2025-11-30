@@ -116,17 +116,23 @@ For detailed command usage and examples, see the [Usage Guide](docs/USAGE.md).
 
 ## 🏗️ Architecture
 
-C2R2-v2 follows a modular client-server architecture with encrypted TLS communications:
+C2R2-v2 follows a modular client-server architecture with encrypted communications:
 
 ```
 ┌─────────────────────┐                    ┌─────────────────────┐
-│  Operator Machine   │     SSH Tunnel     │   Red Team Server   │
-│  ┌───────────────┐  │                    │  ┌───────────────┐  │
-│  │ Team Client   │──┼────────────────────┼──│  C2 Server    │  │
-│  │   (GUI)       │  │                    │  │  (c2r2-server)│  │
-│  └───────────────┘  │                    │  └───────┬───────┘  │
-└─────────────────────┘                    │          │          │
+│  Operator Machine   │      SSH (22)      │   Red Team Server   │
+│  ┌───────────────┐  │  ════════════════> │  ┌───────────────┐  │
+│  │ Team Client   │──┼────────────────────┼──│  SSH Server   │  │
+│  │   (GUI)       │  │                    │  └───────┬───────┘  │
+│  └───────┬───────┘  │                    │   SSH Tunnel       │
+│          │          │                    │          ▼          │
+│   localhost:10xxx ──┼─ (through SSH) ───>│  ┌───────────────┐  │
+│          │          │                    │  │  C2 Server    │  │
+│   REST/WS API       │                    │  │  API:5555     │  │
+│                     │                    │  │  Agents:4444  │  │
+└─────────────────────┘                    │  └───────┬───────┘  │
                                            │   🔐 TLS Encrypted  │
+                                           │       (Agents)      │
                                            │          ▼          │
                                            │  ┌───────────────┐  │
                                            │  │    Agent      │  │
@@ -143,11 +149,21 @@ C2R2-v2 follows a modular client-server architecture with encrypted TLS communic
 ```
 
 **Components:**
-- **Team Client** - Python GUI for operators to connect via SSH (like Havoc Team Client)
-- **C2 Server** - Async multi-client TLS server with interactive CLI
+- **Team Client** - Python GUI for operators, connects via SSH tunnel to API (like Havoc Team Client)
+- **C2 Server** - Async multi-client TLS server with interactive CLI and REST/WebSocket API
 - **Agent** - Lightweight implant (60KB) with TLS-encrypted beacon communication
 - **Builder** - Tool for agent generation and module encryption
 - **Stealer** - Modular credential harvesting capability
+
+**Server Ports:**
+- **Port 22**: SSH for team client connections (tunneled API access)
+- **Port 4444** (default): TLS port for agent connections
+- **Port 5555** (default): HTTP/WebSocket API (accessed via SSH tunnel)
+
+**Security:**
+- Team client traffic 100% tunneled through SSH
+- Agent connections encrypted via TLS 1.3
+- API port only accessible via SSH tunnel (not exposed)
 
 For detailed architecture documentation, see [Architecture Guide](docs/ARCHITECTURE.md).
 
@@ -279,10 +295,12 @@ See [Security Guide](docs/SECURITY.md) for:
 
 ## 🖥️ Team Client
 
-C2R2 includes a graphical Team Client for operators to connect to the C2 server remotely via SSH, similar to Havoc's Team Client architecture.
+C2R2 includes a graphical Team Client for operators to connect to the C2 server remotely via SSH-tunneled API, similar to Havoc's Team Client architecture.
 
 ### Features
-- **SSH Connection**: Secure tunnel to the C2R2 server
+- **SSH Tunnel**: All API traffic encrypted through SSH tunnel
+- **REST/WebSocket API**: Clean API communication through the tunnel
+- **Real-time Updates**: WebSocket connection for live agent status updates
 - **Cross-Platform**: Works on Windows and Linux (Python/tkinter)
 - **Dark Theme**: Modern dark interface
 - **Agent Management**: View connected agents in real-time
@@ -292,13 +310,27 @@ C2R2 includes a graphical Team Client for operators to connect to the C2 server 
 ### Quick Start
 
 ```bash
-# Install dependencies
+# Start the server with API enabled
+./c2r2-server --bind 0.0.0.0 --port 4444 --api-port 5555 --api-password your-secret
+
+# Install client dependencies
 cd team-client
 pip install -r requirements.txt
 
 # Run the Team Client
 python c2r2_team_client.py
 ```
+
+### Connection Flow
+
+1. Team Client establishes SSH connection to the server
+2. SSH tunnel forwards localhost:10xxx → server:5555 (API)
+3. All API/WebSocket traffic goes through encrypted SSH tunnel
+
+This means:
+- API port (5555) doesn't need to be exposed to the internet
+- Only SSH (22) and agent port (4444) need to be accessible
+- 100% encrypted operator traffic via SSH
 
 For detailed instructions, see the [Team Client README](team-client/README.md).
 

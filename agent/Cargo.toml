@@ -13,6 +13,9 @@ production = []  # Production mode: no console, no debug prints, fully stealthy
 obfstr = "0.4"
 # Random number generation for obfuscation
 rand = "0.8"
+# TLS support
+rustls = { version = "0.23", default-features = false, features = ["std", "tls12"] }
+webpki-roots = "0.26"
 
 [target.'cfg(windows)'.dependencies]
 winapi = { version = "0.3", features = [

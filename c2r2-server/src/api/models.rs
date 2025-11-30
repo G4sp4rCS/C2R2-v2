@@ -64,6 +64,27 @@ pub struct BeaconRequest {
     pub jitter: u32,
 }
 
+/// List directory request
+#[derive(Debug, Deserialize)]
+pub struct ListDirRequest {
+    pub path: String,
+}
+
+/// Directory entry info
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct DirEntry {
+    pub name: String,
+    pub is_dir: bool,
+    pub size: u64,
+}
+
+/// List directory response
+#[derive(Debug, Serialize)]
+pub struct ListDirResponse {
+    pub path: String,
+    pub entries: Vec<DirEntry>,
+}
+
 /// Login request
 #[derive(Debug, Deserialize)]
 pub struct LoginRequest {

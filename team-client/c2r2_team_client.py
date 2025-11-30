@@ -154,74 +154,91 @@ class SSHConnection:
         safe_pattern = re.compile(r'^[0-9.]+$')
         return bool(safe_pattern.match(ip))
     
-    def start_c2_interaction(self, c2_path, c2_port, bind_addr="0.0.0.0"):
+    def start_c2_interaction(self, c2_path, c2_port, bind_addr="0.0.0.0", attach_mode=False):
         """
-        Start an interactive session with the C2R2 server.
-        Returns a channel for bidirectional communication.
+        Start or attach to C2R2 server process and capture its stdout/stderr.
         
         Args:
-            c2_path: Path to the c2r2-server binary on the remote server
+            c2_path: Path to the c2r2-server binary on remote server (can be empty if attach_mode=True)
             c2_port: Port for the C2R2 server
             bind_addr: Address to bind the C2 server to
+            attach_mode: If True, attach to existing server via direct TCP connection instead of starting new one
         """
         if not self.connected or not self.ssh_client:
             return False, "Not connected", None
         
-        # Validate inputs to prevent command injection
+        # Validate inputs
         valid, c2_port_int = self._validate_port(c2_port)
-        if not valid:
+        if not valid or c2_port_int is None:
             return False, "Invalid port number", None
         
-        if c2_path and not self._validate_path(c2_path):
-            return False, "Invalid path (contains unsafe characters)", None
-        
-        if not self._validate_ip(bind_addr):
-            return False, "Invalid bind address", None
-        
         try:
-            # Get a shell channel for interactive use
-            self.channel = self.ssh_client.invoke_shell(
-                term='xterm',
-                width=200,
-                height=50
-            )
-            self.channel.settimeout(0.5)
+            if attach_mode:
+                # Connect directly to the running C2R2 server via SSH tunnel
+                # This uses direct-tcpip to forward local socket to remote server port
+                transport = self.ssh_client.get_transport()
+                if not transport:
+                    return False, "SSH transport not available", None
+                
+                self.channel = transport.open_channel(
+                    'direct-tcpip',
+                    (bind_addr, int(c2_port_int)),
+                    ('127.0.0.1', 0)
+                )
+                
+                if not self.channel:
+                    return False, "Failed to connect to C2 server. Is it running?", None
+                
+                self.channel.settimeout(0.5)
+                time.sleep(0.3)
+                
+                return True, f"Attached to C2R2 server at {bind_addr}:{c2_port_int}", self.channel
             
-            # Wait for shell to be ready
-            time.sleep(0.5)
-            
-            # Clear initial banner/prompt
-            try:
-                while self.channel.recv_ready():
-                    self.channel.recv(4096)
-            except Exception:
-                pass
-            
-            # Start C2R2 server if provided path
-            if c2_path:
-                # First check if server is already running (using validated port)
-                cmd = f"pgrep -f 'c2r2-server.*{c2_port_int}' >/dev/null 2>&1 && echo 'RUNNING' || echo 'NOT_RUNNING'\n"
-                self.channel.send(cmd)
+            else:
+                # Start new server instance
+                if not c2_path:
+                    return False, "C2 server binary path is required when not in attach mode", None
+                    
+                if not self._validate_path(c2_path):
+                    return False, "Invalid path (contains unsafe characters)", None
+                
+                # Check if server is already running
+                check_cmd = f"pgrep -f 'c2r2-server.*--port.*{c2_port_int}'"
+                stdin, stdout, stderr = self.ssh_client.exec_command(check_cmd, timeout=5)
+                pid_output = stdout.read().decode('utf-8').strip()
+                
+                if pid_output:
+                    return False, f"Server already running (PID: {pid_output}). Enable 'Attach to existing server' option.", None
+                
+                # Start the C2R2 server with stdin/stdout/stderr connected
+                self.channel = self.ssh_client.invoke_shell(
+                    term='xterm',
+                    width=200,
+                    height=50
+                )
+                self.channel.settimeout(0.5)
+                
+                # Wait for shell to be ready
                 time.sleep(0.5)
                 
-                response = ""
+                # Clear shell banner
                 try:
                     while self.channel.recv_ready():
-                        response += self.channel.recv(4096).decode('utf-8', errors='replace')
+                        self.channel.recv(4096)
                 except Exception:
                     pass
                 
-                # If not running, start it (using validated inputs)
-                if 'NOT_RUNNING' in response:
-                    # Start the server with validated parameters
-                    start_cmd = f"{c2_path} --bind {bind_addr} --port {c2_port_int}\n"
-                    self.channel.send(start_cmd)
-                    time.sleep(2)  # Wait for server to start
-            
-            return True, "Interactive session started", self.channel
+                # Start the C2R2 server
+                start_cmd = f"{c2_path} --bind {bind_addr} --port {c2_port_int}\n"
+                self.channel.send(start_cmd.encode('utf-8'))
+                
+                # Wait for server to start
+                time.sleep(1.5)
+                
+                return True, f"C2R2 server started on {bind_addr}:{c2_port_int}", self.channel
             
         except Exception as e:
-            return False, f"Error starting interactive session: {str(e)}", None
+            return False, f"Error with C2R2 server: {str(e)}", None
     
     def send_to_channel(self, data):
         """Send data to the interactive channel."""
@@ -462,22 +479,33 @@ class C2R2TeamClient:
         self.c2_port_entry.grid(row=row, column=1, padx=5, pady=8)
         self.c2_port_entry.insert(0, "4444")
         
-        # C2 Server Path (optional)
+        # C2 Server Path (required)
         row += 1
         ttk.Label(form_frame, text="C2 Binary Path:", style='Panel.TLabel').grid(
             row=row, column=0, sticky='e', padx=5, pady=8)
         self.c2_path_entry = ttk.Entry(form_frame, width=40, style='Dark.TEntry')
         self.c2_path_entry.grid(row=row, column=1, padx=5, pady=8)
-        self.c2_path_entry.insert(0, "")
+        self.c2_path_entry.insert(0, "./c2r2-server-arm64")
         
         row += 1
         hint_label = ttk.Label(
             form_frame, 
-            text="(Leave empty if C2R2 server is already running)",
+            text="(Path to c2r2-server binary - leave empty if already running)",
             style='Panel.TLabel',
             font=('Consolas', 9)
         )
         hint_label.grid(row=row, column=1, sticky='w', padx=5)
+        
+        # Attach to existing server checkbox
+        row += 1
+        self.attach_var = tk.BooleanVar(value=True)
+        attach_check = ttk.Checkbutton(
+            form_frame,
+            text="Attach to existing server (don't start new instance)",
+            variable=self.attach_var,
+            style='Panel.TLabel'
+        )
+        attach_check.grid(row=row, column=1, sticky='w', padx=5, pady=5)
         
         # Connect button
         row += 1
@@ -706,6 +734,7 @@ class C2R2TeamClient:
         key_path = self.key_entry.get().strip()
         c2_port = self.c2_port_entry.get().strip()
         c2_path = self.c2_path_entry.get().strip()
+        attach_mode = self.attach_var.get()
         
         if not host or not username:
             self.login_status.config(text="❌ Host and username are required", foreground=self.colors['error'])
@@ -713,6 +742,10 @@ class C2R2TeamClient:
         
         if not password and not key_path:
             self.login_status.config(text="❌ Password or SSH key is required", foreground=self.colors['error'])
+            return
+        
+        if not attach_mode and not c2_path:
+            self.login_status.config(text="❌ C2 binary path is required (or enable Attach mode)", foreground=self.colors['error'])
             return
         
         self.login_status.config(text="⏳ Connecting...", foreground=self.colors['warning'])
@@ -725,13 +758,12 @@ class C2R2TeamClient:
                 host, ssh_port, username, 
                 password=password if password else None,
                 key_path=key_path if key_path else None,
-                c2_port=c2_port
+                c2_port=int(c2_port)
             )
             
             if success:
-                # Start interactive session with C2R2 server
-                c2_path_param = c2_path if c2_path else None
-                ok, msg, _ = self.ssh.start_c2_interaction(c2_path_param, int(c2_port))
+                # Start or attach to the C2R2 server
+                ok, msg, _ = self.ssh.start_c2_interaction(c2_path, int(c2_port), attach_mode=attach_mode)
                 
                 if ok:
                     self.root.after(0, lambda: self._on_connect_success(host, c2_port))

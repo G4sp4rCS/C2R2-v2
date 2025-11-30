@@ -541,7 +541,7 @@ async fn handle_client(
                                     let path = &content[..colon_pos];
                                     let entries_str = &content[colon_pos + 1..];
                                     
-                                    info!("[{}] Listado de directorio: {}", id, path);
+                                    info!("[{}] Directory listing: {}", id, path);
                                     
                                     // Parse entries
                                     let entries: Vec<crate::api::DirEntry> = entries_str
@@ -572,7 +572,7 @@ async fn handle_client(
                                         println!("{} {} {}", 
                                             "📂".bright_cyan(), 
                                             format!("[{}]", id).bright_cyan().bold(),
-                                            format!("Directorio: {} ({} items)", path, entries.len()).bright_white()
+                                            format!("Directory: {} ({} items)", path, entries.len()).bright_white()
                                         );
                                     }
                                     
@@ -617,7 +617,7 @@ async fn handle_client(
                                 println!();
                                 println!("{} {} {}", 
                                     "ℹ️ ".bright_cyan(), 
-                                    "Info de".bright_white().bold(),
+                                    "Info from".bright_white().bold(),
                                     format!("[{}]:", id).bright_cyan().bold()
                                 );
                                 println!("{}", "─".repeat(60).bright_black());
@@ -632,13 +632,13 @@ async fn handle_client(
                                     is_error: false,
                                 });
                             } else {
-                                // Respuesta normal de comando - LOGUEAR OUTPUT COMPLETO
+                                // Normal command response - LOG COMPLETE OUTPUT
                                 info!("[{}] OUTPUT:\n{}", id, response);
-                                debug!("[{}] Respuesta recibida: {} bytes", id, response.len());
+                                debug!("[{}] Response received: {} bytes", id, response.len());
                                 println!();
                                 println!("{} {} {}", 
                                     "📨".bright_blue(), 
-                                    "Respuesta de".bright_white().bold(),
+                                    "Response from".bright_white().bold(),
                                     format!("[{}]:", id).bright_cyan().bold()
                                 );
                                 println!("{}", "─".repeat(60).bright_black());

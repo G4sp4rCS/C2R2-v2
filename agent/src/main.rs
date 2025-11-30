@@ -1154,11 +1154,15 @@ fn elevate_command(command: &str) -> String {
     format!("__ERROR__:Elevación solo soportada en Windows{}", DELIMITER)
 }
 
+/// Minimum length for a valid Windows drive path (e.g., "C:")
+const MIN_WINDOWS_DRIVE_PATH_LEN: usize = 2;
+
 /// Get the current working directory as a string
 fn get_current_dir() -> String {
     CURRENT_DIR.lock()
         .map(|dir| dir.to_string_lossy().to_string())
-        .unwrap_or_else(|_| {
+        .unwrap_or_else(|e| {
+            debug_print!("DEBUG: Failed to acquire CURRENT_DIR lock: {}", e);
             #[cfg(target_os = "windows")]
             { "C:\\".to_string() }
             #[cfg(not(target_os = "windows"))]
@@ -1185,8 +1189,8 @@ fn change_directory(path: &str) -> String {
             .parent()
             .map(|p| p.to_string_lossy().to_string())
             .unwrap_or(current)
-    } else if path.starts_with('/') || (path.len() >= 2 && path.chars().nth(1) == Some(':')) {
-        // Absolute path
+    } else if path.starts_with('/') || (path.len() >= MIN_WINDOWS_DRIVE_PATH_LEN && path.chars().nth(1) == Some(':')) {
+        // Absolute path (Unix style or Windows drive letter like C:)
         path.to_string()
     } else {
         // Relative path

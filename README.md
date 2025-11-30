@@ -119,29 +119,33 @@ For detailed command usage and examples, see the [Usage Guide](docs/USAGE.md).
 C2R2-v2 follows a modular client-server architecture with encrypted TLS communications:
 
 ```
-┌─────────────────┐
-│   C2 Server     │  ◄─── Operator (Terminal/CLI)
-│  (c2r2-server)  │
-└────────┬────────┘
-         │
-         │ 🔐 TLS 1.3 Encrypted Beacon (with jitter)
-         ▼
-┌─────────────────┐
-│     Agent       │  ◄─── Target System (Windows)
-│   (agent.exe)   │
-└────────┬────────┘
-         │
-         │ Dynamic Loading
-         ▼
-┌─────────────────┐
-│ Stealer Module  │  ◄─── Encrypted DLL Module
-│ (stealer.dll)   │
-└─────────────────┘
+┌─────────────────────┐                    ┌─────────────────────┐
+│  Operator Machine   │     SSH Tunnel     │   Red Team Server   │
+│  ┌───────────────┐  │                    │  ┌───────────────┐  │
+│  │ Team Client   │──┼────────────────────┼──│  C2 Server    │  │
+│  │   (GUI)       │  │                    │  │  (c2r2-server)│  │
+│  └───────────────┘  │                    │  └───────┬───────┘  │
+└─────────────────────┘                    │          │          │
+                                           │   🔐 TLS Encrypted  │
+                                           │          ▼          │
+                                           │  ┌───────────────┐  │
+                                           │  │    Agent      │  │
+                                           │  │  (agent.exe)  │  │
+                                           │  └───────┬───────┘  │
+                                           │          │          │
+                                           │  Dynamic Loading    │
+                                           │          ▼          │
+                                           │  ┌───────────────┐  │
+                                           │  │Stealer Module │  │
+                                           │  │ (stealer.dll) │  │
+                                           │  └───────────────┘  │
+                                           └─────────────────────┘
 ```
 
 **Components:**
-- **Agent** - Lightweight implant (60KB) with TLS-encrypted beacon communication
+- **Team Client** - Python GUI for operators to connect via SSH (like Havoc Team Client)
 - **C2 Server** - Async multi-client TLS server with interactive CLI
+- **Agent** - Lightweight implant (60KB) with TLS-encrypted beacon communication
 - **Builder** - Tool for agent generation and module encryption
 - **Stealer** - Modular credential harvesting capability
 
@@ -270,6 +274,33 @@ See [Security Guide](docs/SECURITY.md) for:
 - Detection evasion strategies
 - Incident response procedures
 - Threat model and adversaries
+
+---
+
+## 🖥️ Team Client
+
+C2R2 includes a graphical Team Client for operators to connect to the C2 server remotely via SSH, similar to Havoc's Team Client architecture.
+
+### Features
+- **SSH Connection**: Secure tunnel to the C2R2 server
+- **Cross-Platform**: Works on Windows and Linux (Python/tkinter)
+- **Dark Theme**: Modern dark interface
+- **Agent Management**: View connected agents in real-time
+- **Command Execution**: Send commands to selected agents
+- **Command History**: Navigate with arrow keys
+
+### Quick Start
+
+```bash
+# Install dependencies
+cd team-client
+pip install -r requirements.txt
+
+# Run the Team Client
+python c2r2_team_client.py
+```
+
+For detailed instructions, see the [Team Client README](team-client/README.md).
 
 ---
 

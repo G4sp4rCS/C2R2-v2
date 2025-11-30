@@ -1,0 +1,2 @@
+# C2R2 Team Client Dependencies
+paramiko>=3.4.0

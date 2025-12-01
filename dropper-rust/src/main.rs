@@ -85,7 +85,6 @@ fn open_decoy_pdf() -> Result<(), Box<dyn std::error::Error>> {
     use std::env;
     use std::fs::File;
     use std::io::Write;
-    use std::path::PathBuf;
     use obfstr::obfstr;
     
     // Get temp directory

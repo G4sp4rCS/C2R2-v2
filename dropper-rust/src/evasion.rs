@@ -188,7 +188,8 @@ fn check_no_recent_files() -> bool {
             .join("Recent");
         
         if let Ok(entries) = fs::read_dir(recent_path) {
-            let count = entries.count();
+            // Use flatten to handle any errors in iteration
+            let count = entries.flatten().count();
             // Real systems usually have many recent files
             return count < 5;
         }

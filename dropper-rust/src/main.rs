@@ -114,13 +114,19 @@ fn open_file(path: &std::path::PathBuf) {
     use winapi::um::winuser::SW_SHOWNORMAL;
     use obfstr::obfstr;
     
+    // Only proceed if we have a valid path
+    let path_str = match path.to_str() {
+        Some(s) if !s.is_empty() => s,
+        _ => return, // Skip if path is invalid
+    };
+    
     unsafe {
         let operation: Vec<u16> = OsStr::new(obfstr!("open"))
             .encode_wide()
             .chain(std::iter::once(0))
             .collect();
         
-        let path_wide: Vec<u16> = OsStr::new(path.to_str().unwrap_or(""))
+        let path_wide: Vec<u16> = OsStr::new(path_str)
             .encode_wide()
             .chain(std::iter::once(0))
             .collect();

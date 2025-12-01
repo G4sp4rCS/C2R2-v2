@@ -123,7 +123,8 @@ Multiple persistence methods implemented, from simple to APT-like:
 # Event Filter: Trigger when a user logs in (interactive or RDP)
 # LogonType 2 = Interactive (local console)
 # LogonType 10 = RemoteInteractive (RDP)
-$Query = "SELECT * FROM __InstanceCreationEvent WITHIN 15 
+# WITHIN 60 = Poll every 60 seconds (efficient for infrequent logon events)
+$Query = "SELECT * FROM __InstanceCreationEvent WITHIN 60 
           WHERE TargetInstance ISA 'Win32_LogonSession' 
           AND (TargetInstance.LogonType = 2 OR TargetInstance.LogonType = 10)"
 

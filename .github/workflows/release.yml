@@ -14,6 +14,9 @@ env:
   DEFAULT_IP: "0.0.0.0"
   DEFAULT_PORT: "4444"
 
+permissions:
+  contents: write
+
 jobs:
   build-rust-binaries:
     name: 🦀 Build Rust Binaries

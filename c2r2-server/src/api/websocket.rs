@@ -1,12 +1,15 @@
 //! WebSocket Handler for Real-time Events
-//! 
+//!
 //! This module handles WebSocket connections for team clients
 //! to receive real-time events from the server.
 
 use axum::{
-    extract::{State, WebSocketUpgrade, ws::{Message, WebSocket}},
-    response::IntoResponse,
+    extract::{
+        ws::{Message, WebSocket},
+        State, WebSocketUpgrade,
+    },
     http::HeaderMap,
+    response::IntoResponse,
 };
 use futures::{SinkExt, StreamExt};
 use std::sync::Arc;
@@ -27,7 +30,7 @@ pub async fn events_handler(
         .and_then(|v| v.to_str().ok())
         .and_then(|v| v.strip_prefix("Bearer "))
         .map(|s| s.to_string());
-    
+
     ws.on_upgrade(move |socket| handle_websocket(socket, state, token))
 }
 
@@ -43,12 +46,12 @@ async fn handle_websocket(socket: WebSocket, state: Arc<ApiState>, token: Option
         // No token - close connection
         return;
     }
-    
+
     let (mut sender, mut receiver) = socket.split();
-    
+
     // Subscribe to server events
     let mut event_rx = state.event_tx.subscribe();
-    
+
     // Send initial state - list of all connected agents
     let agents = state.get_agents().await;
     for agent in agents {
@@ -59,7 +62,7 @@ async fn handle_websocket(socket: WebSocket, state: Arc<ApiState>, token: Option
             }
         }
     }
-    
+
     // Spawn task to receive messages from client (heartbeat/commands)
     let _state_clone = state.clone();
     let _token_clone = token.clone();
@@ -88,7 +91,7 @@ async fn handle_websocket(socket: WebSocket, state: Arc<ApiState>, token: Option
             }
         }
     });
-    
+
     // Send events to client
     let send_task = tokio::spawn(async move {
         loop {
@@ -127,7 +130,7 @@ async fn handle_websocket(socket: WebSocket, state: Arc<ApiState>, token: Option
             }
         }
     });
-    
+
     // Wait for either task to finish
     tokio::select! {
         _ = recv_task => {}

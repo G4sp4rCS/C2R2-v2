@@ -45,6 +45,7 @@ pub fn create_api_router(state: Arc<ApiState>) -> Router {
         .route("/api/agents/:id/pwd", post(handlers::get_cwd))
         .route("/api/agents/:id/harvest", post(handlers::harvest_credentials))
         .route("/api/agents/:id/persist", post(handlers::set_persistence))
+        .route("/api/agents/:id/persist_remove", post(handlers::remove_persistence))
         .route("/api/agents/:id/beacon", post(handlers::configure_beacon))
         .route("/api/agents/:id/elevate", post(handlers::elevate_agent))
         .route("/api/agents/all/cmd", post(handlers::send_command_all))

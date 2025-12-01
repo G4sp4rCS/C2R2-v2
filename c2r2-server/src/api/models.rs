@@ -1,5 +1,5 @@
 //! API Data Models
-//! 
+//!
 //! These models are used for JSON serialization/deserialization
 //! in the team client API.
 
@@ -15,7 +15,7 @@ pub struct AgentInfo {
     pub os_version: Option<String>,
     pub privileges: Option<String>,
     pub connected_at: String,
-    pub cwd: Option<String>,  // Current working directory
+    pub cwd: Option<String>, // Current working directory
 }
 
 /// List of agents response
@@ -166,10 +166,7 @@ pub enum ServerEvent {
         entries: Vec<DirEntry>,
     },
     /// Current working directory changed
-    CwdChanged {
-        agent_id: u64,
-        cwd: String,
-    },
+    CwdChanged { agent_id: u64, cwd: String },
     /// File download completed
     FileDownloaded {
         agent_id: u64,

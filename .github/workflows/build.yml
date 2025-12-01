@@ -2,9 +2,9 @@ name: 🔨 C2R2-v2 Build & Test
 
 on:
   push:
-    branches: [ main, develop ]
+    branches: [ develop ]
   pull_request:
-    branches: [ main ]
+    branches: [ main, develop ]
   workflow_dispatch:
 
 env:

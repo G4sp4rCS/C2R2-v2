@@ -576,6 +576,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "dropper"
+version = "1.0.0"
+dependencies = [
+ "obfstr",
+ "rand",
+ "winapi",
+ "winres",
+]
+
+[[package]]
 name = "dunce"
 version = "1.0.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"

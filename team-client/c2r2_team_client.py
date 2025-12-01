@@ -592,6 +592,24 @@ class C2R2ApiClient:
         except Exception as e:
             return False, str(e)
     
+    def remove_persistence(self, agent_id: int) -> tuple[bool, str]:
+        """Remove persistence from agent."""
+        if not self.connected:
+            return False, "Not connected"
+        
+        try:
+            response = requests.post(
+                f"{self.base_url}/api/agents/{agent_id}/persist_remove",
+                headers=self._headers(),
+                timeout=30
+            )
+            
+            data = response.json()
+            return data.get("success", False), data.get("message", "Unknown error")
+            
+        except Exception as e:
+            return False, str(e)
+    
     def configure_beacon(self, agent_id: int, interval: int, jitter: int) -> tuple[bool, str]:
         """Configure beacon timing."""
         if not self.connected:
@@ -1130,6 +1148,7 @@ class C2R2TeamClient:
         self.agent_context_menu.add_separator()
         self.agent_context_menu.add_command(label="🔑 Harvest Credentials", command=self._context_harvest)
         self.agent_context_menu.add_command(label="📌 Set Persistence...", command=self._context_persistence)
+        self.agent_context_menu.add_command(label="🧹 Remove Persistence", command=self._context_remove_persistence)
         self.agent_context_menu.add_command(label="📡 Configure Beacon...", command=self._context_beacon)
         self.agent_context_menu.add_command(label="⬆️ Elevate to Admin", command=self._context_elevate)
         self.agent_context_menu.add_separator()
@@ -1779,6 +1798,12 @@ class C2R2TeamClient:
                 method = parts[1]
                 self._set_persistence(self.selected_client, method)
         
+        elif command == '/persist_remove':
+            if self.selected_client is None:
+                self._log_console("❌ No agent selected. Use /select <id>\n", 'error')
+            else:
+                self._remove_persistence(self.selected_client)
+        
         elif command == '/beacon' and len(parts) >= 2:
             if self.selected_client is None:
                 self._log_console("❌ No agent selected. Use /select <id>\n", 'error')
@@ -1896,6 +1921,15 @@ class C2R2TeamClient:
         
         threading.Thread(target=persist_thread, daemon=True).start()
     
+    def _remove_persistence(self, agent_id: int):
+        """Remove persistence from agent."""
+        def remove_persist_thread():
+            success, message = self.api.remove_persistence(agent_id)
+            tag = 'success' if success else 'error'
+            self.root.after(0, lambda: self._log_console(f"🧹 [{agent_id}]: {message}\n", tag))
+        
+        threading.Thread(target=remove_persist_thread, daemon=True).start()
+    
     def _configure_beacon(self, agent_id: int, interval: int, jitter: int):
         """Configure beacon timing."""
         def beacon_thread():
@@ -2000,6 +2034,7 @@ class C2R2TeamClient:
 🔧 Advanced Operations:
    /harvest               - Harvest credentials
    /persist <method>      - Establish persistence (registry|task|wmi|startup)
+   /persist_remove        - Remove persistence from agent
    /beacon <int:jit>      - Configure beacon timing (e.g., 60:30)
    /elevate               - Elevate to admin (UAC prompt)
 
@@ -2480,6 +2515,11 @@ class C2R2TeamClient:
                  relief=tk.FLAT, command=set_persist, padx=20).pack(side=tk.LEFT, padx=5)
         tk.Button(btn_frame, text="Cancel", bg=self.colors['panel_bg'], fg=self.colors['fg'],
                  relief=tk.FLAT, command=dialog.destroy, padx=20).pack(side=tk.LEFT, padx=5)
+    
+    def _context_remove_persistence(self):
+        """Remove persistence from context menu."""
+        if self.context_menu_agent_id:
+            self._remove_persistence(self.context_menu_agent_id)
     
     def _context_beacon(self):
         """Configure beacon from context menu."""

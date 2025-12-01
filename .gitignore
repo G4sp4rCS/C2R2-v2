@@ -53,6 +53,7 @@ ENV/
 
 # PyInstaller
 *.manifest
+!dropper-rust/dropper.manifest
 *.spec
 build/
 dist/

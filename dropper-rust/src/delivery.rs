@@ -7,7 +7,7 @@ use crate::config;
 use obfstr::obfstr;
 use std::env;
 use std::fs::{self, File};
-use std::io::Write;
+use std::io::{Read, Write};
 use std::path::PathBuf;
 
 #[cfg(target_os = "windows")]

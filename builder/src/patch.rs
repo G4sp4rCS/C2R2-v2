@@ -93,9 +93,10 @@ pub fn patch_agent_binary(
 
 /// Generate a template agent with placeholder for patching
 /// This is used during the build process to create a base agent
+#[allow(dead_code)]
 pub fn prepare_patchable_config(c2_server: &str) -> String {
     // Create a config with a marker that can be found and replaced
-    let padded_server = format!("{:\0<width$}", c2_server, width = MAX_SERVER_LENGTH);
+    let _padded_server = format!("{:\0<width$}", c2_server, width = MAX_SERVER_LENGTH);
 
     format!(
         r#"// Generado automáticamente por C2R2 Builder v2.0

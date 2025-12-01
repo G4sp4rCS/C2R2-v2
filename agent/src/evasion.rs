@@ -163,8 +163,8 @@ pub unsafe fn get_export_address(base_addr: LPVOID, func_name: &str) -> Option<L
         &*((base_addr as usize + dos_header.e_lfanew as usize) as *const IMAGE_NT_HEADERS);
 
     // Obtener export directory RVA (está en DataDirectory[0])
-    let export_dir_rva_ptr = (base_addr as usize 
-        + dos_header.e_lfanew as usize 
+    let export_dir_rva_ptr = (base_addr as usize
+        + dos_header.e_lfanew as usize
         + mem::size_of::<u32>()  // Signature
         + mem::size_of::<IMAGE_FILE_HEADER>()
         + 96) as *const u32; // Offset to DataDirectory[0].VirtualAddress

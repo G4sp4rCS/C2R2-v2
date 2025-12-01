@@ -148,7 +148,8 @@ fn check_screen_resolution() -> bool {
 /// Check if mouse hasn't moved (indicates automated execution)
 #[cfg(all(feature = "production", target_os = "windows"))]
 fn check_no_mouse_movement() -> bool {
-    use winapi::um::winuser::{GetCursorPos, POINT};
+    use winapi::um::winuser::GetCursorPos;
+    use winapi::shared::windef::POINT;
     use std::thread;
     use std::time::Duration;
     use std::mem::zeroed;

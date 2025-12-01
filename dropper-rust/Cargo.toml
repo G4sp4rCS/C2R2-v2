@@ -32,7 +32,8 @@ winapi = { version = "0.3", features = [
     "sysinfoapi",
     "debugapi",
     "libloaderapi",
-    "winnt"
+    "winnt",
+    "windef"
 ] }
 
 [target.'cfg(windows)'.build-dependencies]

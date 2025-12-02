@@ -41,6 +41,7 @@ dependencies = [
 name = "agent"
 version = "2.0.0"
 dependencies = [
+ "dinvk",
  "lazy_static",
  "obfstr",
  "rand",
@@ -552,6 +553,19 @@ checksum = "9ed9a281f7bc9b7576e61468ba615a66a5c8cfdff42420a70aa82701a3b1e292"
 dependencies = [
  "block-buffer",
  "crypto-common",
+]
+
+[[package]]
+name = "dinvk"
+version = "0.4.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0ddcae11e0e69466a318b2ca7e9e8c0ddf3ccdb7d282ca2dbdf263ba4e0a4e19"
+dependencies = [
+ "bitflags",
+ "cfg-if",
+ "obfstr",
+ "spin",
+ "windows-targets 0.53.5",
 ]
 
 [[package]]
@@ -1662,6 +1676,15 @@ checksum = "17129e116933cf371d018bb80ae557e889637989d8638274fb25622827b03881"
 dependencies = [
  "libc",
  "windows-sys 0.60.2",
+]
+
+[[package]]
+name = "spin"
+version = "0.10.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d5fe4ccb98d9c292d56fec89a5e07da7fc4cf0dc11e156b41793132775d3e591"
+dependencies = [
+ "lock_api",
 ]
 
 [[package]]

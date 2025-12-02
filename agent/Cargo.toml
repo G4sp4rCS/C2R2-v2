@@ -35,6 +35,9 @@ winapi = { version = "0.3", features = [
     "winsock2",           # Para TCP keepalive configuration
     "ws2def"              # Para socket definitions
 ] }
+# Indirect syscalls - dinvk provides DInvoke-style syscall execution
+# Bypasses usermode hooks by dynamically resolving and executing syscalls
+dinvk = "0.4"
 
 
 [[bin]]

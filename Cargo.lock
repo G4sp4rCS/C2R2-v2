@@ -593,6 +593,7 @@ dependencies = [
 name = "dropper"
 version = "1.0.0"
 dependencies = [
+ "dinvk",
  "obfstr",
  "rand",
  "winapi",

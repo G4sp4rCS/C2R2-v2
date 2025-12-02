@@ -5,8 +5,8 @@
 #   - Builder y DLLs encriptadas
 
 # Usar Debian 12 (Bookworm) que tiene GLIBC 2.36 compatible con Raspberry Pi OS
-# Rust 1.85+ required for edition 2024 support (dinvk crate dependency)
-FROM rust:1.85-bookworm
+# Rust 1.88+ required for edition 2024 with let_chains support (dinvk crate dependency)
+FROM rust:1.88-bookworm
 
 # Instalar dependencias para compilación cruzada a Windows y ARM
 RUN apt-get update && apt-get install -y \

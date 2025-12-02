@@ -15,6 +15,23 @@ Dropper compilado en Rust con shellcode embebido y encriptado con XOR. Diseñado
 - **PDF decoy** - Abre un PDF señuelo para parecer legítimo
 - **Metadata legítimo** - Se disfraza como Adobe Acrobat
 
+## Uso Rápido
+
+### Template Dropper (Desarrollo)
+
+Cuando se ejecuta el dropper sin payload embebido, muestra instrucciones de uso:
+
+```bash
+# Ver ayuda
+dropper.exe --help
+
+# Ejecutar sin payload (mostrará error informativo)
+dropper.exe
+```
+
+**Nota**: El dropper template requiere un payload embebido o adjunto para funcionar.
+Use el builder para crear un dropper funcional.
+
 ## Flujo de Ejecución
 
 1. **Delay inicial** (3 segundos) - Evade aceleración de tiempo de sandbox

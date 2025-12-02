@@ -33,7 +33,9 @@ winapi = { version = "0.3", features = [
     "debugapi",           # Para IsDebuggerPresent (anti-debug)
     "sysinfoapi",         # Para GetSystemInfo (anti-sandbox)
     "winsock2",           # Para TCP keepalive configuration
-    "ws2def"              # Para socket definitions
+    "ws2def",             # Para socket definitions
+    "handleapi",          # Para CloseHandle (timestomping)
+    "fileapi"             # Para CreateFileW, SetFileTime (timestomping)
 ] }
 # Indirect syscalls - dinvk provides DInvoke-style syscall execution
 # Bypasses usermode hooks by dynamically resolving and executing syscalls

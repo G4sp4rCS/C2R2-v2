@@ -23,29 +23,56 @@ By using C2R2-v2, you agree to:
 
 **Unauthorized access to computer systems is a crime. You have been warned.**
 
----z
+---
 
 ## 📖 Documentation
 
 **Complete documentation is available in the [`/docs`](docs/) directory:**
 
-### Core Documentation
-- **[Getting Started](docs/README.md)** - Overview and introduction
-- **[Installation Guide](docs/INSTALLATION.md)** - Build and setup instructions
-- **[Docker Build Guide](DOCKER.md)** - 🐳 Quick build with Docker (recommended)
-- **[Usage Guide](docs/USAGE.md)** - Command reference and examples
-- **[Architecture](docs/ARCHITECTURE.md)** - System design and components
-- **[Modules](docs/MODULES.md)** - Module documentation and development
-- **[API Reference](docs/API.md)** - Developer API documentation
-- **[Security](docs/SECURITY.md)** - Security considerations and OPSEC
-- **[Contributing](docs/CONTRIBUTING.md)** - How to contribute
-- **[Development](docs/DEVELOPMENT.md)** - Development guide
+### Getting Started
+| Document | Description |
+|----------|-------------|
+| [Documentation Index](docs/README.md) | Overview and introduction |
+| [Installation Guide](docs/INSTALLATION.md) | Prerequisites, building, and deployment |
+| [Usage Guide](docs/USAGE.md) | Command reference and operational workflows |
+| [Docker Build](docs/guides/DOCKER.md) | 🐳 Quick build with Docker (recommended) |
 
-### Network Deployment Guides
-- **[Network Deployment](docs/NETWORK_DEPLOYMENT.md)** - Complete guide for LAN/WAN deployments
-- **[Raspberry Pi Setup](RASPBERRY_PI_SETUP.md)** - Step-by-step guide for Raspberry Pi with port forwarding
-- **[Troubleshooting](docs/NETWORK_DEPLOYMENT.md#troubleshooting)** - Connection issues and solutions
-- **[Solución de Problemas (Español)](SOLUCION_PROBLEMAS_ES.md)** - Guía de problemas de conexión en español
+### Architecture & Design
+| Document | Description |
+|----------|-------------|
+| [System Architecture](docs/ARCHITECTURE.md) | Component design, data flow, and protocols |
+| [Modules Documentation](docs/MODULES.md) | Module system and capabilities |
+| [API Reference](docs/API.md) | Developer API documentation |
+
+### Deployment Guides
+| Document | Description |
+|----------|-------------|
+| [Network Deployment](docs/guides/NETWORK_DEPLOYMENT.md) | LAN, WAN, and port forwarding setup |
+| [Raspberry Pi Setup](docs/guides/RASPBERRY_PI_SETUP.md) | Complete Pi deployment guide |
+
+### Features
+| Document | Description |
+|----------|-------------|
+| [Evasion Techniques](docs/features/EVASION.md) | Anti-sandbox, anti-VM, string/command obfuscation |
+| [Persistence Mechanisms](docs/features/PERSISTENCE.md) | Registry, scheduled tasks, WMI, startup |
+| [Credential Stealer](docs/features/STEALER.md) | Browser, Discord, Telegram, wallet harvesting |
+| [Ransomware Module](docs/features/RANSOMWARE.md) | File encryption capabilities |
+| [Dropper System](docs/features/DROPPER.md) | Social engineering and payload delivery |
+| [Privilege Escalation](docs/features/ELEVATE.md) | UAC bypass and elevation techniques |
+
+### Development
+| Document | Description |
+|----------|-------------|
+| [Development Guide](docs/DEVELOPMENT.md) | Project structure, building, and debugging |
+| [Contributing Guidelines](docs/CONTRIBUTING.md) | How to contribute to the project |
+| [Security Considerations](docs/SECURITY.md) | OPSEC, threat model, and best practices |
+
+### Troubleshooting
+| Document | Description |
+|----------|-------------|
+| [Connection Issues](docs/troubleshooting/CONNECTION.md) | Agent connection and network problems |
+| [Build Issues](docs/troubleshooting/BUILD.md) | Compilation and cross-compilation fixes |
+| [Problemas Comunes (ES)](docs/troubleshooting/SOLUCION_PROBLEMAS_ES.md) | Spanish troubleshooting guide |
 
 ---
 
@@ -197,7 +224,7 @@ The fastest way to build everything:
 docker-compose up --build
 ```
 
-All binaries will be in the `dist/` directory. See **[Docker Guide (DOCKER.md)](DOCKER.md)** for detailed instructions.
+All binaries will be in the `dist/` directory. See **[Docker Guide](docs/guides/DOCKER.md)** for detailed instructions.
 
 #### Option 2: Manual Build
 
@@ -224,7 +251,7 @@ cargo build --release
 ./target/release/c2r2-server --generate-certs
 ```
 
-**📖 Build Modes:** See [BUILD.md](BUILD.md) for detailed documentation on development vs production builds.
+**📖 Build Modes:** See [Evasion Documentation](docs/features/EVASION.md) for detailed documentation on development vs production builds.
 
 ⚠️ **Important**: Always use `--production` flag for real deployments to ensure stealth:
 - ✅ No console window
@@ -292,9 +319,9 @@ For deploying over the internet with port forwarding (e.g., Raspberry Pi):
 ```
 
 **📖 Having connection issues?** See:
-- **[Raspberry Pi Setup Guide](RASPBERRY_PI_SETUP.md)** - Complete setup for Pi with port forwarding
-- **[Network Deployment Guide](docs/NETWORK_DEPLOYMENT.md)** - Comprehensive network configuration
-- **[Troubleshooting](docs/NETWORK_DEPLOYMENT.md#troubleshooting)** - Common connection problems
+- **[Raspberry Pi Setup Guide](docs/guides/RASPBERRY_PI_SETUP.md)** - Complete setup for Pi with port forwarding
+- **[Network Deployment Guide](docs/guides/NETWORK_DEPLOYMENT.md)** - Comprehensive network configuration
+- **[Connection Troubleshooting](docs/troubleshooting/CONNECTION.md)** - Common connection problems
 
 **Complete usage guide:** [Usage Documentation](docs/USAGE.md)
 

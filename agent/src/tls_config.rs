@@ -1,12 +1,12 @@
 //! TLS Configuration for C2R2 Agent
-//! 
+//!
 //! This module configures rustls to accept self-signed certificates.
 //! For C2 operations, we need to trust the server's certificate without
 //! verification since we use self-signed certificates.
 
-use rustls::ClientConfig;
-use rustls::client::danger::{ServerCertVerified, ServerCertVerifier, HandshakeSignatureValid};
+use rustls::client::danger::{HandshakeSignatureValid, ServerCertVerified, ServerCertVerifier};
 use rustls::pki_types::{CertificateDer, ServerName, UnixTime};
+use rustls::ClientConfig;
 use rustls::DigitallySignedStruct;
 use std::sync::Arc;
 
@@ -65,7 +65,7 @@ impl ServerCertVerifier for InsecureCertVerifier {
 /// Creates a TLS client configuration that accepts self-signed certificates
 pub fn create_client_config() -> ClientConfig {
     let verifier = Arc::new(InsecureCertVerifier);
-    
+
     ClientConfig::builder()
         .dangerous()
         .with_custom_certificate_verifier(verifier)

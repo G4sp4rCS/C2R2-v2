@@ -6,7 +6,8 @@ members = [
     "c2r2-server",
     "stealer-dll",
     "ransomware-dll",
-    "dropper-rust"
+    "dropper-rust",
+    "loader"
 ]
 
 [profile.release]

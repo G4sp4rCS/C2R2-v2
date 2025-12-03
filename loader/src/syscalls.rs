@@ -13,7 +13,9 @@
 use std::ffi::c_void;
 
 #[cfg(target_os = "windows")]
-use dinvk::winapis::{NtAllocateVirtualMemory, NtProtectVirtualMemory, NtWriteVirtualMemory};
+use dinvk::winapis::{
+    NtAllocateVirtualMemory, NtProtectVirtualMemory, NtWriteVirtualMemory, NT_SUCCESS,
+};
 
 /// Allocate memory in a remote process using indirect syscall
 #[cfg(target_os = "windows")]
@@ -33,7 +35,7 @@ pub fn allocate_remote_memory(
         0x04,   // PAGE_READWRITE (initially RW, will change to RX later)
     );
 
-    if status >= 0 && !base_address.is_null() {
+    if NT_SUCCESS(status) && !base_address.is_null() {
         Ok(base_address)
     } else {
         Err(format!("NtAllocateVirtualMemory failed: 0x{:X}", status))
@@ -57,7 +59,7 @@ pub fn write_remote_memory(
         &mut bytes_written,
     );
 
-    if status >= 0 {
+    if NT_SUCCESS(status) {
         Ok(())
     } else {
         Err(format!("NtWriteVirtualMemory failed: 0x{:X}", status))
@@ -83,7 +85,7 @@ pub fn protect_remote_memory(
         &mut old_protect,
     );
 
-    if status >= 0 {
+    if NT_SUCCESS(status) {
         Ok(())
     } else {
         Err(format!("NtProtectVirtualMemory failed: 0x{:X}", status))
@@ -111,7 +113,7 @@ pub fn allocate_local_rw_memory(size: usize) -> *mut c_void {
         0x04,   // PAGE_READWRITE
     );
 
-    if status >= 0 {
+    if NT_SUCCESS(status) {
         base_address
     } else {
         std::ptr::null_mut()
@@ -135,7 +137,7 @@ pub fn make_local_memory_executable(address: *mut c_void, size: usize) -> bool {
         &mut old_protect,
     );
 
-    status >= 0
+    NT_SUCCESS(status)
 }
 
 // ============================================================================

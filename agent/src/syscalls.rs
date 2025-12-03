@@ -21,7 +21,7 @@ pub use dinvk;
 #[cfg(target_os = "windows")]
 use dinvk::winapis::{
     NtAllocateVirtualMemory, NtCreateThreadEx, NtCurrentProcess, NtCurrentThread,
-    NtProtectVirtualMemory, NtWriteVirtualMemory,
+    NtProtectVirtualMemory, NtWriteVirtualMemory, NT_SUCCESS,
 };
 
 // Re-export commonly used dinvk functions with snake_case names
@@ -154,7 +154,7 @@ pub fn allocate_rwx_memory(size: usize) -> *mut c_void {
         0x40,   // PAGE_EXECUTE_READWRITE
     );
 
-    if status >= 0 {
+    if NT_SUCCESS(status) {
         base_address
     } else {
         std::ptr::null_mut()
@@ -177,7 +177,7 @@ pub fn allocate_rw_memory(size: usize) -> *mut c_void {
         0x04,   // PAGE_READWRITE
     );
 
-    if status >= 0 {
+    if NT_SUCCESS(status) {
         base_address
     } else {
         std::ptr::null_mut()
@@ -199,5 +199,5 @@ pub fn make_memory_executable(address: *mut c_void, size: usize) -> bool {
         &mut old_protect,
     );
 
-    status >= 0
+    NT_SUCCESS(status)
 }

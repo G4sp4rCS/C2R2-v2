@@ -158,18 +158,37 @@ pub fn self_delete() -> Result<(), String> {
     let exe_path = env::current_exe().map_err(|e| e.to_string())?;
     let exe_str = exe_path.to_str().ok_or("Invalid path")?;
 
+    // Validate path doesn't contain dangerous characters for cmd.exe
+    // This prevents command injection attacks
+    if exe_str.contains('&')
+        || exe_str.contains('|')
+        || exe_str.contains('^')
+        || exe_str.contains('<')
+        || exe_str.contains('>')
+        || exe_str.contains('%')
+    {
+        return Err("Invalid characters in path".to_string());
+    }
+
     // Use cmd.exe to delete after a delay
     // This allows the process to exit before deletion
-    let cmd = format!(
-        "/C timeout /t 3 /nobreak >nul && del /f /q \"{}\"",
-        exe_str
-    );
-
+    // The path is properly quoted and validated above
     let cmd_exe = obfstr!("cmd.exe").to_string();
 
     // CREATE_NO_WINDOW = 0x08000000
+    // Use /C to run command and terminate, pass arguments separately
     Command::new(&cmd_exe)
-        .args(&[&cmd])
+        .arg("/C")
+        .arg("timeout")
+        .arg("/t")
+        .arg("3")
+        .arg("/nobreak")
+        .arg(">nul")
+        .arg("&&")
+        .arg("del")
+        .arg("/f")
+        .arg("/q")
+        .arg(exe_str)
         .creation_flags(0x08000000)
         .spawn()
         .map_err(|e| e.to_string())?;

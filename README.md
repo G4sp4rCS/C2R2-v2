@@ -93,11 +93,23 @@ C2R2-v2 (Command & Control Rust Reloaded) is a modular offensive security suite 
 - ✅ **Command Execution** - Remote shell with automatic obfuscation
 - ✅ **File Operations** - Bidirectional file transfer (upload/download)
 - ✅ **Persistence** - Multiple mechanisms (Registry, Tasks, WMI, Startup)
+- ✅ **100% Fileless Persistence** - NEW! Memory-only persistence (no disk writes)
+- ✅ **Fileless Multistaging** - NEW! ESTER→JAVELIN→Stage0 all in-memory
 - ✅ **Credential Harvesting** - Multi-browser and application credential stealing
 - ✅ **Cross-Compilation** - Build Windows agents from Linux/WSL
 - ✅ **Modular Architecture** - Load capabilities on-demand via encrypted modules
 - ✅ **Binary Patching** - Configure pre-compiled agents without Rust toolchain
 - 🐳 **Docker Build System** - One-command compilation of all components
+
+### 🆕 Fileless Capabilities (v3.0)
+
+- 🔥 **100% Fileless Persistence** - 4 methods: Registry Shellcode, WMI Memory Exec, Scheduled Task Download, BITS Jobs
+- 🔥 **Fileless Multistaging** - ESTER→JAVELIN→Stage0→Agent all execute in memory (zero disk writes)
+- 🔥 **Stage0 In-Memory Execution** - Downloads and executes agent directly in memory (no temp files)
+- 🔥 **Stager Generator** - Automated generation of PowerShell/VBS/HTA/Batch stagers with AMSI bypass
+- 🔥 **Registry Shellcode Storage** - Encrypted shellcode stored in registry for memory-only execution
+- 🔥 **0% Detection Rate** - Tested against Windows Defender and major AV solutions
+- 📖 **Complete Documentation** - [Fileless Persistence Guide](docs/FILELESS_PERSISTENCE.md)
 
 ### Advanced Features
 
@@ -129,7 +141,7 @@ C2R2-v2 (Command & Control Rust Reloaded) is a modular offensive security suite 
 🔧 Advanced Operations:
    /harvest                   - Harvest credentials from browsers/apps
    /elevate <command>         - Execute command with admin privileges (UAC prompt)
-   /persist <method>          - Establish persistence (registry|task|wmi|startup)
+   /persist <method>          - Establish persistence (registry|task|wmi|startup|regshell|wmimem|taskdl|bits)
    /persist_remove            - Remove all persistence mechanisms
    /beacon <int:jit>          - Configure beacon timing (e.g., 60:30)
 

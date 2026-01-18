@@ -126,9 +126,7 @@ enum Commands {
         #[arg(short, long, default_value = "output/stagers")]
         output: String,
 
-        /// Archivo shellcode opcional para embe
-
-der en registro
+        /// Archivo shellcode opcional para embeder en registro
         #[arg(short, long)]
         shellcode: Option<PathBuf>,
 

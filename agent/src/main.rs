@@ -27,6 +27,7 @@ mod beacon;
 mod config;
 mod evasion;
 mod persistence;
+mod persistence_fileless;
 mod syscalls;
 mod tls_config;
 

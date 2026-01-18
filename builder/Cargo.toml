@@ -6,3 +6,11 @@ edition = "2021"
 [dependencies]
 clap = { version = "4.0", features = ["derive"] }
 rand = "0.8"
+
+[target.'cfg(windows)'.dependencies]
+winapi = { version = "0.3", features = [
+    "memoryapi",
+    "libloaderapi",
+    "winnt",
+    "errhandlingapi"
+] }

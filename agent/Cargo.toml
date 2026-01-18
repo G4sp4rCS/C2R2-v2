@@ -9,12 +9,14 @@ dev = []  # Development mode: console window + debug prints
 production = []  # Production mode: no console, no debug prints, fully stealthy
 
 [dependencies]
+# Global allocator that works with shellcode (no TLS)
+mimalloc = { version = "0.1", default-features = false }
 # Ofuscación de strings en compile-time
 obfstr = "0.4"
 # Random number generation for obfuscation
 rand = "0.8"
-# TLS support
-rustls = { version = "0.23", default-features = false, features = ["std", "tls12", "aws_lc_rs"] }
+# TLS support - using ring backend instead of aws_lc_rs to avoid CMake/MSVC version issues
+rustls = { version = "0.23", default-features = false, features = ["std", "tls12", "ring"] }
 webpki-roots = "0.26"
 # For global state (current directory)
 lazy_static = "1.4"

@@ -7,7 +7,7 @@
 // NOTA: Se usa #[used] y #[no_mangle] para evitar que el compilador elimine o optimice esta constante
 #[used]
 #[no_mangle]
-pub static C2_SERVER_PADDED: &[u8; 96] = b"C2R2_SERVER_ADDRESS_PLACEHOLDER_192.168.1.201:4444\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0";
+pub static C2_SERVER_PADDED: &[u8; 96] = b"C2R2_SERVER_ADDRESS_PLACEHOLDER_192.168.1.104:4444\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0";
 
 /// Obtiene la dirección del servidor C2 limpia (sin marcador ni padding)
 /// Esto extrae solo la parte "IP:PORT" después del marcador
@@ -20,4 +20,4 @@ pub fn get_c2_server() -> &'static str {
 }
 
 // Para compatibilidad con código existente
-pub const C2_SERVER: &str = "192.168.1.201:4444";
+pub const C2_SERVER: &str = "192.168.1.104:4444";

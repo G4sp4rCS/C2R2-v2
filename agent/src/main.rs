@@ -2,6 +2,13 @@
 #![cfg_attr(feature = "production", windows_subsystem = "windows")]
 #![cfg_attr(not(feature = "production"), windows_subsystem = "console")]
 
+// Use mimalloc as global allocator - required for shellcode execution
+// The default Rust allocator uses TLS which crashes when running as shellcode
+use mimalloc::MiMalloc;
+
+#[global_allocator]
+static GLOBAL: MiMalloc = MiMalloc;
+
 // Macro for conditional debug printing
 // In production mode, this compiles to nothing
 // In dev mode, it prints to stdout

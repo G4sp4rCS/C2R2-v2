@@ -635,6 +635,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "dea2df4cf52843e0452895c455a1a2cfbb842a1e7329671acf418fdc53ed4c59"
 
 [[package]]
+name = "ester"
+version = "2.0.0"
+dependencies = [
+ "obfstr",
+ "rand",
+ "winapi",
+ "winres",
+]
+
+[[package]]
 name = "fallible-iterator"
 version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -986,6 +996,18 @@ name = "itoa"
 version = "1.0.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4a5f13b858c8d314ee3e8f639011f7ccefe71f97f96e50151fb991f267928e2c"
+
+[[package]]
+name = "javelin"
+version = "2.0.0"
+dependencies = [
+ "base64 0.22.1",
+ "dinvk",
+ "obfstr",
+ "rand",
+ "winapi",
+ "winres",
+]
 
 [[package]]
 name = "jobserver"
@@ -1686,6 +1708,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d5fe4ccb98d9c292d56fec89a5e07da7fc4cf0dc11e156b41793132775d3e591"
 dependencies = [
  "lock_api",
+]
+
+[[package]]
+name = "stage0"
+version = "2.0.0"
+dependencies = [
+ "obfstr",
+ "rand",
+ "rustls",
+ "webpki-roots 0.26.11",
+ "winapi",
 ]
 
 [[package]]

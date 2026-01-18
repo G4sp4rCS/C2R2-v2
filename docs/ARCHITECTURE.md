@@ -6,6 +6,21 @@ This document describes the architecture, design decisions, and component intera
 
 C2R2-v2 follows a modular client-server architecture optimized for stealth, flexibility, and maintainability. The framework is built entirely in Rust, leveraging memory safety, zero-cost abstractions, and powerful concurrency primitives.
 
+## Table of Contents
+
+1. [High-Level Architecture](#high-level-architecture)
+2. [Component Architecture](#component-architecture)
+3. [Multi-Stage Execution Pipeline](#multi-stage-execution-pipeline)
+4. [Data Flow](#data-flow)
+5. [Security Architecture](#security-architecture)
+6. [Extensibility](#extensibility)
+7. [Performance Considerations](#performance-considerations)
+8. [Build System](#build-system)
+9. [Deployment Architecture](#deployment-architecture)
+10. [Logging and Debugging](#logging-and-debugging)
+11. [Error Handling](#error-handling)
+12. [Future Architecture Considerations](#future-architecture-considerations)
+
 ## High-Level Architecture
 
 ```
@@ -329,6 +344,80 @@ impl StolenData {
     }
 }
 ```
+
+## Multi-Stage Execution Pipeline
+
+C2R2-v2 includes a multi-stage execution pipeline inspired by IRIS C2, providing layered OPSEC and clean separation of concerns. See [STAGING.md](STAGING.md) for complete documentation.
+
+### Stage Architecture
+
+```
+┌──────────────────────────────────────────────────────┐
+│  Stage 1: ESTER (Entry/Dropper)                      │
+│  - Environment validation                            │
+│  - Sandbox detection                                 │
+│  - Triggers Stage 2                                  │
+│  - NO C2 communication                               │
+│  - Runs on disk (entry point)                        │
+└─────────────────┬────────────────────────────────────┘
+                  │ Executes in memory
+                  ▼
+┌──────────────────────────────────────────────────────┐
+│  Stage 2: JAVELIN (In-Memory Loader)                 │
+│  - XOR/AES payload decryption                        │
+│  - RW → RX memory transitions                        │
+│  - Artifact cleanup                                  │
+│  - NO C2 communication                               │
+│  - Runs entirely in memory                           │
+└─────────────────┬────────────────────────────────────┘
+                  │ Loads and executes
+                  ▼
+┌──────────────────────────────────────────────────────┐
+│  Stage 3: Stage0 (Bootstrap)                         │
+│  - Initial C2 beacon                                 │
+│  - TLS session establishment                         │
+│  - Downloads full agent                              │
+│  - Position-independent code                         │
+│  - Runs entirely in memory                           │
+└─────────────────┬────────────────────────────────────┘
+                  │ Downloads and executes
+                  ▼
+┌──────────────────────────────────────────────────────┐
+│  Full Agent (Standard C2R2-v2 Agent)                 │
+│  - All agent capabilities                            │
+│  - Beacon loop with jitter                           │
+│  - Command execution                                 │
+│  - Module loading                                    │
+└──────────────────────────────────────────────────────┘
+```
+
+### Key Characteristics
+
+| Stage | Disk | Memory | C2 Comms | Purpose |
+|-------|------|--------|----------|---------|
+| ESTER | ✅ | - | ❌ | Environment validation |
+| JAVELIN | ❌ | ✅ | ❌ | Payload decryption & loading |
+| Stage0 | ❌ | ✅ | ✅ | C2 bootstrap & agent download |
+| Full Agent | ❌ | ✅ | ✅ | Complete capabilities |
+
+### Why Multi-Stage?
+
+**Separation of Concerns**:
+- ESTER: Environment validation only
+- JAVELIN: Payload loading only  
+- Stage0: C2 communication only
+- Full Agent: All capabilities
+
+**OPSEC Benefits**:
+- Minimal disk footprint (only ESTER)
+- No C2 addresses in early stages
+- Layered evasion techniques
+- Full agent only deployed when needed
+
+**Flexibility**:
+- Stages can be updated independently
+- Different staging strategies for different scenarios
+- Reusable components
 
 ## Data Flow
 

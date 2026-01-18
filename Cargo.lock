@@ -1715,6 +1715,7 @@ dependencies = [
 name = "stage0"
 version = "2.0.0"
 dependencies = [
+ "dinvk",
  "obfstr",
  "rand",
  "rustls",

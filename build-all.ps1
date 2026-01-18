@@ -107,6 +107,28 @@ Write-Color "✓ WSL detectado" Green
 Write-Host ""
 
 # ============================================================================
+# Configurar entorno de Visual Studio (necesario para builds Windows)
+# ============================================================================
+$vsWhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+if (Test-Path $vsWhere) {
+    $vsPath = & $vsWhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath 2>$null
+    if ($vsPath) {
+        $vcvarsall = Join-Path $vsPath "VC\Auxiliary\Build\vcvars64.bat"
+        if (Test-Path $vcvarsall) {
+            Write-Color "⚙️  Configurando entorno Visual Studio..." Cyan
+            # Ejecutar vcvars64.bat y capturar las variables de entorno
+            cmd /c "call `"$vcvarsall`" && set" 2>$null | ForEach-Object {
+                if ($_ -match "^([^=]+)=(.*)$") {
+                    [System.Environment]::SetEnvironmentVariable($matches[1], $matches[2], "Process")
+                }
+            }
+            Write-Color "✓ Entorno Visual Studio configurado" Green
+        }
+    }
+}
+Write-Host ""
+
+# ============================================================================
 # 1. Compilar Servidor en WSL (Linux x86_64)
 # ============================================================================
 Write-Color "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" Blue
@@ -299,8 +321,27 @@ Write-Host ""
 # ============================================================================
 if ($MultiStage) {
     Write-Color "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" Blue
-    Write-Color "📦 [4/4] Compilando sistema multi-stage con builder..." Yellow
+    Write-Color "📦 [4/4] Compilando sistema multi-stage con builder + donut..." Yellow
     Write-Color "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" Blue
+    
+    # Verificar que donut.exe esté disponible (no usamos Python module)
+    Write-Color "🍩 Verificando donut.exe para conversión EXE→Shellcode..." Cyan
+    $donutExe = Join-Path $PSScriptRoot "donut_v1.1\donut.exe"
+    if (-not (Test-Path $donutExe)) {
+        Write-Color "❌ donut.exe no encontrado en: $donutExe" Red
+        Write-Color "   Descarga donut desde: https://github.com/TheWover/donut/releases" Yellow
+        Write-Color "   Extrae el contenido en: $PSScriptRoot\donut_v1.1\" Yellow
+        exit 1
+    }
+    Write-Color "✅ donut.exe encontrado: $donutExe" Green
+
+    # Verificar que el script exe_to_shellcode.py exista
+    $exeToShellcodeScript = Join-Path $PSScriptRoot "builder\scripts\exe_to_shellcode.py"
+    if (-not (Test-Path $exeToShellcodeScript)) {
+        Write-Color "❌ exe_to_shellcode.py no encontrado en: $exeToShellcodeScript" Red
+        exit 1
+    }
+    Write-Color "✅ exe_to_shellcode.py encontrado" Green
     
     Write-Color "⚙️  Usando C2R2 Builder para construir ESTER→JAVELIN→Stage0..." Cyan
     

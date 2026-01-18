@@ -3,6 +3,7 @@
 mod dll_encrypt;
 mod encrypt;
 mod patch;
+// mod pe_loader; // Disabled - using donut.exe instead
 mod sc_generator;
 mod stage_builder;
 

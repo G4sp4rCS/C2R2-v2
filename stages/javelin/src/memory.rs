@@ -8,7 +8,11 @@ use std::error::Error;
 #[cfg(target_os = "windows")]
 use std::ffi::c_void;
 #[cfg(target_os = "windows")]
-use dinvk::winapis::{NtAllocateVirtualMemory, NtProtectVirtualMemory, NtFreeVirtualMemory, NtCurrentProcess};
+use dinvk::winapis::{NtAllocateVirtualMemory, NtProtectVirtualMemory, NtCurrentProcess};
+#[cfg(target_os = "windows")]
+use winapi::um::memoryapi::VirtualFree;
+#[cfg(target_os = "windows")]
+use winapi::um::winnt::MEM_RELEASE;
 
 /// Memory region handle for cleanup
 pub struct MemoryRegion {

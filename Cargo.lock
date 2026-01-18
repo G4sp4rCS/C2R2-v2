@@ -267,6 +267,7 @@ version = "2.0.0"
 dependencies = [
  "clap",
  "rand",
+ "winapi",
 ]
 
 [[package]]

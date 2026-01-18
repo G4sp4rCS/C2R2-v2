@@ -2,9 +2,9 @@
 //!
 //! Contains the C2 server address and session parameters
 
-/// C2 server address (will be configured by builder)
+/// C2 server address (configured by builder)
 /// Format: "IP:PORT"
-pub const C2_SERVER: &str = "127.0.0.1:4444";
+pub const C2_SERVER: &str = "192.168.1.104:4444";
 
 /// Gets the C2 server address
 pub fn get_c2_server() -> &'static str {

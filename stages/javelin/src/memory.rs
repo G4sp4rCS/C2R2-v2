@@ -39,20 +39,13 @@ impl MemoryRegion {
 
 impl Drop for MemoryRegion {
     /// Automatically frees memory when the region goes out of scope
-    /// Uses indirect syscall via dinvk for EDR evasion
     fn drop(&mut self) {
         #[cfg(target_os = "windows")]
-        unsafe {
+        {
             if !self.address.is_null() {
-                let mut base = self.address as *mut c_void;
-                let mut size = self.size;
-                // Use NtFreeVirtualMemory via dinvk
-                let _ = NtFreeVirtualMemory(
-                    NtCurrentProcess(),
-                    &mut base,
-                    &mut size,
-                    0x8000, // MEM_RELEASE
-                );
+                unsafe {
+                    VirtualFree(self.address as *mut winapi::ctypes::c_void, 0, MEM_RELEASE);
+                }
             }
         }
     }

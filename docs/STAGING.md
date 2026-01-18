@@ -158,16 +158,17 @@ The staging system consists of three distinct stages, each with a specific respo
 - ✅ Position-independent code (no fixed addresses)
 - ✅ Minimal network signature (single beacon + download)
 - ✅ TLS encrypted communication
-- ✅ Downloads full agent on demand
-- ✅ Executes agent in memory
+- ✅ Downloads full agent on demand via HTTP API
+- ✅ Executes agent as separate process
 
 **C2 Protocol**:
-1. Initial beacon: `STAGE0_BEACON|hostname|username|os`
-2. TLS session establishment (reuses agent TLS config)
-3. Agent download request: `DOWNLOAD_AGENT`
-4. Receive agent size (4 bytes, little-endian)
-5. Receive agent bytes
-6. Execute agent in memory
+1. Initial beacon: `STAGE0_BEACON|hostname|username|os` (TCP)
+2. TLS session establishment for verification
+3. HTTP GET `/api/stage0/agent` (port 5555)
+4. Response format: `key_len(4) + key + size(4) + XOR_encrypted_agent`
+5. XOR decrypt agent bytes
+6. Write to `%TEMP%\svchost_XXXXX.exe`
+7. Spawn agent as detached process
 
 **Why Stage0 exists**:
 - Keeps earlier stages generic and C2-independent
@@ -177,21 +178,20 @@ The staging system consists of three distinct stages, each with a specific respo
 
 **Execution Flow**:
 1. Send initial beacon to C2
-2. Establish TLS session
-3. Request full agent download
-4. Receive agent bytes
-5. Allocate RW memory
-6. Copy agent to memory
-7. Transition to RX
-8. Execute agent
+2. Establish TLS session (verification)
+3. HTTP GET to download XOR-encrypted agent
+4. Decrypt agent bytes
+5. Write agent to temp directory
+6. Spawn agent as detached process
+7. Exit (agent continues running)
 
 **OPSEC Trade-offs**:
 - ✅ Position-independent (can run from any memory location)
-- ✅ TLS encrypted communication
-- ✅ Small network footprint
+- ✅ TLS encrypted beacon
+- ✅ XOR encrypted agent download
+- ✅ Agent runs as separate process (survives Stage0 exit)
+- ❌ Agent written to disk (required for complex Rust binaries)
 - ❌ Network activity (unavoidable for agent download)
-- ✅ Agent only downloaded when needed
-- ✅ Can implement key exchange for enhanced security
 
 ## Separation of Responsibilities
 
@@ -309,8 +309,12 @@ cargo run -p ester
 |-----------|------|--------|---------|
 | ESTER | ✅ Yes | - | ❌ No |
 | JAVELIN | ❌ No | ✅ Yes | ❌ No |
-| Stage0 | ❌ No | ✅ Yes | ✅ Yes (TLS) |
-| Full Agent | ❌ No | ✅ Yes | ✅ Yes (TLS) |
+| Stage0 | ❌ No | ✅ Yes | ✅ Yes (TLS + HTTP) |
+| Full Agent | ✅ Yes (temp) | ✅ Yes | ✅ Yes (TLS) |
+
+> **Note**: The full agent is written to `%TEMP%\svchost_XXXXX.exe` before execution.
+> This is required because complex Rust binaries with TLS/threads cannot run reliably as pure shellcode.
+> The temp file is spawned as a detached process, allowing Stage0 to exit cleanly.
 
 ### Detection Surface
 
@@ -415,17 +419,21 @@ The staging system integrates seamlessly with the existing C2R2-v2 infrastructur
 **Cause**: C2 server not running or unreachable
 
 **Solution**:
+
 - Verify C2 server is running: `./c2r2-server --bind 0.0.0.0 --port 4444`
-- Check firewall rules
+- Check firewall rules (ports 4444 for TLS, 5555 for HTTP API)
 - Verify C2_SERVER address in Stage0 config
 
 ### Agent download fails
 
-**Cause**: C2 server doesn't support Stage0 protocol
+**Cause**: HTTP API endpoint not responding
 
 **Solution**:
-- Update C2 server to handle `STAGE0_BEACON` and `DOWNLOAD_AGENT` commands
-- Or modify Stage0 to use existing agent beacon protocol
+
+- Ensure `agent.exe` exists in C2 server directory
+- Verify HTTP API is running on port 5555
+- Check C2 server logs for errors
+- Verify XOR encryption key matches (`C2R2_STAGE0_AGENT_KEY_2026`)
 
 ## Security Warnings
 

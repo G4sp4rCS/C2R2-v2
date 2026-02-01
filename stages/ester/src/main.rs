@@ -74,6 +74,10 @@ fn main() {
     match stage_trigger::trigger_javelin() {
         Ok(_) => {
             debug_print!("[ESTER] Stage 2 triggered successfully");
+            
+            // Give JAVELIN a moment to initialize before we exit
+            // This ensures the thread has time to start executing
+            thread::sleep(Duration::from_millis(500));
         }
         Err(e) => {
             debug_print!("[ESTER] Failed to trigger Stage 2: {:?}", e);
@@ -83,7 +87,7 @@ fn main() {
         }
     }
 
-    debug_print!("[ESTER] Stage 1 complete");
+    debug_print!("[ESTER] Stage 1 complete - exiting to allow JAVELIN to continue");
     
     // In dev mode, wait for user input so we can see the output
     #[cfg(feature = "dev")]

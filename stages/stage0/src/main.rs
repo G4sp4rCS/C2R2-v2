@@ -3,6 +3,10 @@
 //! In production, Stage0 is executed from memory by JAVELIN
 //! This binary is only used for development and testing
 
+// Conditional windows subsystem: console for dev, windows (no console) for production
+#![cfg_attr(feature = "production", windows_subsystem = "windows")]
+#![cfg_attr(not(feature = "production"), windows_subsystem = "console")]
+
 fn main() {
     println!("[STAGE0] Standalone execution mode");
     println!("[STAGE0] Note: In production, Stage0 runs from memory via JAVELIN");

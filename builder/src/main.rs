@@ -382,6 +382,7 @@ fn main() {
                     "--release",
                     "--target",
                     "x86_64-pc-windows-gnu",
+                    "--no-default-features",
                     "--features",
                     "production",
                     "-p",

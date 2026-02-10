@@ -8,6 +8,15 @@ default = ["dev"]
 dev = []  # Development mode: console window + debug prints
 production = []  # Production mode: no console, no debug prints, fully stealthy
 
+[lib]
+name = "agent_dll"
+crate-type = ["cdylib"]
+path = "src/lib.rs"
+
+[[bin]]
+name = "agent"
+path = "src/main.rs"
+
 [dependencies]
 # Global allocator that works with shellcode (no TLS)
 mimalloc = { version = "0.1", default-features = false }
@@ -43,10 +52,6 @@ winapi = { version = "0.3", features = [
 # Bypasses usermode hooks by dynamically resolving and executing syscalls
 dinvk = "0.4"
 
-
-[[bin]]
-name = "agent"
-path = "src/main.rs"
 
 [build-dependencies]
 winres = "0.1.12"

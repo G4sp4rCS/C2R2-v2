@@ -238,6 +238,37 @@ pub async fn list_directory(
     }
 }
 
+/// Delete a file or directory on an agent
+pub async fn delete_file(
+    State(state): State<Arc<ApiState>>,
+    headers: HeaderMap,
+    Path(id): Path<u64>,
+    Json(request): Json<DeleteRequest>,
+) -> Result<Json<CommandResponse>, StatusCode> {
+    // Validate token
+    if let Some(token) = extract_token(&headers) {
+        if !state.validate_token(&token).await {
+            return Err(StatusCode::UNAUTHORIZED);
+        }
+    } else {
+        return Err(StatusCode::UNAUTHORIZED);
+    }
+
+    let command = format!("__DELETE__:{}", request.path);
+    match state.send_command(id, command).await {
+        Ok(_) => Ok(Json(CommandResponse {
+            success: true,
+            message: format!("Delete request sent for: {}", request.path),
+            agent_id: id,
+        })),
+        Err(e) => Ok(Json(CommandResponse {
+            success: false,
+            message: e,
+            agent_id: id,
+        })),
+    }
+}
+
 /// Change current directory on an agent
 pub async fn change_directory(
     State(state): State<Arc<ApiState>>,

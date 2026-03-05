@@ -132,36 +132,40 @@ impl ApiState {
         fps.remove(&fingerprint)
     }
 
-    /// Reassign an agent from `old_id` to `new_id`.
+    /// Reassign an agent from a temporary `temp_id` to its original persistent `original_id`.
     /// Moves the agent entry in all maps and notifies team clients.
     pub async fn reassign_agent_id(
         &self,
-        old_id: ClientId,
-        new_id: ClientId,
+        temp_id: ClientId,
+        original_id: ClientId,
         new_tx: mpsc::UnboundedSender<String>,
     ) {
-        // Remove old_id entry, update its id field, insert under new_id
-        {
+        // Remove temp entry, update its id field, insert under original_id
+        // Keep agent info for event notification to avoid race condition
+        let reconnected_info = {
             let mut agents = self.agents.write().await;
-            if let Some(mut agent_state) = agents.remove(&old_id) {
-                agent_state.info.id = new_id;
+            if let Some(mut agent_state) = agents.remove(&temp_id) {
+                agent_state.info.id = original_id;
                 agent_state.tx = new_tx.clone();
-                agents.insert(new_id, agent_state);
+                let info = agent_state.info.clone();
+                agents.insert(original_id, agent_state);
+                Some(info)
+            } else {
+                None
             }
-        }
+        };
         {
             let mut command_tx = self.command_tx.write().await;
-            command_tx.remove(&old_id);
-            command_tx.insert(new_id, new_tx);
+            command_tx.remove(&temp_id);
+            command_tx.insert(original_id, new_tx);
         }
 
-        // Notify team clients: remove old temporary ID, announce reconnection under real ID
-        let _ = self.event_tx.send(ServerEvent::AgentDisconnected { id: old_id });
-        let agents = self.agents.read().await;
-        if let Some(agent) = agents.get(&new_id) {
+        // Notify team clients: remove temporary ID, announce reconnection under original ID
+        let _ = self.event_tx.send(ServerEvent::AgentDisconnected { id: temp_id });
+        if let Some(info) = reconnected_info {
             let _ = self
                 .event_tx
-                .send(ServerEvent::AgentConnected(agent.info.clone()));
+                .send(ServerEvent::AgentConnected(info));
         }
     }
 

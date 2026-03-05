@@ -33,6 +33,10 @@ pub struct ApiState {
     /// Active authentication tokens
     pub auth_tokens: Arc<RwLock<HashMap<String, AuthToken>>>,
 
+    /// Fingerprints of disconnected agents: "hostname|username" → old ClientId
+    /// Used to reassign the same ID when an agent reconnects
+    pub disconnected_fingerprints: Arc<RwLock<HashMap<String, ClientId>>>,
+
     /// API password (configured at startup)
     pub api_password: String,
 
@@ -59,6 +63,7 @@ impl ApiState {
             command_tx: Arc::new(RwLock::new(HashMap::new())),
             event_tx,
             auth_tokens: Arc::new(RwLock::new(HashMap::new())),
+            disconnected_fingerprints: Arc::new(RwLock::new(HashMap::new())),
             api_password,
             start_time: Instant::now(),
             verbose,
@@ -91,8 +96,21 @@ impl ApiState {
         let _ = self.event_tx.send(ServerEvent::AgentConnected(info));
     }
 
-    /// Remove an agent
+    /// Remove an agent (saves fingerprint for reconnection)
     pub async fn remove_agent(&self, id: ClientId) {
+        // Save fingerprint before removing so we can recognize reconnections
+        {
+            let agents = self.agents.read().await;
+            if let Some(agent) = agents.get(&id) {
+                if let (Some(hostname), Some(username)) =
+                    (&agent.info.hostname, &agent.info.username)
+                {
+                    let fingerprint = format!("{}|{}", hostname, username);
+                    let mut fps = self.disconnected_fingerprints.write().await;
+                    fps.insert(fingerprint, id);
+                }
+            }
+        }
         {
             let mut agents = self.agents.write().await;
             agents.remove(&id);
@@ -104,6 +122,47 @@ impl ApiState {
 
         // Broadcast event to team clients
         let _ = self.event_tx.send(ServerEvent::AgentDisconnected { id });
+    }
+
+    /// Check if a hostname+username matches a previously disconnected agent.
+    /// Returns the old ClientId if found (and removes the entry).
+    pub async fn check_reconnection(&self, hostname: &str, username: &str) -> Option<ClientId> {
+        let fingerprint = format!("{}|{}", hostname, username);
+        let mut fps = self.disconnected_fingerprints.write().await;
+        fps.remove(&fingerprint)
+    }
+
+    /// Reassign an agent from `old_id` to `new_id`.
+    /// Moves the agent entry in all maps and notifies team clients.
+    pub async fn reassign_agent_id(
+        &self,
+        old_id: ClientId,
+        new_id: ClientId,
+        new_tx: mpsc::UnboundedSender<String>,
+    ) {
+        // Remove old_id entry, update its id field, insert under new_id
+        {
+            let mut agents = self.agents.write().await;
+            if let Some(mut agent_state) = agents.remove(&old_id) {
+                agent_state.info.id = new_id;
+                agent_state.tx = new_tx.clone();
+                agents.insert(new_id, agent_state);
+            }
+        }
+        {
+            let mut command_tx = self.command_tx.write().await;
+            command_tx.remove(&old_id);
+            command_tx.insert(new_id, new_tx);
+        }
+
+        // Notify team clients: remove old temporary ID, announce reconnection under real ID
+        let _ = self.event_tx.send(ServerEvent::AgentDisconnected { id: old_id });
+        let agents = self.agents.read().await;
+        if let Some(agent) = agents.get(&new_id) {
+            let _ = self
+                .event_tx
+                .send(ServerEvent::AgentConnected(agent.info.clone()));
+        }
     }
 
     /// Update agent info

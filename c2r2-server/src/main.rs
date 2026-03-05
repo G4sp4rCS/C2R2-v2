@@ -378,11 +378,17 @@ async fn handle_client(
         }
     });
 
+    // Shared effective ID - may change if agent is recognized as a reconnection
+    let effective_id = Arc::new(AtomicU64::new(id));
+
     // Tarea para recibir respuestas del cliente
     let info = client_info.clone();
     let api_state_recv = api_state.clone();
+    let clients_recv = clients.clone();
+    let effective_id_recv = effective_id.clone();
     let recv_task = tokio::spawn(async move {
         let mut command_buffer = String::new();
+        let mut id = id; // mutable local copy, updated on reconnection
 
         loop {
             let mut line = String::new();
@@ -403,12 +409,37 @@ async fn handle_client(
                         // Formato: __SYSINFO__:tipo:valor
                         let parts: Vec<&str> = line.trim().splitn(3, ':').collect();
                         if parts.len() >= 3 {
-                            let mut info = info.lock().unwrap();
                             let value = parts[2].to_string();
-                            match parts[1] {
+                            let sysinfo_type = parts[1].to_string();
+
+                            // Extract reconnection info while holding the lock briefly
+                            let reconnect_check = {
+                                let mut info = info.lock().unwrap();
+                                match sysinfo_type.as_str() {
+                                    "hostname" => {
+                                        info.hostname = Some(value.clone());
+                                        None // hostname alone doesn't trigger reconnection check
+                                    }
+                                    "username" => {
+                                        info.username = Some(value.clone());
+                                        // Return hostname if available for reconnection check
+                                        info.hostname.clone().map(|h| (h, value.clone()))
+                                    }
+                                    "os" => {
+                                        info.os_version = Some(value.clone());
+                                        None
+                                    }
+                                    "privileges" => {
+                                        info.privileges = Some(value.clone());
+                                        None
+                                    }
+                                    _ => None,
+                                }
+                            }; // MutexGuard dropped here
+
+                            // Update API state (non-blocking spawn for simple updates)
+                            match sysinfo_type.as_str() {
                                 "hostname" => {
-                                    info.hostname = Some(value.clone());
-                                    // Update API state
                                     let api_state = api_state_recv.clone();
                                     let value_clone = value.clone();
                                     tokio::spawn(async move {
@@ -429,16 +460,18 @@ async fn handle_client(
                                     }
                                 }
                                 "username" => {
-                                    info.username = Some(value.clone());
-                                    let api_state = api_state_recv.clone();
-                                    let value_clone = value.clone();
-                                    tokio::spawn(async move {
-                                        api_state
-                                            .update_agent_info(id, |agent| {
-                                                agent.username = Some(value_clone);
-                                            })
-                                            .await;
-                                    });
+                                    {
+                                        let api_state = api_state_recv.clone();
+                                        let value_clone = value.clone();
+                                        let uid = id;
+                                        tokio::spawn(async move {
+                                            api_state
+                                                .update_agent_info(uid, |agent| {
+                                                    agent.username = Some(value_clone);
+                                                })
+                                                .await;
+                                        });
+                                    }
                                     info!("[{}] SYSINFO username: {}", id, value);
                                     if verbose {
                                         println!(
@@ -448,9 +481,71 @@ async fn handle_client(
                                             value.bright_white()
                                         );
                                     }
+
+                                    // Check for reconnection
+                                    if let Some((hostname, username)) = reconnect_check {
+                                        let current_id = id;
+                                        if let Some(old_id) = api_state_recv
+                                            .check_reconnection(&hostname, &username)
+                                            .await
+                                        {
+                                            if old_id != current_id {
+                                                info!(
+                                                    "Agent reconnected: [{}] -> [{}] ({}@{})",
+                                                    current_id, old_id, username, hostname
+                                                );
+                                                println!(
+                                                    "{} {} {} {}",
+                                                    "🔄".bright_yellow(),
+                                                    "Agent reconnected:".bright_white().bold(),
+                                                    format!("[{}] → [{}]", current_id, old_id)
+                                                        .bright_cyan()
+                                                        .bold(),
+                                                    format!("({}@{})", username, hostname)
+                                                        .bright_white()
+                                                );
+
+                                                // Get the tx from current entry
+                                                let tx_clone = {
+                                                    let c = clients_recv.lock().unwrap();
+                                                    c.get(&current_id).map(|h| h.tx.clone())
+                                                };
+                                                if let Some(tx) = tx_clone {
+                                                    // Reassign in API state
+                                                    api_state_recv
+                                                        .reassign_agent_id(
+                                                            current_id,
+                                                            old_id,
+                                                            tx.clone(),
+                                                        )
+                                                        .await;
+
+                                                    // Reassign in clients HashMap
+                                                    {
+                                                        let mut c = clients_recv.lock().unwrap();
+                                                        if let Some(mut handle) =
+                                                            c.remove(&current_id)
+                                                        {
+                                                            handle.id = old_id;
+                                                            {
+                                                                let mut ci =
+                                                                    handle.info.lock().unwrap();
+                                                                ci.id = old_id;
+                                                            }
+                                                            c.insert(old_id, handle);
+                                                        }
+                                                    }
+
+                                                    // Update the effective ID for cleanup
+                                                    id = old_id;
+                                                    effective_id_recv
+                                                        .store(old_id, Ordering::SeqCst);
+                                                }
+                                            }
+                                        }
+                                    }
                                 }
                                 "os" => {
-                                    info.os_version = Some(value.clone());
                                     let api_state = api_state_recv.clone();
                                     let value_clone = value.clone();
                                     tokio::spawn(async move {
@@ -471,7 +566,6 @@ async fn handle_client(
                                     }
                                 }
                                 "privileges" => {
-                                    info.privileges = Some(value.clone());
                                     let api_state = api_state_recv.clone();
                                     let value_clone = value.clone();
                                     tokio::spawn(async move {
@@ -755,11 +849,12 @@ async fn handle_client(
         _ = recv_task => {},
     }
 
-    // Limpiar cliente
-    clients.lock().unwrap().remove(&id);
-    api_state.remove_agent(id).await;
-    warn!("Cliente [{}] desconectado", id);
-    println!("❌ Cliente [{}] desconectado", id);
+    // Limpiar cliente - use effective_id which may have been updated on reconnection
+    let cleanup_id = effective_id.load(Ordering::SeqCst);
+    clients.lock().unwrap().remove(&cleanup_id);
+    api_state.remove_agent(cleanup_id).await;
+    warn!("Cliente [{}] desconectado", cleanup_id);
+    println!("❌ Cliente [{}] desconectado", cleanup_id);
 }
 
 fn handle_file_download(response: &str, client_id: ClientId, verbose: bool) {

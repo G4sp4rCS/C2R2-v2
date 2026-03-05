@@ -22,8 +22,6 @@ path = "src/main.rs"
 mimalloc = { version = "0.1", default-features = false }
 # Ofuscación de strings en compile-time
 obfstr = "0.4"
-# Random number generation for obfuscation
-rand = "0.8"
 # TLS support - using ring backend instead of aws_lc_rs to avoid CMake/MSVC version issues
 rustls = { version = "0.23", default-features = false, features = ["std", "tls12", "ring"] }
 webpki-roots = "0.26"

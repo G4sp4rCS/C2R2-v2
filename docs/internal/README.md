@@ -31,7 +31,7 @@ See the main documentation in the parent directories:
 | Category | Files |
 |----------|-------|
 | Anti-Analysis | `ANTI_SANDBOX_*.md`, `AV_*.md` |
-| Obfuscation | `ARGFUSCATOR_*.md`, `OBFUSCATION_*.md` |
+| Obfuscation | `OBFUSCATION_*.md` |
 | Build System | `BUILD*.md`, `DOCKER*.md` |
 | Persistence | `PERSISTENCE_*.md` |
 | Reconnection | `RECONNECTION_*.md`, `CONNECTION_*.md` |

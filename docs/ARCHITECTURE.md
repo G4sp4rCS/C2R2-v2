@@ -201,7 +201,7 @@ pub struct ClientRegistry {
 
 - **`beacon.rs`**: Implements beacon timing logic with jitter
 - **`persistence.rs`**: Multiple persistence mechanisms
-- **`argfuscator.rs`**: Command obfuscation techniques
+- **`persistence_fileless.rs`**: Fileless persistence (registry shellcode, WMI, BITS)
 - **`syscalls.rs`**: Direct system call wrappers
 - **`evasion.rs`**: Anti-analysis and evasion techniques
 

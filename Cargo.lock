@@ -45,7 +45,6 @@ dependencies = [
  "lazy_static",
  "mimalloc",
  "obfstr",
- "rand",
  "rustls",
  "webpki-roots 0.26.11",
  "winapi",

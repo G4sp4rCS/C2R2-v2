@@ -144,36 +144,6 @@ Removes all persistence mechanisms created by the agent.
 - `Ok(String)`: Success message
 - `Err(String)`: Error message
 
-### ArgFuscator Module
-
-#### `argfuscator.rs`
-
-##### Functions
-
-```rust
-/// Obfuscate a command string
-pub fn obfuscate_command(cmd: &str) -> String
-```
-
-Applies random obfuscation to command string.
-
-**Parameters**:
-- `cmd`: Original command
-
-**Returns**: Obfuscated command
-
-**Techniques**:
-- Random case changes: `whoami` → `wHoAmI`
-- Caret insertion: `whoami` → `who^am^i`
-- Quote wrapping: `whoami` → `"w"h"o"ami`
-- Environment variables: `cmd` → `%COMSPEC%`
-
-**Example**:
-```rust
-let obfuscated = obfuscate_command("whoami");
-// Possible outputs: "wHoAmI", "who^am^i", "w\"h\"o\"ami", etc.
-```
-
 ### Evasion Module
 
 #### `evasion.rs`
@@ -760,7 +730,7 @@ pub extern "system" fn DllMain(
 ### Using the Agent API
 
 ```rust
-use c2r2_agent::{beacon, persistence, argfuscator};
+use c2r2_agent::{beacon, persistence};
 
 fn main() {
     // Configure beacon
@@ -773,11 +743,6 @@ fn main() {
     if let Ok(msg) = persistence::establish_persistence("registry") {
         println!("Persistence: {}", msg);
     }
-    
-    // Obfuscate commands
-    let cmd = "whoami";
-    let obfuscated = argfuscator::obfuscate_command(cmd);
-    println!("Obfuscated: {}", obfuscated);
 }
 ```
 

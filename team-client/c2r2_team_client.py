@@ -1875,6 +1875,14 @@ class C2R2TeamClient:
                 path = ' '.join(parts[1:]) if len(parts) > 1 else ""
                 self._list_directory(self.selected_client, path)
         
+        elif not command.startswith('/'):
+            # Shell pass-through: any input without a leading '/' is sent directly
+            # to the selected agent as a shell command (equivalent to /cmd <input>)
+            if self.selected_client is None:
+                self._log_console("❌ No agent selected. Use /select <id>\n", 'error')
+            else:
+                self._execute_command(self.selected_client, cmd)
+        
         else:
             self._log_console(f"❌ Unknown command: {command}. Use /help\n", 'error')
     

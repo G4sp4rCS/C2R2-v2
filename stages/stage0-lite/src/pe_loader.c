@@ -227,4 +227,3 @@ BOOL reflective_load(BYTE* raw, DWORD raw_size) {
     CloseHandle(hThread);
     return TRUE;
 }
-}

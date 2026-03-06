@@ -170,15 +170,16 @@ if (-not $SkipAgent) {
     Write-Host "  -> dist/agent.dll : $([math]::Round($remoteSize/1KB,1)) KB" -ForegroundColor Green
 }
 
-# Start the server — use tmux so rustyline has a tty and survives SSH disconnect
+# Start the server detached with nohup (no TTY required; use tmux manually if
+# you need the interactive rustyline CLI: tmux attach -t c2r2)
 Write-Host ""
-Write-Host "  Starting c2r2-server on VPS (tmux session 'c2r2')..." -ForegroundColor DarkGray
+Write-Host "  Starting c2r2-server on VPS (nohup detached)..." -ForegroundColor DarkGray
 
-# Kill any existing tmux session + old process
+# Kill any existing session / old process
 & ssh "${VpsUser}@${Ip}" "tmux kill-session -t c2r2 2>/dev/null; pkill -f 'c2r2-server' 2>/dev/null; sleep 1"
 
-$tmuxCmd = "tmux new-session -d -s c2r2 'cd ${VpsDir} && ./c2r2-server --bind 0.0.0.0 --port ${Port} --api-port ${ApiPort} 2>&1 | tee logs/server.log'"
-& ssh "${VpsUser}@${Ip}" $tmuxCmd
+$startCmd = "mkdir -p ${VpsDir}/logs && nohup ${VpsDir}/c2r2-server --bind 0.0.0.0 --port ${Port} --api-port ${ApiPort} >> ${VpsDir}/logs/server.log 2>&1 &"
+& ssh "${VpsUser}@${Ip}" $startCmd
 Start-Sleep 4
 
 # Verify it's running

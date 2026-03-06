@@ -1,0 +1,7 @@
+# JAVELIN is converted to PIC shellcode by Donut.
+# crt-static must NOT be used here: the static CRT init sequence
+# (TLS, __security_init_cookie, etc.) crashes when running as shellcode
+# because the PE-loader infrastructure doesn't exist.
+# This overrides the workspace-level crt-static flag.
+[target.x86_64-pc-windows-msvc]
+rustflags = []

@@ -149,8 +149,20 @@ if ($Production) {
 }
 
 Write-Host "  cargo $($jArgs -join ' ')" -ForegroundColor DarkGray
+
+# JAVELIN is converted to PIC shellcode by Donut.
+# crt-static crashes in shellcode context (static CRT init accesses TLS/PE-loader
+# infrastructure that doesn't exist when running as raw shellcode).
+# Temporarily clear RUSTFLAGS so the workspace crt-static flag is not applied.
+$savedRustFlags = $env:RUSTFLAGS
+$env:RUSTFLAGS = ""
+
 & cargo @jArgs
-if ($LASTEXITCODE -ne 0) { Pop-Location; Die "JAVELIN build failed" }
+$jBuildExit = $LASTEXITCODE
+
+$env:RUSTFLAGS = $savedRustFlags  # restore
+
+if ($jBuildExit -ne 0) { Pop-Location; Die "JAVELIN build failed" }
 
 $javelinExe = Join-Path $RepoRoot "target\x86_64-pc-windows-msvc\release\javelin.exe"
 if (-not (Test-Path $javelinExe)) { Pop-Location; Die "javelin.exe not found at $javelinExe" }

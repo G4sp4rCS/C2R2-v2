@@ -1,3 +1,9 @@
 [target.x86_64-pc-windows-gnu]
 linker = "x86_64-w64-mingw32-gcc"
 ar = "x86_64-w64-mingw32-ar"
+
+# Statically link the MSVC CRT (VCRUNTIME140.dll, MSVCP140.dll, etc.)
+# so the binary runs on machines without the VC++ Redistributable installed
+# (e.g. Windows 11 IoT LTSC, stripped Server Core, fresh bare-metal installs).
+[target.x86_64-pc-windows-msvc]
+rustflags = ["-C", "target-feature=+crt-static"]

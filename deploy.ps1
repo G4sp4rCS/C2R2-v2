@@ -147,7 +147,7 @@ $SshOpts = @("-o", "ConnectTimeout=20", "-o", "BatchMode=yes", "-o", "StrictHost
 # Decide what to transfer
 $filesToServe = @()
 if (-not $SkipServer) { $filesToServe += "c2r2-server-x86_64" }
-if (-not $SkipAgent)  { $filesToServe += "agent.dll" }
+if (-not $SkipAgent)  { $filesToServe += "agent.dll"; $filesToServe += "ester.exe" }
 if ($filesToServe.Count -eq 0) { Die "Nothing to deploy (-SkipAgent and -SkipServer both set)" }
 
 # Pick a random high port for the local HTTP server (avoids conflicts)
@@ -172,6 +172,7 @@ foreach ($f in $filesToServe) {
     $dest = switch ($f) {
         "c2r2-server-x86_64" { '~/c2r2/c2r2-server' }
         "agent.dll"          { '~/c2r2/dist/agent.dll' }
+        "ester.exe"          { '~/c2r2/dist/ester.exe' }
     }
     $curlCmds += "curl -fsSL http://127.0.0.1:${HttpPort}/${f} -o ${dest}"
 }
@@ -188,7 +189,7 @@ ${curlBlock}
 chmod +x ~/c2r2/c2r2-server 2>/dev/null || true
 
 # Show sizes
-ls -lh ~/c2r2/c2r2-server ~/c2r2/dist/agent.dll 2>/dev/null | awk '{print "[ok]", `$5, `$9}'
+ls -lh ~/c2r2/c2r2-server ~/c2r2/dist/agent.dll ~/c2r2/dist/ester.exe 2>/dev/null | awk '{print "[ok]", `$5, `$9}'
 
 # Stop old server (tmux session + process)
 tmux kill-session -t c2r2 2>/dev/null || true

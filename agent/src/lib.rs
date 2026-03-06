@@ -6,10 +6,12 @@
 #![cfg_attr(feature = "production", windows_subsystem = "windows")]
 #![allow(non_snake_case)]
 
-use mimalloc::MiMalloc;
-
+// Use system allocator to avoid __declspec(thread) / PE TLS dependency.
+// mimalloc uses per-thread heaps via TLS, which breaks reflective loading
+// (the OS never calls LdrpAllocateTls for a reflectively-loaded DLL, so
+// the TLS slot is uninitialised and the first alloc crashes with 0xC0000005).
 #[global_allocator]
-static GLOBAL: MiMalloc = MiMalloc;
+static GLOBAL: std::alloc::System = std::alloc::System;
 
 // Macro for conditional debug printing
 #[macro_export]
@@ -67,6 +69,7 @@ const MAX_CONSECUTIVE_TIMEOUTS: u32 = 3;
 mod dll_entry {
     use super::*;
     use std::ffi::c_void;
+    use std::sync::atomic::{AtomicPtr, Ordering};
 
     type HINSTANCE = *mut c_void;
     type DWORD = u32;
@@ -74,6 +77,14 @@ mod dll_entry {
     type HANDLE = *mut c_void;
 
     const DLL_PROCESS_ATTACH: DWORD = 1;
+    const DLL_THREAD_ATTACH:  DWORD = 2;
+
+    /// Saved DLL base address — used by agent_thread to call
+    /// _DllMainCRTStartup(DLL_THREAD_ATTACH) which makes the MSVC CRT
+    /// allocate a TLS slot for this new thread (PE TLS / __declspec(thread)).
+    /// Without this call, any __declspec(thread) variable access in agent_thread
+    /// reads TEB.ThreadLocalStoragePointer[_tls_index] = NULL → SIGSEGV.
+    static DLL_BASE: AtomicPtr<c_void> = AtomicPtr::new(std::ptr::null_mut());
 
     #[link(name = "kernel32")]
     extern "system" {
@@ -88,21 +99,58 @@ mod dll_entry {
     }
 
     extern "system" fn agent_thread(_param: LPVOID) -> DWORD {
+        // ----------------------------------------------------------------
+        // TLS initialisation for this raw OS thread.
+        //
+        // When a DLL is reflectively loaded (not via the Windows loader),
+        // new threads created inside DllMain do NOT automatically receive
+        // a DLL_THREAD_ATTACH notification, so the MSVC CRT's _initptd
+        // routine is never called for them.  _initptd allocates the per-
+        // thread block pointed to by TEB.ThreadLocalStoragePointer[_tls_index],
+        // which every __declspec(thread) variable relies on.  If it is not
+        // called the first access to such a variable dereferences NULL →
+        // STATUS_ACCESS_VIOLATION (0xC0000005).
+        //
+        // Fix: call the DLL's own entry-point (_DllMainCRTStartup) with
+        // DLL_THREAD_ATTACH.  The CRT will call _initptd for us, then
+        // forward to user DllMain(DLL_THREAD_ATTACH) which we ignore.
+        // ----------------------------------------------------------------
+        let base = DLL_BASE.load(Ordering::Relaxed);
+        if !base.is_null() {
+            unsafe {
+                // Parse the in-memory PE to find AddressOfEntryPoint
+                // (= _DllMainCRTStartup, the real DLL entry-point).
+                let dos = base as *const u8;
+                let e_lfanew = std::ptr::read_unaligned(dos.add(60) as *const u32) as usize;
+                // PE64 optional header starts at e_lfanew+24.
+                // AddressOfEntryPoint is at optional-header offset 16.
+                let ep_rva = std::ptr::read_unaligned(
+                    dos.add(e_lfanew + 24 + 16) as *const u32,
+                ) as usize;
+                let entry: extern "system" fn(*mut c_void, u32, *mut c_void) -> i32 =
+                    std::mem::transmute(dos.add(ep_rva));
+                // DLL_THREAD_ATTACH → CRT allocates TLS for this thread.
+                entry(base, DLL_THREAD_ATTACH, std::ptr::null_mut());
+            }
+        }
+
         run_agent();
         0
     }
 
     #[no_mangle]
     pub extern "system" fn DllMain(
-        _h_instance: HINSTANCE,
+        h_instance: HINSTANCE,
         dw_reason: DWORD,
         _lp_reserved: LPVOID,
     ) -> i32 {
         if dw_reason == DLL_PROCESS_ATTACH {
+            // Save the DLL base so agent_thread can re-init TLS.
+            DLL_BASE.store(h_instance, Ordering::Relaxed);
             unsafe {
                 CreateThread(
                     std::ptr::null_mut(),
-                    0,
+                    4 * 1024 * 1024,  // 4 MB stack — rustls needs room
                     agent_thread as LPVOID,
                     std::ptr::null_mut(),
                     0,

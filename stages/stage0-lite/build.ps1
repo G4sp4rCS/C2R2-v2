@@ -143,7 +143,11 @@ $ScPath = Join-Path $BuildDir "stage0_lite.bin"
 Write-Host ""
 Write-Host "[2/4] Converting to PIC shellcode with Donut ..." -ForegroundColor Yellow
 
-& $DonutExe -i $ExePath -o $ScPath -a 2 -f 1 -x 2 -e 3 -t
+# -t runs stage0 in its own thread (separate stack) to avoid stack overflow in
+# the JAVELIN thread. ESTER keeps the process alive via an infinite loop, so
+# the Donut shellcode returning from stage0 startup does not kill the process.
+# -x 1 = ExitThread (not ExitProcess) if stage0's entry point ever returns.
+& $DonutExe -i $ExePath -o $ScPath -a 2 -f 1 -x 1 -e 3 -t
 
 if ($LASTEXITCODE -ne 0) {
     Write-Host "DONUT FAILED (exit $LASTEXITCODE)" -ForegroundColor Red

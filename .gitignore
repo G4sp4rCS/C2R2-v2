@@ -32,6 +32,9 @@ agent/src/stealer/
 
 # VSCode
 .vscode/
+
+# Local agent/session configuration
+.grok/
 c2r2-server/modules/stealer.enc
 c2r2-server/modules/stealer.key
 

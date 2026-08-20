@@ -1,17 +1,17 @@
-# 📝 Sistema de Logging C2R2
+#  Sistema de Logging C2R2
 
 ## Descripción General
 
 C2R2 Server implementa un **sistema completo de logging** que registra **TODAS las interacciones** entre el operador y los agentes en archivos de texto, incluyendo:
 
-- ✅ Comandos enviados por el operador
-- ✅ Outputs/respuestas completas de los agentes
-- ✅ Transferencias de archivos (upload/download)
-- ✅ Conexiones y desconexiones de agentes
-- ✅ Información del sistema (SYSINFO)
-- ✅ Errores y eventos importantes
+-  Comandos enviados por el operador
+-  Outputs/respuestas completas de los agentes
+-  Transferencias de archivos (upload/download)
+-  Conexiones y desconexiones de agentes
+-  Información del sistema (SYSINFO)
+-  Errores y eventos importantes
 
-## 📂 Ubicación de Logs
+##  Ubicación de Logs
 
 Todos los logs se guardan en el directorio **`logs/`** (creado automáticamente):
 
@@ -29,7 +29,7 @@ C2R2/
 - Formato de archivo: `c2r2-session.log.YYYY-MM-DD`
 - Los logs antiguos **NO se eliminan automáticamente** (auditoría completa)
 
-## 📋 Formato de Logs
+##  Formato de Logs
 
 ### Formato General
 
@@ -53,7 +53,7 @@ nt authority\system
 | `ERROR` | Errores (fallas de envío, decodificación)   | Rojo   |
 | `DEBUG` | Información detallada (tamaño de respuestas)| Gris   |
 
-## 🎯 Eventos Logueados
+##  Eventos Logueados
 
 ### 1. Inicio/Cierre del Servidor
 
@@ -146,7 +146,7 @@ nt authority\system
 [WARN] Cliente [1] desconectado
 ```
 
-## 🔧 Configuración
+##  Configuración
 
 ### Cambiar Nivel de Log
 
@@ -178,7 +178,7 @@ target\release\c2r2-server.exe -p 4444 -b 0.0.0.0
 - `debug` - Información detallada técnica
 - `trace` - Todo (muy verboso, no recomendado)
 
-## 📖 Ejemplos de Uso
+##  Ejemplos de Uso
 
 ### Ver logs en tiempo real (Linux/macOS)
 
@@ -228,7 +228,7 @@ grep -A 20 "OUTPUT:" logs/c2r2-session.log.2025-10-15
 Select-String "OUTPUT:" logs\c2r2-session.log.2025-10-15 -Context 0,20
 ```
 
-## 🔍 Análisis Forense
+##  Análisis Forense
 
 ### Timeline completo de una sesión
 
@@ -262,9 +262,9 @@ workstation-01\admin
 2025-10-15T10:20:00.777Z [INFO] Server cerrado por comando /exit del operador
 ```
 
-## 🛡️ Seguridad y Privacidad
+##  Seguridad y Privacidad
 
-### ⚠️ IMPORTANTE
+###  IMPORTANTE
 
 Los logs contienen **información sensible**:
 - Comandos ejecutados (pueden incluir credenciales)
@@ -294,7 +294,7 @@ Los logs contienen **información sensible**:
    - Ya incluido en `.gitignore`
    - Verificar con: `git status`
 
-## 📊 Estadísticas
+##  Estadísticas
 
 El sistema de logging permite análisis post-operación:
 
@@ -305,7 +305,7 @@ El sistema de logging permite análisis post-operación:
 - **Tasa de errores/comandos fallidos**
 - **Tiempo promedio de respuesta**
 
-## 🔧 Troubleshooting
+##  Troubleshooting
 
 ### Los logs no se están creando
 
@@ -332,7 +332,7 @@ El sistema de logging permite análisis post-operación:
   find logs/ -name "*.log.*" -mtime +30 -delete  # Eliminar > 30 días
   ```
 
-## 📚 Referencias Técnicas
+##  Referencias Técnicas
 
 - **Crate:** `tracing` v0.1
 - **Crate:** `tracing-subscriber` v0.3
@@ -343,5 +343,5 @@ El sistema de logging permite análisis post-operación:
 
 ---
 
-**Última actualización:** 15 de Octubre, 2025  
+**Última actualización:** 15 de Octubre, 2025
 **Versión C2R2:** v2.0 (Direct Connection)

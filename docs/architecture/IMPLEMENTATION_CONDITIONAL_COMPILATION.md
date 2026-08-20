@@ -2,12 +2,12 @@
 
 ## Problem Statement (Spanish)
 ```
-Necesito poder separar la paja del trigo. Necesito hacer alguna especie de compilación 
+Necesito poder separar la paja del trigo. Necesito hacer alguna especie de compilación
 condicional para una versión de desarrollo y otra de producción, en la cual producción:
 - No abra ninguna terminal ni cmd ni nada parecido, que sea 100% stealthy.
 - Que no tire prints de debug
-- A veces lo que pasa es que tenes el cmd que tira los mensajes de debug y cuando mandas 
-  un comando desde el servidor tenes que tocar enter en el cmd que tiene el agente para 
+- A veces lo que pasa es que tenes el cmd que tira los mensajes de debug y cuando mandas
+  un comando desde el servidor tenes que tocar enter en el cmd que tiene el agente para
   que pase, hay que fixear eso con urgencia
 ```
 
@@ -85,21 +85,21 @@ Created comprehensive documentation:
 
 ## Requirements Met
 
-### ✅ Requirement 1: No Console Window in Production
+###  Requirement 1: No Console Window in Production
 **Solution**: `#![windows_subsystem = "windows"]` in production mode
 - Console window completely hidden
 - 100% stealthy operation
 - No visible windows at all
 
-### ✅ Requirement 2: No Debug Prints in Production  
+###  Requirement 2: No Debug Prints in Production
 **Solution**: `debug_print!` macro compiles to nothing in production
 - All 75+ debug statements removed at compile time
 - Zero runtime overhead
 - No information leakage
 
-### ✅ Requirement 3: No Need to Press Enter
-**Context**: The original issue was related to the agent having a visible console window and blocking on stdin. 
-**Solution**: 
+###  Requirement 3: No Need to Press Enter
+**Context**: The original issue was related to the agent having a visible console window and blocking on stdin.
+**Solution**:
 - In production mode, there's no console window at all
 - The agent runs completely in the background
 - No stdin interaction possible (and none needed)
@@ -141,19 +141,19 @@ cargo run --release -- build-agent --name agent-prod --server 192.168.1.10:4444 
 
 ## Testing Results
 
-### ✅ Development Mode
+###  Development Mode
 - Compiles successfully
 - Console window visible (as expected)
 - All debug messages displayed
 - Easy to troubleshoot and debug
 
-### ✅ Production Mode
+###  Production Mode
 - Compiles successfully
 - No console window (confirmed by windows_subsystem setting)
 - No debug output in binary (verified with strings)
 - Fully stealthy operation
 
-### ✅ Builder Tool
+###  Builder Tool
 - Both modes work correctly
 - Proper feature flags passed to cargo
 - Clear user feedback about mode selection
@@ -194,8 +194,8 @@ To verify the implementation works:
    ```bash
    # Development
    cd builder && cargo run --release -- build-agent --name dev-test --server 127.0.0.1:4444
-   
-   # Production  
+
+   # Production
    cd builder && cargo run --release -- build-agent --name prod-test --server 127.0.0.1:4444 --production
    ```
 
@@ -218,9 +218,9 @@ To verify the implementation works:
 
 All three requirements from the problem statement have been successfully implemented:
 
-1. ✅ **100% Stealthy**: Production builds have no console window
-2. ✅ **No Debug Prints**: All debug statements removed at compile time in production
-3. ✅ **No Enter Key Issue**: The issue was related to having a visible console; production mode has no console at all
+1.  **100% Stealthy**: Production builds have no console window
+2.  **No Debug Prints**: All debug statements removed at compile time in production
+3.  **No Enter Key Issue**: The issue was related to having a visible console; production mode has no console at all
 
 The solution is:
 - **Minimal**: Only changes what's necessary

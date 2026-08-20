@@ -1,8 +1,8 @@
-# 🐳 Docker Build - C2R2-v2
+#  Docker Build - C2R2-v2
 
 Este directorio contiene la configuración de Docker para compilar todos los componentes de C2R2-v2 de forma automática.
 
-## ⚡ TL;DR - Compilación Rápida
+##  TL;DR - Compilación Rápida
 
 ```bash
 # 1. Configurar (opcional, usa valores por defecto si se omite)
@@ -20,18 +20,18 @@ ls dist/
 
 ---
 
-## 📦 ¿Qué compila?
+##  ¿Qué compila?
 
 El sistema de Docker compila y entrega:
 
-- ✅ **Servidor C2** (`c2r2-server`) - Binario Linux listo para ejecutar
-- ✅ **Agente Windows** (`agent.exe`) - Con IP/puerto preconfigurado
-- ✅ **Builder** - Herramienta para generar más agentes
-- ✅ **Stealer DLL** - Módulo de robo de credenciales (encriptado)
-- ✅ **Ransomware DLL** - Módulo de ransomware (encriptado)
-- ✅ **Módulos encriptados** - Listos para cargar en el agente
+-  **Servidor C2** (`c2r2-server`) - Binario Linux listo para ejecutar
+-  **Agente Windows** (`agent.exe`) - Con IP/puerto preconfigurado
+-  **Builder** - Herramienta para generar más agentes
+-  **Stealer DLL** - Módulo de robo de credenciales (encriptado)
+-  **Ransomware DLL** - Módulo de ransomware (encriptado)
+-  **Módulos encriptados** - Listos para cargar en el agente
 
-## 🚀 Uso Rápido
+##  Uso Rápido
 
 ### 1. Configurar parámetros
 
@@ -93,7 +93,7 @@ dist/
 └── BUILD_INFO.txt       # Información de compilación
 ```
 
-## 🔧 Opciones Avanzadas
+##  Opciones Avanzadas
 
 ### Compilar con parámetros personalizados
 
@@ -136,14 +136,14 @@ docker rmi c2r2-builder:latest
 rm -rf dist/
 ```
 
-## 📋 Modos de Compilación
+##  Modos de Compilación
 
 ### Modo Desarrollo (`PRODUCTION_MODE=false`)
 
-- ✅ Consola visible para debugging
-- ✅ Prints de debug habilitados
-- ✅ Ideal para testing y desarrollo
-- ⚠️ NO usar en operaciones reales
+-  Consola visible para debugging
+-  Prints de debug habilitados
+-  Ideal para testing y desarrollo
+-  NO usar en operaciones reales
 
 ```bash
 PRODUCTION_MODE=false docker-compose up --build
@@ -151,16 +151,16 @@ PRODUCTION_MODE=false docker-compose up --build
 
 ### Modo Producción (`PRODUCTION_MODE=true`)
 
-- ✅ Sin consola (100% stealthy)
-- ✅ Sin prints de debug
-- ✅ Totalmente silencioso
-- ✅ Listo para operaciones reales
+-  Sin consola (100% stealthy)
+-  Sin prints de debug
+-  Totalmente silencioso
+-  Listo para operaciones reales
 
 ```bash
 PRODUCTION_MODE=true docker-compose up --build
 ```
 
-## 🎯 Ejemplos de Uso
+##  Ejemplos de Uso
 
 ### Ejemplo 1: Testing Local
 
@@ -237,7 +237,7 @@ cd dist
 ./c2r2-server --bind 0.0.0.0 --port 8080
 ```
 
-## 🔍 Verificación
+##  Verificación
 
 Después de compilar, verifica los binarios:
 
@@ -269,13 +269,13 @@ Para verificar que todos los binarios se generaron correctamente:
 ```
 
 Este script verifica:
-- ✅ Todos los binarios principales existen
-- ✅ DLLs compiladas correctamente
-- ✅ Módulos encriptados generados
-- ✅ Permisos de ejecución correctos
-- ✅ Muestra el tamaño de cada archivo
+-  Todos los binarios principales existen
+-  DLLs compiladas correctamente
+-  Módulos encriptados generados
+-  Permisos de ejecución correctos
+-  Muestra el tamaño de cada archivo
 
-## 🐛 Troubleshooting
+##  Troubleshooting
 
 ### Error: "Cannot connect to Docker daemon"
 
@@ -322,14 +322,14 @@ docker-compose up --build
    sudo ufw allow 4444/tcp
    ```
 
-## 📚 Más Información
+##  Más Información
 
-- **[README Principal](README.md)** - Documentación general
+- **[README principal](../../README.md)** - Documentación general
 - **[BUILD.md](BUILD.md)** - Modos de compilación
-- **[Raspberry Pi Setup](RASPBERRY_PI_SETUP.md)** - Configuración para Pi
-- **[Network Deployment](docs/NETWORK_DEPLOYMENT.md)** - Despliegue en red
+- **[Raspberry Pi setup](RASPBERRY_PI_SETUP.md)** - Configuración para Pi
+- **[Troubleshooting](../troubleshooting/)** - Despliegue y conexión en red
 
-## ⚠️ Advertencia Legal
+##  Advertencia Legal
 
 **SOLO PARA PROPÓSITOS EDUCATIVOS Y TESTING AUTORIZADO**
 
@@ -337,4 +337,4 @@ El uso no autorizado de este software es ilegal. Usa solo en sistemas que posees
 
 ---
 
-**🐳 Happy Hacking!**
+** Happy Hacking!**

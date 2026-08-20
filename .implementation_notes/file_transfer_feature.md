@@ -1,11 +1,11 @@
-# 🎉 Feature Implementation Summary
+#  Feature Implementation Summary
 
-## ✅ Implementación Completada: File Transfer (Download & Upload)
+##  Implementación Completada: File Transfer (Download & Upload)
 
-### 📦 Archivos Modificados
+###  Archivos Modificados
 
 1. **`agent/src/main.rs`** (+134 líneas)
-   - Agregado handler para `__DOWNLOAD__:` 
+   - Agregado handler para `__DOWNLOAD__:`
    - Agregado handler para `__UPLOAD__:`
    - Implementación de `download_file()` - Lee archivo y codifica en Base64
    - Implementación de `upload_file()` - Decodifica Base64 y escribe archivo
@@ -28,39 +28,39 @@
    - Casos de uso comunes
    - Troubleshooting
 
-### 🔧 Características Implementadas
+###  Características Implementadas
 
-✅ **Download (Exfiltración)**
+ **Download (Exfiltración)**
 - Descarga archivos desde el agente al servidor C2
 - Sintaxis: `/download C:\ruta\archivo.txt`
 - Guarda en: `downloads/archivo.txt`
 - Feedback visual con box colorido
 
-✅ **Upload (Deploy)**
+ **Upload (Deploy)**
 - Sube archivos desde el servidor al agente
 - Sintaxis: `/upload local.exe C:\remoto.exe`
 - Confirma escritura exitosa
 - Feedback visual con info de tamaño
 
-✅ **Base64 Encoding/Decoding**
+ **Base64 Encoding/Decoding**
 - Implementación nativa en Rust (sin dependencias)
 - Soporta archivos binarios
 - Presente en ambos componentes (agente y servidor)
 
-✅ **Manejo de Errores**
+ **Manejo de Errores**
 - Archivo no encontrado
 - Permisos denegados
 - Errores de decodificación
 - Feedback claro y colorido
 
-✅ **Protocol Messages**
+ **Protocol Messages**
 - `__DOWNLOAD__:ruta` - Solicitud de descarga
 - `__FILE__:nombre:tamaño:base64` - Transferencia de archivo
 - `__UPLOAD__:ruta:base64` - Transferencia de subida
 - `__SUCCESS__:mensaje` - Operación exitosa
 - `__ERROR__:mensaje` - Error en operación
 
-### 📊 Estadísticas
+###  Estadísticas
 
 - **Líneas agregadas**: ~552
 - **Líneas eliminadas**: ~10
@@ -69,7 +69,7 @@
 - **Dependencias nuevas**: 0 (implementación nativa)
 - **Tamaño del agente**: ~60KB (sin cambio significativo)
 
-### 🎯 Testing Checklist
+###  Testing Checklist
 
 Para probar las nuevas funcionalidades:
 
@@ -103,42 +103,42 @@ echo "test payload" > test.txt
 # Verificar mensaje de error colorido
 ```
 
-### 🚀 Próximos Pasos Sugeridos
+###  Próximos Pasos Sugeridos
 
 Basado en el análisis de Nightmangle, las siguientes features serían valiosas:
 
-1. **Screenshot** 📸
+1. **Screenshot**
    - Captura de pantalla remota
    - Comando: `/screenshot`
    - Envío como imagen Base64
    - Dificultad: Media
 
-2. **Directory Listing** 📂
+2. **Directory Listing**
    - Listar contenido de directorios
    - Comando: `/ls C:\ruta\`
    - Output formateado con tamaños
    - Dificultad: Fácil
 
-3. **Browser Credential Stealer** 🔑
+3. **Browser Credential Stealer**
    - Extraer credenciales de Chrome/Firefox/Edge
    - Comando: `/steal-creds`
    - Requiere acceso a SQLite
    - Dificultad: Alta
 
-4. **Process Listing** ⚙️
+4. **Process Listing**
    - Listar procesos activos
    - Comando: `/ps`
    - Mostrar PID, nombre, usuario
    - Dificultad: Fácil
 
-### 📝 Notas
+###  Notas
 
 - Las funciones Base64 son compatibles con el estándar RFC 4648
 - No hay límite de tamaño para transferencias, pero archivos grandes pueden saturar memoria
 - Se recomienda comprimir archivos grandes antes de transferir
 - El directorio `downloads/` se crea automáticamente si no existe
 
-### 🐛 Known Issues
+###  Known Issues
 
 - Ninguno detectado por el momento
 - Warnings de Cargo sobre workspace resolver (no críticos)
@@ -146,6 +146,6 @@ Basado en el análisis de Nightmangle, las siguientes features serían valiosas:
 
 ---
 
-**Commit**: `fcdef1f`  
-**Branch**: `without-shellcode`  
-**Status**: ✅ Completado y pusheado exitosamente
+**Commit**: `fcdef1f`
+**Branch**: `without-shellcode`
+**Status**:  Completado y pusheado exitosamente

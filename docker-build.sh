@@ -65,7 +65,7 @@ while [[ $# -gt 0 ]]; do
             exit 0
             ;;
         *)
-            echo -e "${RED}❌ Opción desconocida: $1${NC}"
+            echo -e "${RED} Opción desconocida: $1${NC}"
             echo "Usa --help para ver opciones disponibles"
             exit 1
             ;;
@@ -73,7 +73,7 @@ while [[ $# -gt 0 ]]; do
 done
 
 # Mostrar configuración
-echo -e "${YELLOW}📋 Configuración de compilación:${NC}"
+echo -e "${YELLOW} Configuración de compilación:${NC}"
 echo -e "   ${BLUE}•${NC} Servidor: ${GREEN}${SERVER_IP}:${SERVER_PORT}${NC}"
 echo -e "   ${BLUE}•${NC} Agente: ${GREEN}${AGENT_NAME}.exe${NC}"
 echo -e "   ${BLUE}•${NC} Modo: ${GREEN}$([ "$PRODUCTION_MODE" = "true" ] && echo "PRODUCCIÓN (stealthy)" || echo "DESARROLLO (debug)")${NC}"
@@ -83,7 +83,7 @@ echo ""
 read -p "¿Continuar con la compilación? [Y/n] " -n 1 -r
 echo
 if [[ ! $REPLY =~ ^[Yy]$ ]] && [[ -n $REPLY ]]; then
-    echo -e "${YELLOW}⚠️  Compilación cancelada${NC}"
+    echo -e "${YELLOW}  Compilación cancelada${NC}"
     exit 0
 fi
 
@@ -92,13 +92,13 @@ mkdir -p dist
 
 # Compilar con Docker Compose
 echo ""
-echo -e "${BLUE}🔨 Compilando componentes...${NC}"
+echo -e "${BLUE} Compilando componentes...${NC}"
 echo ""
 
 # Añadir flag --no-cache si está activado
 BUILD_FLAGS="--build"
 if [ "$NO_CACHE" = "true" ]; then
-    echo -e "${YELLOW}⚠️  Modo --no-cache activado (se ignorará caché de Docker)${NC}"
+    echo -e "${YELLOW}  Modo --no-cache activado (se ignorará caché de Docker)${NC}"
     COMPOSE_BUILD_FLAGS="--no-cache"
 else
     COMPOSE_BUILD_FLAGS=""
@@ -112,9 +112,9 @@ docker-compose build $COMPOSE_BUILD_FLAGS && docker-compose up
 
 # Verificar resultados
 echo ""
-echo -e "${GREEN}✅ Compilación completada!${NC}"
+echo -e "${GREEN} Compilación completada!${NC}"
 echo ""
-echo -e "${YELLOW}📦 Binarios generados en dist/:${NC}"
+echo -e "${YELLOW} Binarios generados en dist/:${NC}"
 find dist/ -maxdepth 1 -type f -exec ls -lh {} \; | while read -r line; do
     echo -e "   ${BLUE}•${NC} $line"
 done
@@ -122,13 +122,13 @@ done
 # Mostrar información
 if [ -f dist/BUILD_INFO.txt ]; then
     echo ""
-    echo -e "${YELLOW}📋 Información de compilación:${NC}"
+    echo -e "${YELLOW} Información de compilación:${NC}"
     sed 's/^/   /' < dist/BUILD_INFO.txt
 fi
 
 echo ""
 echo -e "${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-echo -e "${GREEN}✨ ¡Listo para usar!${NC}"
+echo -e "${GREEN} ¡Listo para usar!${NC}"
 echo ""
 echo -e "${YELLOW}Próximos pasos:${NC}"
 echo -e "   ${BLUE}1.${NC} Inicia el servidor: ${GREEN}cd dist && ./c2r2-server --bind 0.0.0.0 --port ${SERVER_PORT}${NC}"

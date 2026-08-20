@@ -16,17 +16,17 @@ use std::ffi::CString;
 unsafe fn get_syscall_number(func_name: &str) -> Option<u32> {
     let ntdll = CString::new("ntdll.dll").ok()?;
     let func = CString::new(func_name).ok()?;
-    
+
     let ntdll_handle = GetModuleHandleA(ntdll.as_ptr());
     if ntdll_handle.is_null() {
         return None;
     }
-    
+
     let func_addr = GetProcAddress(ntdll_handle, func.as_ptr());
     if func_addr.is_null() {
         return None;
     }
-    
+
     // Parsear el syscall stub de ntdll
     // Formato típico en x64:
     // 4C 8B D1           mov r10, rcx
@@ -34,7 +34,7 @@ unsafe fn get_syscall_number(func_name: &str) -> Option<u32> {
     // 0F 05              syscall
     // C3                 ret
     let bytes = std::slice::from_raw_parts(func_addr as *const u8, 32);
-    
+
     // Buscar patrón: B8 XX 00 00 00 (mov eax, imm32)
     for i in 0..24 {
         if bytes[i] == 0xB8 {
@@ -48,7 +48,7 @@ unsafe fn get_syscall_number(func_name: &str) -> Option<u32> {
             return Some(syscall_num);
         }
     }
-    
+
     None
 }
 
@@ -68,7 +68,7 @@ pub unsafe fn nt_allocate_virtual_memory(
         Some(num) => num,
         None => return -1073741795, // STATUS_INVALID_PARAMETER (0xC000000D como signed)
     };
-    
+
     // Wrapper interno que ejecuta el syscall
     #[allow(improper_ctypes_definitions)]
     unsafe extern "system" fn syscall_wrapper(
@@ -81,7 +81,7 @@ pub unsafe fn nt_allocate_virtual_memory(
         protect: u32,
     ) -> NTSTATUS {
         let mut status: i32;
-        
+
         // allocation_type y protect DEBEN estar en el stack
         asm!(
             "mov r10, rcx",         // Syscall convention (r10 = process_handle)
@@ -98,10 +98,10 @@ pub unsafe fn nt_allocate_virtual_memory(
             in("r9") zero_bits,
             lateout("eax") status,
         );
-        
+
         status
     }
-    
+
     // Llamar al wrapper
     syscall_wrapper(
         syscall_num,

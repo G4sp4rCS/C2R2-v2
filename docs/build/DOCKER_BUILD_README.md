@@ -1,8 +1,8 @@
-# 🏗️ Docker Build System - C2R2-v2
+#  Docker Build System - C2R2-v2
 
 Sistema de compilación automática que genera todos los binarios necesarios para C2R2-v2.
 
-## 📦 Binarios Generados
+##  Binarios Generados
 
 ### Servidor C2R2
 - **`c2r2-server`** - Servidor x86_64 (Linux, Ubuntu, Debian, etc.)
@@ -18,7 +18,7 @@ Sistema de compilación automática que genera todos los binarios necesarios par
 
 ---
 
-## 🚀 Uso Rápido
+##  Uso Rápido
 
 ### Opción 1: Script Automatizado (Recomendado)
 
@@ -49,7 +49,7 @@ docker run --rm -v $(pwd)/dist:/output c2r2-builder
 
 ---
 
-## 🎯 Uso de los Binarios
+##  Uso de los Binarios
 
 ### Servidor en Linux x86_64 (Ubuntu, Debian, etc.)
 
@@ -70,12 +70,12 @@ chmod +x c2r2-server-arm64
 ```
 
 **Compatibilidad Raspberry Pi:**
-- ✅ Raspberry Pi 5 (ARM Cortex-A76)
-- ✅ Raspberry Pi 4 (ARM Cortex-A72)
-- ✅ Raspberry Pi 3 B/B+ (ARM Cortex-A53)
-- ✅ Raspberry Pi 400 (ARM Cortex-A72)
-- ✅ Raspberry Pi Zero 2 W (ARM Cortex-A53)
-- ❌ Raspberry Pi Zero/Zero W (ARMv6 - no soportado)
+-  Raspberry Pi 5 (ARM Cortex-A76)
+-  Raspberry Pi 4 (ARM Cortex-A72)
+-  Raspberry Pi 3 B/B+ (ARM Cortex-A53)
+-  Raspberry Pi 400 (ARM Cortex-A72)
+-  Raspberry Pi Zero 2 W (ARM Cortex-A53)
+-  Raspberry Pi Zero/Zero W (ARMv6 - no soportado)
 
 ### Agente en Windows
 
@@ -87,18 +87,18 @@ agent.exe
 
 ---
 
-## 🔧 Arquitecturas Soportadas
+##  Arquitecturas Soportadas
 
 | Componente | x86_64 | ARM64 | Windows |
 |------------|--------|-------|---------|
-| Servidor C2 | ✅ | ✅ | ❌ |
-| Agente | ❌ | ❌ | ✅ |
-| Builder | ✅ | ❌ | ❌ |
-| DLLs | ❌ | ❌ | ✅ |
+| Servidor C2 |  |  |  |
+| Agente |  |  |  |
+| Builder |  |  |  |
+| DLLs |  |  |  |
 
 ---
 
-## 📋 Ejemplos de Uso
+##  Ejemplos de Uso
 
 ### Escenario 1: Raspberry Pi como C2 Server
 
@@ -148,7 +148,7 @@ cd dist
 
 ---
 
-## 🛠️ Troubleshooting
+##  Troubleshooting
 
 ### Error: "edition 2024 not supported"
 
@@ -181,7 +181,7 @@ uname -m
 
 ---
 
-## 📊 Tamaños Aproximados
+##  Tamaños Aproximados
 
 | Binario | Tamaño | Observaciones |
 |---------|--------|---------------|
@@ -193,7 +193,7 @@ uname -m
 
 ---
 
-## 🔐 Notas de Seguridad
+##  Notas de Seguridad
 
 1. **Los binarios generados contienen:**
    - IP y puerto del servidor C2 embebidos
@@ -213,7 +213,7 @@ uname -m
 
 ---
 
-## 📚 Más Información
+##  Más Información
 
 - **Dropper System**: Ver `dropper/QUICKSTART.md`
 - **Iconos y Evasión**: Ver `dropper/ICON_USAGE_GUIDE.md`
@@ -228,4 +228,4 @@ cd /mnt/e/repos/C2R2-v2
 bash docker-build.sh --ip TU_IP --port TU_PUERTO --production --no-cache
 ```
 
-🎯 **Resultado**: Binarios listos en `dist/` para Linux (x86_64 y ARM64) y Windows
+ **Resultado**: Binarios listos en `dist/` para Linux (x86_64 y ARM64) y Windows

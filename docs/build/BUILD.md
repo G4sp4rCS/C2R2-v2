@@ -58,9 +58,9 @@ cargo run --release -- build-agent --name agent-prod --server 192.168.1.10:4444 
 
 | Feature | Development | Production |
 |---------|------------|------------|
-| Console Window | ✅ Visible | ❌ Hidden |
-| Debug Prints | ✅ Enabled | ❌ Disabled |
-| Stealth | ⚠️ Low | ✅ High |
+| Console Window |  Visible |  Hidden |
+| Debug Prints |  Enabled |  Disabled |
+| Stealth |  Low |  High |
 | Use Case | Testing/Debug | Real Operations |
 
 ## Technical Details
@@ -84,12 +84,12 @@ debug_print!("DEBUG: Connecting to C2 server...");
 
 ## Important Notes
 
-⚠️ **Always use production mode for real deployments**
+ **Always use production mode for real deployments**
 - Development builds are easily detected by security products
 - Console windows are visible and suspicious
 - Debug output can leak sensitive information
 
-✅ **Use development mode for**
+ **Use development mode for**
 - Testing connectivity
 - Debugging command execution
 - Verifying module loading
@@ -133,13 +133,13 @@ To verify which mode an agent was built with:
 2. Use the latest code which has fixed the read_line blocking issue
 
 ### Issue: Agent is detected by AV
-**Solution**: 
+**Solution**:
 1. Always use production mode for real operations
 2. Ensure you've built with `--features production`
 3. Development builds are intentionally more visible for debugging
 
 ### Issue: Can't debug issues in production builds
-**Solution**: 
+**Solution**:
 1. Reproduce the issue with a development build
 2. Debug with console window and debug prints
 3. Once fixed, rebuild in production mode

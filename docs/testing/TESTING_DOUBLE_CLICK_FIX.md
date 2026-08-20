@@ -99,7 +99,7 @@ cargo build --release --features dev --target x86_64-pc-windows-gnu
 1. Copy `target/x86_64-pc-windows-gnu/release/agent.exe` to Windows
 2. Ensure C2 server is running and reachable
 3. Double-click `agent.exe`
-4. **Expected Result:** 
+4. **Expected Result:**
    - Console window appears
    - See "DEBUG: Conectado al servidor C2"
    - See "DEBUG: Enviando información del sistema..."
@@ -177,12 +177,12 @@ This test verifies retry logic works correctly.
 ## Success Criteria
 
 The fix is successful if:
-1. ✅ Agent connects to C2 server when double-clicked
-2. ✅ System information (hostname, username, OS, privileges) arrives at server
-3. ✅ Server can issue commands and receive responses
-4. ✅ No silent crashes in production mode
-5. ✅ Connection failures are handled gracefully
-6. ✅ Agent retries connection on failure
+1.  Agent connects to C2 server when double-clicked
+2.  System information (hostname, username, OS, privileges) arrives at server
+3.  Server can issue commands and receive responses
+4.  No silent crashes in production mode
+5.  Connection failures are handled gracefully
+6.  Agent retries connection on failure
 
 ## Known Limitations
 

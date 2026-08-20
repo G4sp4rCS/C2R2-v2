@@ -14,7 +14,7 @@ The server used `split_whitespace()` which broke quoted arguments:
 // BEFORE: Broken parsing
 let parts: Vec<&str> = line.trim().split_whitespace().collect();
 // Input: dir "C:\Program Files"
-// Result: ["dir", "\"C:\\Program", "Files\""] ❌
+// Result: ["dir", "\"C:\\Program", "Files\""]
 ```
 
 The agent's argfuscator also used `split_whitespace()` which re-broke already parsed commands.
@@ -31,7 +31,7 @@ The agent's argfuscator also used `split_whitespace()` which re-broke already pa
 // AFTER: Fixed parsing
 let parts = parse_command_line(line.trim());
 // Input: dir "C:\Program Files"
-// Result: ["dir", "C:\\Program Files"] ✓
+// Result: ["dir", "C:\\Program Files"]
 ```
 
 #### Updated Commands
@@ -76,11 +76,11 @@ Standalone Rust test validated core parsing logic with all problem scenarios fro
 
 ## Build Status
 
-✅ Server compiles successfully (debug & release)
-✅ Release binary created: 2.3MB
-✅ All tests pass
-✅ No new warnings introduced
-⚠️ Agent requires Windows target (expected, not related to changes)
+ Server compiles successfully (debug & release)
+ Release binary created: 2.3MB
+ All tests pass
+ No new warnings introduced
+ Agent requires Windows target (expected, not related to changes)
 
 ## Files Modified
 
@@ -103,26 +103,26 @@ Standalone Rust test validated core parsing logic with all problem scenarios fro
 
 ## Security Considerations
 
-✅ No command injection vulnerabilities introduced
-✅ Quotes are properly handled and escaped
-✅ Obfuscation still applies to all commands
-✅ Commands still execute through `cmd.exe /C` (no direct execution)
-✅ Parser handles edge cases (empty quotes, trailing backslashes)
+ No command injection vulnerabilities introduced
+ Quotes are properly handled and escaped
+ Obfuscation still applies to all commands
+ Commands still execute through `cmd.exe /C` (no direct execution)
+ Parser handles edge cases (empty quotes, trailing backslashes)
 
 ## Backward Compatibility
 
-✅ Commands without quotes work exactly as before
-✅ Existing command handlers maintain same behavior
-✅ No breaking changes to API or protocol
-✅ Obfuscation maintains same security level
+ Commands without quotes work exactly as before
+ Existing command handlers maintain same behavior
+ No breaking changes to API or protocol
+ Obfuscation maintains same security level
 
 ## Example Usage
 
 ### Before (Broken)
 ```
 C2R2[1]> /cmd dir "C:\Program Files"
-📤 [1] → dir "C:\Program Files"
-📨 Respuesta de [1]:
+ [1] → dir "C:\Program Files"
+ Respuesta de [1]:
 ────────────────────────────────────────
 Error: Invalid path
 ────────────────────────────────────────
@@ -131,8 +131,8 @@ Error: Invalid path
 ### After (Fixed)
 ```
 C2R2[1]> /cmd dir "C:\Program Files"
-📤 [1] → dir "C:\Program Files"
-📨 Respuesta de [1]:
+ [1] → dir "C:\Program Files"
+ Respuesta de [1]:
 ────────────────────────────────────────
 [Directory listing of C:\Program Files]
 ────────────────────────────────────────
@@ -140,13 +140,13 @@ C2R2[1]> /cmd dir "C:\Program Files"
 
 ## Implementation Quality
 
-- ✅ Clean, readable code with documentation
-- ✅ Comprehensive test coverage
-- ✅ Detailed documentation for future maintenance
-- ✅ Minimal changes following principle of least modification
-- ✅ No removal of working code
-- ✅ Proper error handling maintained
-- ✅ Consistent with project coding style
+-  Clean, readable code with documentation
+-  Comprehensive test coverage
+-  Detailed documentation for future maintenance
+-  Minimal changes following principle of least modification
+-  No removal of working code
+-  Proper error handling maintained
+-  Consistent with project coding style
 
 ## Verification Checklist
 

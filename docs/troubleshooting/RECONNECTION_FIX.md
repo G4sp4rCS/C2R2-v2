@@ -1,6 +1,6 @@
 # Fix: Constant Reconnection Issue (Client ID Increment Problem)
 
-## 🎯 Problem
+##  Problem
 
 After PR #15 which fixed immediate disconnections, a new issue emerged where agents would constantly reconnect every ~5 minutes, creating new client IDs each time:
 
@@ -26,7 +26,7 @@ Symptoms:
 - This cycle repeats indefinitely
 - Client list shows only the most recent connection, but the ID keeps incrementing
 
-## 🔍 Root Cause
+##  Root Cause
 
 The issue was introduced in PR #15 (CONNECTION_STABILITY_FIX.md) which added TCP keepalive and timeout configuration:
 
@@ -57,7 +57,7 @@ match reader.read_line(&mut buffer) {
 - It provided a safety mechanism to prevent indefinite blocking
 - However, it was too aggressive for a C2 agent waiting for commands
 
-## ✅ Solution Implemented
+##  Solution Implemented
 
 ### Handle Timeout Errors Gracefully
 
@@ -113,7 +113,7 @@ Agent connects → Waits for commands → No commands for 5 min → read_line() 
 → If connection truly dies → Real error detected → Break and reconnect with backoff
 ```
 
-## 📊 Technical Details
+##  Technical Details
 
 ### Read Operation Behavior
 
@@ -144,7 +144,7 @@ The read timeout is kept configured because:
 3. **Network Partition Detection**: Can detect some scenarios faster than TCP keepalive
 4. **Graceful Handling**: Now handled gracefully without disconnecting
 
-## 🧪 Testing
+##  Testing
 
 ### Expected Behavior After Fix
 
@@ -221,7 +221,7 @@ C2R2[1]> hostname
 # Should execute successfully
 ```
 
-## 📝 Changes Made
+##  Changes Made
 
 **Files Modified:**
 - `agent/src/main.rs`:
@@ -236,34 +236,34 @@ C2R2[1]> hostname
 - `agent/src/beacon.rs` - Beacon logic unchanged
 - `agent/Cargo.toml` - Dependencies unchanged
 
-## 🎯 Expected Results
+##  Expected Results
 
 After this fix:
-- ✅ Agents connect and stay connected indefinitely
-- ✅ No more automatic disconnections every 5 minutes
-- ✅ Client IDs remain stable over time
-- ✅ Commands work at any time without timing issues
-- ✅ Persistence works correctly without reconnection issues
-- ✅ TCP keepalive still detects truly dead connections
-- ✅ Read timeout still configured (for evasion/stealth purposes)
-- ✅ Timeout errors handled gracefully without disconnecting
-- ✅ Proper exponential backoff on actual connection failures
-- ✅ Write timeout still detects send failures quickly
+-  Agents connect and stay connected indefinitely
+-  No more automatic disconnections every 5 minutes
+-  Client IDs remain stable over time
+-  Commands work at any time without timing issues
+-  Persistence works correctly without reconnection issues
+-  TCP keepalive still detects truly dead connections
+-  Read timeout still configured (for evasion/stealth purposes)
+-  Timeout errors handled gracefully without disconnecting
+-  Proper exponential backoff on actual connection failures
+-  Write timeout still detects send failures quickly
 
-## 🔍 Why Previous Fix Was Incomplete
+##  Why Previous Fix Was Incomplete
 
 **PR #15 (CONNECTION_STABILITY_FIX.md):**
-- ✅ Fixed: No TCP keepalive → Added keepalive
-- ✅ Fixed: No timeout configuration → Added timeouts
-- ❌ Problem: Used catch-all error handler `Err(_) => break` → Closed connection on timeout
+-  Fixed: No TCP keepalive → Added keepalive
+-  Fixed: No timeout configuration → Added timeouts
+-  Problem: Used catch-all error handler `Err(_) => break` → Closed connection on timeout
 
 **This Fix:**
-- ✅ Keeps: TCP keepalive for connection health
-- ✅ Keeps: Both read and write timeouts
-- ✅ Fixes: Smart error handling that distinguishes timeout from real errors
-- ✅ Result: Timeout doesn't cause disconnection, only real errors do
+-  Keeps: TCP keepalive for connection health
+-  Keeps: Both read and write timeouts
+-  Fixes: Smart error handling that distinguishes timeout from real errors
+-  Result: Timeout doesn't cause disconnection, only real errors do
 
-## 🔧 Troubleshooting
+##  Troubleshooting
 
 If issues persist after this fix:
 
@@ -288,7 +288,7 @@ If issues persist after this fix:
      - Network is unstable (check connection quality)
      - Antivirus interference (check AV logs)
 
-## 📚 Related Documents
+##  Related Documents
 
 - **CONNECTION_STABILITY_FIX.md** - Initial fix that added keepalive (PR #15)
 - **PERSISTENCE_FIX.md** - Persistence mechanism implementation
@@ -296,8 +296,8 @@ If issues persist after this fix:
 
 ---
 
-**Version:** 2.0.3  
-**Date:** November 2024  
-**Related Issues:** Client constant reconnection, ID increment  
-**Previous PR:** #15 (CONNECTION_STABILITY_FIX.md)  
-**Status:** ✅ Fixed
+**Version:** 2.0.3
+**Date:** November 2024
+**Related Issues:** Client constant reconnection, ID increment
+**Previous PR:** #15 (CONNECTION_STABILITY_FIX.md)
+**Status:**  Fixed

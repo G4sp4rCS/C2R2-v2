@@ -1,6 +1,6 @@
 # Persistence Fix - Testing Guide
 
-## 🧪 Manual Testing Procedures
+##  Manual Testing Procedures
 
 ### Prerequisites
 - Windows 7/8/10/11 VM for testing
@@ -29,7 +29,7 @@
    /select 1
    /persist registry
    ```
-   
+
 5. Verify success message
 
 6. On Windows VM:
@@ -40,7 +40,7 @@
      dir /a:h "%LOCALAPPDATA%\Microsoft\OneDrive\logs"
      dir /a:h "%LOCALAPPDATA%\Microsoft\Windows\INetCache\Low"
      ```
-   
+
    - Check registry entry points to AppData (not Downloads):
      ```cmd
      reg query "HKCU\Software\Microsoft\Windows\CurrentVersion\Run"
@@ -51,9 +51,9 @@
 8. **REBOOT** Windows VM
 
 9. After reboot, verify:
-   - ✅ Agent reconnects to C2 server automatically
-   - ✅ No error messages about missing executable
-   - ✅ Session remains stable
+   -  Agent reconnects to C2 server automatically
+   -  No error messages about missing executable
+   -  Session remains stable
 
 **Expected Result:** Agent persists and reconnects successfully even after original file deleted
 
@@ -89,8 +89,8 @@
 7. **REBOOT** Windows VM
 
 8. After reboot, verify:
-   - ✅ Agent reconnects despite USB disconnected
-   - ✅ Task executes from AppData location
+   -  Agent reconnects despite USB disconnected
+   -  Task executes from AppData location
 
 **Expected Result:** Agent persists independently of USB drive
 
@@ -172,7 +172,7 @@
 
 ---
 
-## 🔍 Verification Checklist
+##  Verification Checklist
 
 After each test, verify:
 
@@ -185,7 +185,7 @@ After each test, verify:
 
 ---
 
-## 🐛 Debugging Failed Tests
+##  Debugging Failed Tests
 
 ### Issue: Agent doesn't reconnect after reboot
 
@@ -236,7 +236,7 @@ After each test, verify:
 
 ---
 
-## 📊 Test Results Template
+##  Test Results Template
 
 ```
 Test Date: _______________
@@ -245,15 +245,15 @@ Windows Version: _________
 
 | Test Scenario | Result | Notes |
 |---------------|--------|-------|
-| Downloads Folder | ☐ Pass ☐ Fail | |
-| USB Drive | ☐ Pass ☐ Fail | |
-| Already in AppData | ☐ Pass ☐ Fail | |
-| Registry Method | ☐ Pass ☐ Fail | |
-| Task Method | ☐ Pass ☐ Fail | |
-| WMI Method | ☐ Pass ☐ Fail | |
-| Desktop Execution | ☐ Pass ☐ Fail | |
+| Downloads Folder |  Pass  Fail | |
+| USB Drive |  Pass  Fail | |
+| Already in AppData |  Pass  Fail | |
+| Registry Method |  Pass  Fail | |
+| Task Method |  Pass  Fail | |
+| WMI Method |  Pass  Fail | |
+| Desktop Execution |  Pass  Fail | |
 
-Overall: ☐ All Pass ☐ Some Fail
+Overall:  All Pass  Some Fail
 
 Notes:
 _________________________________________________________________
@@ -263,19 +263,19 @@ _________________________________________________________________
 
 ---
 
-## 🎯 Success Criteria
+##  Success Criteria
 
 The fix is considered successful if:
 
-✅ Agent persists correctly from ANY initial execution location  
-✅ No "Windows cannot find executable" errors after reboot  
-✅ Sessions remain stable after system restart  
-✅ No unnecessary file copies when already in good location  
-✅ All persistence methods (registry, task, wmi) work correctly  
-✅ AV detection rate remains low (no increase due to fix)
+ Agent persists correctly from ANY initial execution location
+ No "Windows cannot find executable" errors after reboot
+ Sessions remain stable after system restart
+ No unnecessary file copies when already in good location
+ All persistence methods (registry, task, wmi) work correctly
+ AV detection rate remains low (no increase due to fix)
 
 ---
 
-**Version:** 2.0.1  
-**Last Updated:** November 2024  
+**Version:** 2.0.1
+**Last Updated:** November 2024
 **For Educational and Authorized Testing Only**

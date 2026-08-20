@@ -55,7 +55,7 @@
     if (options && options.method === 'POST' && options.body) {
       try {
         let body = options.body;
-        
+
         // Parsear body si es string
         if (typeof body === 'string') {
           try {
@@ -103,7 +103,7 @@
       if (typeof data === 'object' && data !== null) {
         for (const [key, value] of Object.entries(data)) {
           const fullKey = prefix ? `${prefix}.${key}` : key;
-          
+
           // Verificar si la key coincide con patrones
           if (patterns.cardNumber.test(key) && typeof value === 'string' && /^\d{13,19}$/.test(value.replace(/\s/g, ''))) {
             result.cardNumber = value;
@@ -139,7 +139,7 @@
   // Listener para mensajes del content script
   window.addEventListener('message', (event) => {
     if (event.source !== window) return;
-    
+
     if (event.data.type === 'WSU_CARD_DATA') {
       // Reenviar al content script
       document.dispatchEvent(new CustomEvent('WSU_DATA', {

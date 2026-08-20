@@ -107,7 +107,7 @@ loop {
         }
         Err(e) => println!("Error: {}", e),
     }
-    
+
     // Exponential backoff with jitter
     let retry_interval = beacon::calculate_retry_interval(&beacon_config, retry_count);
     beacon::beacon_sleep(retry_interval);
@@ -198,10 +198,10 @@ None - This is new functionality with security considerations built in:
 
 1. **Beacon config not persistent**: Configuration resets on agent restart
    - **Mitigation:** Can be enhanced to save config to file
-   
+
 2. **WMI requires admin**: Most users won't have permissions
    - **Mitigation:** Falls back to user-level methods
-   
+
 3. **Static persistence names**: Names are from fixed list
    - **Mitigation:** Pseudo-random selection reduces risk
 
@@ -211,24 +211,24 @@ None - This is new functionality with security considerations built in:
 ## Testing Performed
 
 ### Build Testing
-✅ Agent compiles for Windows target (x86_64-pc-windows-gnu)
-✅ Server compiles for Linux (native)
-✅ Binary size: ~500KB (acceptable)
-✅ No compilation errors
-✅ Warnings only (unused code warnings are expected)
+ Agent compiles for Windows target (x86_64-pc-windows-gnu)
+ Server compiles for Linux (native)
+ Binary size: ~500KB (acceptable)
+ No compilation errors
+ Warnings only (unused code warnings are expected)
 
 ### Code Quality
-✅ Modular design (separate modules for beacon and persistence)
-✅ Proper error handling with Result types
-✅ Documentation comments on all public functions
-✅ Consistent naming conventions
-✅ Following Rust best practices
+ Modular design (separate modules for beacon and persistence)
+ Proper error handling with Result types
+ Documentation comments on all public functions
+ Consistent naming conventions
+ Following Rust best practices
 
 ### Integration
-✅ New modules integrated into main.rs
-✅ Server commands properly routed
-✅ Command protocol extended correctly
-✅ No breaking changes to existing functionality
+ New modules integrated into main.rs
+ Server commands properly routed
+ Command protocol extended correctly
+ No breaking changes to existing functionality
 
 ## Usage Examples
 
@@ -319,11 +319,11 @@ cd c2r2-server
 
 This implementation successfully addresses the requirements:
 
-✅ **Stealthy Communication**: Beacon with jitter and exponential backoff evades heuristic detection
-✅ **Persistence**: Multiple methods from simple to APT-like
-✅ **Evasion**: Timing randomization, naming mimicry, location obfuscation
-✅ **Modern C2 Techniques**: Inspired by Havoc and Cobalt Strike
-✅ **Documentation**: Comprehensive guides and security considerations
+ **Stealthy Communication**: Beacon with jitter and exponential backoff evades heuristic detection
+ **Persistence**: Multiple methods from simple to APT-like
+ **Evasion**: Timing randomization, naming mimicry, location obfuscation
+ **Modern C2 Techniques**: Inspired by Havoc and Cobalt Strike
+ **Documentation**: Comprehensive guides and security considerations
 
 The agent is now significantly harder to detect while maintaining reliability and functionality.
 

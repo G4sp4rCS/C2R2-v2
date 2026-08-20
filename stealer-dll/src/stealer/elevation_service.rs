@@ -81,7 +81,7 @@ impl ElevationServiceClient {
             // Inicializar COM
             let hr = CoInitializeEx(ptr::null_mut(), COINIT_MULTITHREADED);
             let com_initialized = hr >= 0 || hr == 0x00000001; // S_OK or S_FALSE
-            
+
             if !com_initialized {
                 return Err(format!("CoInitializeEx failed: 0x{:08X}", hr));
             }
@@ -210,7 +210,7 @@ impl Drop for ElevationServiceClient {
                 // Release COM object
                 ((*(*self.elevator).lpVtbl).Release)(self.elevator);
             }
-            
+
             // Only uninitialize COM if we initialized it
             if self.com_initialized {
                 CoUninitialize();
@@ -278,8 +278,8 @@ mod tests {
     fn test_elevation_service_available() {
         // Test si el servicio está disponible
         match ElevationServiceClient::new() {
-            Ok(_) => println!("✅ Elevation Service disponible"),
-            Err(e) => println!("❌ Elevation Service NO disponible: {}", e),
+            Ok(_) => println!(" Elevation Service disponible"),
+            Err(e) => println!(" Elevation Service NO disponible: {}", e),
         }
     }
 }

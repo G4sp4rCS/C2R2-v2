@@ -56,20 +56,20 @@ Err(e) => {
 
 ## Key Points
 
-✅ **Read timeout is still configured** (300 seconds)
+ **Read timeout is still configured** (300 seconds)
 - Important for evasion/stealth as mentioned by user
 - Not removed, just handled differently
 
-✅ **Timeout errors don't close connection**
+ **Timeout errors don't close connection**
 - `ErrorKind::TimedOut` → continue loop
-- `ErrorKind::WouldBlock` → continue loop  
+- `ErrorKind::WouldBlock` → continue loop
 - Other errors → break loop (real connection issues)
 
-✅ **TCP keepalive still active**
+ **TCP keepalive still active**
 - Detects truly dead connections
 - Maintains NAT/firewall traversal
 
-✅ **Write timeout unchanged**
+ **Write timeout unchanged**
 - Still 30 seconds
 - Quick detection of send failures
 
@@ -98,5 +98,5 @@ Err(e) => {
 
 ---
 
-**Status**: ✅ Complete  
+**Status**:  Complete
 **Lines Changed**: +654, -2

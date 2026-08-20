@@ -1,16 +1,16 @@
 # Respuesta al Problema de Conexión
 
-## 🎯 Pregunta Original
+##  Pregunta Original
 
 > "Tengo un problema, estoy intentando hacer pruebas sobre internet. Tengo una Raspberry pi que utilizo el puerto default 4444 port forwardeado desde el router pero por algún motivo que desconozco no llega a alcanzarlo el agente. ¿Esto debería de funcionar?"
 
-## ✅ Respuesta
+##  Respuesta
 
 **Sí, debería funcionar perfectamente.** El problema más común es la configuración del servidor.
 
 ---
 
-## 🔧 Solución Rápida
+##  Solución Rápida
 
 ### El Error Más Común
 
@@ -19,10 +19,10 @@ El servidor C2R2 probablemente está escuchando solo en `localhost (127.0.0.1)` 
 ### Cómo Solucionarlo
 
 ```bash
-# ❌ INCORRECTO - Solo escucha conexiones locales
+#  INCORRECTO - Solo escucha conexiones locales
 ./c2r2-server
 
-# ✅ CORRECTO - Escucha en todas las interfaces (permite conexiones externas)
+#  CORRECTO - Escucha en todas las interfaces (permite conexiones externas)
 ./c2r2-server --bind 0.0.0.0 --port 4444
 ```
 
@@ -32,16 +32,16 @@ El servidor C2R2 probablemente está escuchando solo en `localhost (127.0.0.1)` 
 # Ejecutar en la Raspberry Pi
 sudo netstat -tlnp | grep 4444
 
-# ✅ CORRECTO - Escucha en todas las interfaces
+#  CORRECTO - Escucha en todas las interfaces
 tcp  0  0  0.0.0.0:4444  0.0.0.0:*  LISTEN
 
-# ❌ INCORRECTO - Solo escucha en localhost
+#  INCORRECTO - Solo escucha en localhost
 tcp  0  0  127.0.0.1:4444  0.0.0.0:*  LISTEN
 ```
 
 ---
 
-## 📋 Checklist Completo
+##  Checklist Completo
 
 ### En la Raspberry Pi
 
@@ -106,7 +106,7 @@ nc -zv 203.0.113.50 4444
 ```bash
 cd builder
 
-# ⚠️ IMPORTANTE: Usar IP PÚBLICA, no la IP local de la Pi
+#  IMPORTANTE: Usar IP PÚBLICA, no la IP local de la Pi
 cargo run --release -- build-agent \
   --name mi-agente \
   --server "203.0.113.50:4444" \
@@ -115,7 +115,7 @@ cargo run --release -- build-agent \
 
 ---
 
-## 📚 Documentación Completa
+##  Documentación Completa
 
 Hemos creado documentación completa para resolver este problema:
 
@@ -127,13 +127,13 @@ Hemos creado documentación completa para resolver este problema:
   - Lista de verificación completa
 
 ### En Inglés
-- **[RASPBERRY_PI_SETUP.md](RASPBERRY_PI_SETUP.md)** - Guía detallada para Raspberry Pi
-- **[docs/NETWORK_DEPLOYMENT.md](docs/NETWORK_DEPLOYMENT.md)** - Configuración avanzada
-- **[Troubleshooting Section](docs/NETWORK_DEPLOYMENT.md#troubleshooting)** - Solución de problemas
+- **[RASPBERRY_PI_SETUP.md](../build/RASPBERRY_PI_SETUP.md)** - Guía detallada para Raspberry Pi
+- **[Build and deployment](../build/)** - Configuración avanzada
+- **[Troubleshooting](./)** - Solución de problemas
 
 ---
 
-## 🔍 Problemas Comunes
+##  Problemas Comunes
 
 ### 1. Servidor solo escucha en localhost
 
@@ -195,7 +195,7 @@ cargo run --release -- build-agent \
 
 ---
 
-## 🎓 Diagrama del Flujo de Conexión
+##  Diagrama del Flujo de Conexión
 
 ```
 ┌──────────────┐
@@ -215,7 +215,7 @@ cargo run --release -- build-agent \
        ▼
 ┌──────────────┐
 │ Raspberry Pi │  Servidor escuchando en 0.0.0.0:4444
-│ (0.0.0.0)    │  ✅ Acepta conexiones de cualquier interfaz
+│ (0.0.0.0)    │   Acepta conexiones de cualquier interfaz
 └──────────────┘
 ```
 
@@ -226,29 +226,29 @@ cargo run --release -- build-agent \
 
 ---
 
-## ✅ Resumen
+##  Resumen
 
 **Para que funcione necesitas:**
 
-1. ✅ Servidor corriendo con `--bind 0.0.0.0`
-2. ✅ Firewall en la Pi permitiendo puerto 4444
-3. ✅ Port forwarding en el router configurado
-4. ✅ Agente construido con tu IP PÚBLICA
-5. ✅ Puerto accesible desde internet (verificado)
+1.  Servidor corriendo con `--bind 0.0.0.0`
+2.  Firewall en la Pi permitiendo puerto 4444
+3.  Port forwarding en el router configurado
+4.  Agente construido con tu IP PÚBLICA
+5.  Puerto accesible desde internet (verificado)
 
 **El problema más común es #1** - servidor escuchando solo en localhost.
 
 ---
 
-## 🆘 ¿Necesitas Más Ayuda?
+##  ¿Necesitas Más Ayuda?
 
 1. **Lee la guía completa en español:** [SOLUCION_PROBLEMAS_ES.md](SOLUCION_PROBLEMAS_ES.md)
 2. **Activa modo verbose:** `./c2r2-server --bind 0.0.0.0 --port 4444 --verbose`
 3. **Revisa logs:** `tail -f logs/c2r2-session.log`
-4. **Consulta la documentación:** [Todas las guías](README.md#documentation)
+4. **Consulta la documentación:** [Todas las guías](../../README.md#documentation)
 
 ---
 
-**Fecha:** Noviembre 2024  
-**Versión:** C2R2 v2.0  
+**Fecha:** Noviembre 2024
+**Versión:** C2R2 v2.0
 **Solo para fines educativos y pruebas autorizadas**

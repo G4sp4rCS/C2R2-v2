@@ -1,13 +1,13 @@
-# 🔍 Herramientas de Diagnóstico - Web Data
+#  Herramientas de Diagnóstico - Web Data
 
 Estos ejecutables diagnostican la estructura de la base de datos `Web Data` de Edge/Chrome para ayudar a entender por qué el stealer no detecta tarjetas o direcciones.
 
-## 📦 Archivos
+##  Archivos
 
 - **debug_webdata.exe** - Analiza la estructura completa de Web Data
 - **find_cards.exe** - Encuentra dónde están guardadas las tarjetas y direcciones
 
-## 🚀 Uso en la VM Windows
+##  Uso en la VM Windows
 
 ### 1. Copiar archivos a la VM
 
@@ -27,17 +27,17 @@ find_cards.exe
 
 **Salida esperada:**
 ```
-🔍 Perfiles encontrados: 1
+ Perfiles encontrados: 1
 
-📂 Perfil: Default
+ Perfil: Default
    Path: C:\Users\...\Microsoft\Edge\User Data\Default\Web Data
 
-💳 TARJETAS:
-   ✅ credit_cards: 1 registros  ← Aquí debería aparecer tu tarjeta
+ TARJETAS:
+    credit_cards: 1 registros  ← Aquí debería aparecer tu tarjeta
       Columnas: guid, name_on_card, expiration_month, ...
-   
-📍 DIRECCIONES:
-   ✅ addresses: 3 registros  ← Direcciones guardadas
+
+ DIRECCIONES:
+    addresses: 3 registros  ← Direcciones guardadas
       Columnas: guid, use_count, date_modified, ...
 ```
 
@@ -52,9 +52,9 @@ debug_webdata.exe
 - Schema completo de tablas importantes
 - Columnas exactas de cada tabla
 
-## 🎯 Interpretación de resultados
+##  Interpretación de resultados
 
-### ✅ Si `credit_cards` tiene 0 registros:
+###  Si `credit_cards` tiene 0 registros:
 
 **Problema**: Edge no está guardando tarjetas localmente, está usando la nube de Microsoft.
 
@@ -64,23 +64,23 @@ debug_webdata.exe
 3. Elimina la tarjeta actual
 4. Vuelve a agregar la tarjeta (ahora se guardará localmente)
 5. Ejecuta `find_cards.exe` de nuevo
-6. Debería aparecer: `✅ credit_cards: 1 registros`
+6. Debería aparecer: ` credit_cards: 1 registros`
 
-### ✅ Si `addresses` tiene N registros pero el stealer no los detecta:
+###  Si `addresses` tiene N registros pero el stealer no los detecta:
 
 **Problema**: El código del stealer está buscando en la tabla incorrecta.
 
 **Solución**: Necesitamos actualizar `autofill.rs` para leer de la tabla `addresses` en lugar de `autofill_profile_addresses`.
 
-### 🔄 Si encuentras múltiples perfiles:
+###  Si encuentras múltiples perfiles:
 
 El stealer ya está configurado para buscar en Profile 1-5, así que debería detectarlos automáticamente.
 
-## 📝 Reportar resultados
+##  Reportar resultados
 
 Después de ejecutar `find_cards.exe`, comparte la salida completa para que pueda ajustar el código del stealer según la estructura real de tu base de datos.
 
-## ⚠️ Notas
+##  Notas
 
 - Estos ejecutables son **seguros** y solo **leen** la base de datos
 - **NO modifican** ningún archivo

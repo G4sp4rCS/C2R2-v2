@@ -31,7 +31,7 @@ Random variance added to beacon times to break pattern detection:
 #### 3. **Exponential Backoff**
 On connection failure, wait time increases progressively:
 - First retry: 10 seconds
-- Second retry: 20 seconds  
+- Second retry: 20 seconds
 - Third retry: 40 seconds
 - ...continues doubling up to max (600 seconds / 10 minutes)
 - Prevents noisy reconnection storms that trigger alerts
@@ -72,9 +72,9 @@ pub struct BeaconConfig {
 Multiple persistence methods implemented, from simple to APT-like:
 
 ### 1. Registry Run Key (Simple)
-**Method:** `registry`  
-**Location:** `HKCU\Software\Microsoft\Windows\CurrentVersion\Run`  
-**Privileges Required:** User  
+**Method:** `registry`
+**Location:** `HKCU\Software\Microsoft\Windows\CurrentVersion\Run`
+**Privileges Required:** User
 **Detection Level:** Medium-High (commonly monitored)
 
 **Characteristics:**
@@ -88,8 +88,8 @@ Multiple persistence methods implemented, from simple to APT-like:
   - "Microsoft Compatibility Telemetry"
 
 ### 2. Scheduled Task (Sophisticated)
-**Method:** `task`  
-**Privileges Required:** User  
+**Method:** `task`
+**Privileges Required:** User
 **Detection Level:** Medium (less commonly monitored)
 
 **Characteristics:**
@@ -101,9 +101,9 @@ Multiple persistence methods implemented, from simple to APT-like:
   - "GoogleUpdateTaskMachineUA"
   - "Adobe Acrobat Update Task"
 
-### 3. WMI Event Subscription (APT-like) ⚠️
-**Method:** `wmi`  
-**Privileges Required:** Administrator (usually)  
+### 3. WMI Event Subscription (APT-like)
+**Method:** `wmi`
+**Privileges Required:** Administrator (usually)
 **Detection Level:** Low (APT technique)
 
 **Characteristics:**
@@ -120,7 +120,7 @@ Multiple persistence methods implemented, from simple to APT-like:
 **Implementation:**
 ```powershell
 # Event Filter: Trigger on system performance data
-$Query = "SELECT * FROM __InstanceModificationEvent WITHIN 7200 
+$Query = "SELECT * FROM __InstanceModificationEvent WITHIN 7200
           WHERE TargetInstance ISA 'Win32_PerfFormattedData_PerfOS_System'"
 
 # Consumer: Execute agent binary
@@ -130,9 +130,9 @@ CommandLineEventConsumer -> Execute agent
 ```
 
 ### 4. Startup Folder (Fallback)
-**Method:** `startup`  
-**Location:** `%APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup`  
-**Privileges Required:** User  
+**Method:** `startup`
+**Location:** `%APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup`
+**Privileges Required:** User
 **Detection Level:** High (easily visible)
 
 **Characteristics:**
@@ -165,7 +165,7 @@ Before establishing persistence, the agent:
 
 # Choose persistence method
 /persist registry    # Simple, commonly monitored
-/persist task        # Sophisticated, less monitored  
+/persist task        # Sophisticated, less monitored
 /persist wmi         # APT-like, very stealthy (requires admin)
 /persist startup     # Fallback, easily visible
 ```

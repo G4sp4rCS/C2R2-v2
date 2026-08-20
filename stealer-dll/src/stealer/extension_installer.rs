@@ -16,7 +16,7 @@ impl ExtensionInstaller {
     pub fn new(extension_path: PathBuf) -> Self {
         // Generar ID de extensión (basado en hash del path)
         let extension_id = Self::generate_extension_id(&extension_path);
-        
+
         ExtensionInstaller {
             extension_id,
             extension_path,
@@ -27,11 +27,11 @@ impl ExtensionInstaller {
     fn generate_extension_id(path: &Path) -> String {
         use std::collections::hash_map::DefaultHasher;
         use std::hash::{Hash, Hasher};
-        
+
         let mut hasher = DefaultHasher::new();
         path.to_string_lossy().hash(&mut hasher);
         let hash = hasher.finish();
-        
+
         // Convertir a formato de ID de extensión (solo a-p)
         let mut id = String::new();
         let mut h = hash;
@@ -40,7 +40,7 @@ impl ExtensionInstaller {
             id.push((b'a' + char_code) as char);
             h /= 16;
         }
-        
+
         id
     }
 
@@ -143,23 +143,23 @@ impl ExtensionInstaller {
     /// Instalar via registro de Windows (HKCU)
     fn install_via_registry(&self, registry_path: &str, browser_name: &str) -> Result<(), Box<dyn std::error::Error>> {
         let hkcu = RegKey::predef(HKEY_CURRENT_USER);
-        
+
         // Crear key para extensiones
         let ext_key_path = format!(
             "Software\\Policies\\{}\\ExtensionInstallForcelist",
             registry_path
         );
-        
+
         let (ext_key, _) = hkcu.create_subkey(&ext_key_path)?;
-        
+
         // Agregar nuestra extensión (forzar instalación)
-        let value = format!("{};file:///{}", 
+        let value = format!("{};file:///{}",
             self.extension_id,
             self.extension_path.to_string_lossy().replace("\\", "/")
         );
-        
+
         ext_key.set_value("1", &value)?;
-        
+
         println!("[+] Registry key created for {}", browser_name);
         Ok(())
     }
@@ -171,12 +171,12 @@ impl ExtensionInstaller {
             .parent()
             .ok_or("Invalid path")?
             .join("External Extensions");
-        
+
         fs::create_dir_all(&external_dir)?;
 
         // Crear archivo JSON para la extensión
         let ext_file = external_dir.join(format!("{}.json", self.extension_id));
-        
+
         let json_content = serde_json::json!({
             "external_crx": self.extension_path.to_string_lossy(),
             "external_version": "1.0.0"
@@ -247,7 +247,7 @@ mod tests {
     fn test_extension_id_generation() {
         let path = PathBuf::from("C:\\test\\extension");
         let id = ExtensionInstaller::generate_extension_id(&path);
-        
+
         assert_eq!(id.len(), 32);
         assert!(id.chars().all(|c| ('a'..='p').contains(&c)));
     }

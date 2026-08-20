@@ -111,7 +111,7 @@ pub fn detect_time_acceleration() -> bool {
     let start = Instant::now();
     thread::sleep(Duration::from_secs(1));
     let elapsed = start.elapsed();
-    
+
     // If less than 900ms elapsed, time was accelerated
     if elapsed.as_millis() < 900 {
         return true;
@@ -136,7 +136,7 @@ fn main() {
             std::process::exit(0);
         }
     }
-    
+
     // Normal agent execution continues...
 }
 ```
@@ -227,13 +227,13 @@ The implementation was inspired by techniques from:
 ## OPSEC Considerations
 
 ### When to Use Production Mode
-✅ **Use production mode for:**
+ **Use production mode for:**
 - Real red team operations
 - Adversary simulations
 - Production deployments
 - Any live engagement
 
-❌ **Don't use production mode for:**
+ **Don't use production mode for:**
 - Local testing and development
 - Debugging issues
 - Learning and experimentation
@@ -323,4 +323,4 @@ Potential improvements for future versions:
 
 ---
 
-**⚠️ Legal Notice**: These anti-sandbox features are designed for authorized security testing and red team operations only. Use responsibly and only on systems you have permission to test.
+** Legal Notice**: These anti-sandbox features are designed for authorized security testing and red team operations only. Use responsibly and only on systems you have permission to test.

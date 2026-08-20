@@ -9,7 +9,7 @@ This file demonstrates the command parsing fix and provides test cases for valid
 Input:  /cmd dir "C:\Program Files"
 Parsed: ["/cmd", "dir", "C:\Program Files"]
 Sent:   dir "C:\Program Files"
-Result: ✓ Path preserved correctly
+Result:  Path preserved correctly
 ```
 
 ### 2. Paths with spaces using single quotes
@@ -17,7 +17,7 @@ Result: ✓ Path preserved correctly
 Input:  /cmd dir 'C:\Program Files (x86)'
 Parsed: ["/cmd", "dir", "C:\Program Files (x86)"]
 Sent:   dir "C:\Program Files (x86)"
-Result: ✓ Path preserved correctly
+Result:  Path preserved correctly
 ```
 
 ### 3. Relative paths with spaces
@@ -25,7 +25,7 @@ Result: ✓ Path preserved correctly
 Input:  /cmd dir "..\..\Program Files (x86)"
 Parsed: ["/cmd", "dir", "..\..\Program Files (x86)"]
 Sent:   dir "..\..\Program Files (x86)"
-Result: ✓ Relative path preserved correctly
+Result:  Relative path preserved correctly
 ```
 
 ### 4. Path without quotes (no spaces)
@@ -33,7 +33,7 @@ Result: ✓ Relative path preserved correctly
 Input:  /cmd dir C:\Windows
 Parsed: ["/cmd", "dir", "C:\Windows"]
 Sent:   dir C:\Windows
-Result: ✓ No quotes added unnecessarily
+Result:  No quotes added unnecessarily
 ```
 
 ### 5. Multiple arguments with spaces
@@ -41,7 +41,7 @@ Result: ✓ No quotes added unnecessarily
 Input:  /cmd copy "C:\My Documents\file.txt" "D:\Backup\files\"
 Parsed: ["/cmd", "copy", "C:\My Documents\file.txt", "D:\Backup\files\"]
 Sent:   copy "C:\My Documents\file.txt" "D:\Backup\files\"
-Result: ✓ Both paths preserved correctly
+Result:  Both paths preserved correctly
 ```
 
 ### 6. Mixed quoted and unquoted arguments
@@ -49,7 +49,7 @@ Result: ✓ Both paths preserved correctly
 Input:  /cmd type "C:\Users\User Name\file.txt"
 Parsed: ["/cmd", "type", "C:\Users\User Name\file.txt"]
 Sent:   type "C:\Users\User Name\file.txt"
-Result: ✓ Mixed arguments handled correctly
+Result:  Mixed arguments handled correctly
 ```
 
 ### 7. Upload command with spaces
@@ -57,7 +57,7 @@ Result: ✓ Mixed arguments handled correctly
 Input:  /upload "C:\local file.txt" "C:\remote path\file.txt"
 Parsed: ["/upload", "C:\local file.txt", "C:\remote path\file.txt"]
 Sent:   __UPLOAD__|C:\local file.txt|C:\remote path\file.txt
-Result: ✓ Upload paths preserved correctly
+Result:  Upload paths preserved correctly
 ```
 
 ### 8. Download command with spaces
@@ -65,7 +65,7 @@ Result: ✓ Upload paths preserved correctly
 Input:  /download "C:\Remote Files\document.pdf"
 Parsed: ["/download", "C:\Remote Files\document.pdf"]
 Sent:   __DOWNLOAD__:C:\Remote Files\document.pdf
-Result: ✓ Download path preserved correctly
+Result:  Download path preserved correctly
 ```
 
 ## Edge Cases
@@ -75,7 +75,7 @@ Result: ✓ Download path preserved correctly
 Input:  /cmd echo "" test
 Parsed: ["/cmd", "echo", "", "test"]
 Sent:   echo "" test
-Result: ✓ Empty string preserved
+Result:  Empty string preserved
 ```
 
 ### 10. Backslashes at end (Windows paths)
@@ -83,7 +83,7 @@ Result: ✓ Empty string preserved
 Input:  /cmd dir "C:\Program Files\"
 Parsed: ["/cmd", "dir", "C:\Program Files\"]
 Sent:   dir "C:\Program Files\"
-Result: ✓ Trailing backslash preserved
+Result:  Trailing backslash preserved
 ```
 
 ### 11. Mixed quote types in same command
@@ -91,7 +91,7 @@ Result: ✓ Trailing backslash preserved
 Input:  /cmd dir 'C:\Users' "C:\Program Files"
 Parsed: ["/cmd", "dir", "C:\Users", "C:\Program Files"]
 Sent:   dir C:\Users "C:\Program Files"
-Result: ✓ Different quote types handled correctly
+Result:  Different quote types handled correctly
 ```
 
 ## Agent Obfuscation Handling
@@ -102,31 +102,31 @@ After the command is sent to the agent, the argfuscator processes it:
 
 1. **Received by agent:** `dir "C:\Program Files"`
 2. **Parsed by argfuscator:** `["dir", "C:\Program Files"]`
-3. **Obfuscation applied:** 
+3. **Obfuscation applied:**
    - Random case: `DiR`
    - Caret insertion: `D^i^R`
    - Path preserved: `C:\Program Files` (no modification)
 4. **Reconstructed:** `D^i^R "C:\Program Files"`
 5. **Executed:** `cmd /C D^i^R "C:\Program Files"`
-6. **Result:** ✓ Command executes correctly
+6. **Result:**  Command executes correctly
 
 ## Before vs After
 
 ### Before the fix:
 ```
 Input:  /cmd dir "C:\Program Files"
-Parsed: ["/cmd", "dir", "\"C:\Program", "Files\""]  ❌ BROKEN
+Parsed: ["/cmd", "dir", "\"C:\Program", "Files\""]   BROKEN
 Sent:   dir "C:\Program Files"
-Agent:  ["dir", "\"C:\Program", "Files\""]          ❌ BROKEN
+Agent:  ["dir", "\"C:\Program", "Files\""]           BROKEN
 Output: Error - invalid path
 ```
 
 ### After the fix:
 ```
 Input:  /cmd dir "C:\Program Files"
-Parsed: ["/cmd", "dir", "C:\Program Files"]         ✓ CORRECT
+Parsed: ["/cmd", "dir", "C:\Program Files"]          CORRECT
 Sent:   dir "C:\Program Files"
-Agent:  ["dir", "C:\Program Files"]                 ✓ CORRECT
+Agent:  ["dir", "C:\Program Files"]                  CORRECT
 Output: Directory listing successful
 ```
 

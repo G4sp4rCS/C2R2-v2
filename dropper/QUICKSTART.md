@@ -1,27 +1,27 @@
-# 🎨 Sistema de Iconos y Droppers - Resumen Ejecutivo
+#  Sistema de Iconos y Droppers - Resumen Ejecutivo
 
-## ✅ ¿Qué se implementó?
+##  ¿Qué se implementó?
 
 ### 1. Sistema de Iconos Integrados
-- ✅ **build.rs mejorado**: Añade icono y metadatos al compilar
-- ✅ **download_icon.py**: Descarga iconos de alta calidad (7 tipos)
-- ✅ **Metadatos falsos**: Ejecutable parece de Microsoft Corporation
+-  **build.rs mejorado**: Añade icono y metadatos al compilar
+-  **download_icon.py**: Descarga iconos de alta calidad (7 tipos)
+-  **Metadatos falsos**: Ejecutable parece de Microsoft Corporation
 
 ### 2. Generadores de Droppers
-- ✅ **simple_dropper.bat**: Dropper BAT básico con PDF decoy
-- ✅ **advanced_dropper.ps1**: PowerShell con anti-sandbox y XOR
-- ✅ **generate_lnk.ps1**: Genera shortcuts con icono personalizado
-- ✅ **builder.py**: Generador automático (BAT/PS1/HTA)
+-  **simple_dropper.bat**: Dropper BAT básico con PDF decoy
+-  **advanced_dropper.ps1**: PowerShell con anti-sandbox y XOR
+-  **generate_lnk.ps1**: Genera shortcuts con icono personalizado
+-  **builder.py**: Generador automático (BAT/PS1/HTA)
 
 ### 3. Automatización
-- ✅ **build_with_icon.ps1**: Script todo-en-uno
+-  **build_with_icon.ps1**: Script todo-en-uno
   - Descarga icono
   - Compila agent
   - Ejecuta pruebas
   - Genera droppers
 
 ### 4. Testing
-- ✅ **test_droppers.py**: 15 pruebas unitarias
+-  **test_droppers.py**: 15 pruebas unitarias
   - Validación de sintaxis
   - XOR encryption/decryption
   - Anti-sandbox checks
@@ -29,7 +29,7 @@
 
 ---
 
-## 🚀 Uso Rápido
+##  Uso Rápido
 
 ### Compilar con Icono de PDF
 ```powershell
@@ -49,10 +49,10 @@ cd e:\repos\C2R2-v2\dropper
 
 ---
 
-## 📊 Resultados
+##  Resultados
 
 ### Icono Integrado
-✅ Agent.exe ahora tiene:
+ Agent.exe ahora tiene:
 - **Icono personalizado** (PDF, Word, Excel, etc.)
 - **Metadatos falsos**:
   - Compañía: Microsoft Corporation
@@ -61,14 +61,14 @@ cd e:\repos\C2R2-v2\dropper
   - Copyright: © Microsoft Corporation
 
 ### Droppers Generados (en `dropper/output/`)
-- ✅ `Factura_2024.pdf.bat` - BAT con PDF decoy
-- ✅ `Documento.pdf.lnk` - LNK con icono de PDF
-- ✅ `documento.ps1` - PowerShell encriptado
-- ✅ `documento.hta` - HTML Application para phishing
+-  `Factura_2024.pdf.bat` - BAT con PDF decoy
+-  `Documento.pdf.lnk` - LNK con icono de PDF
+-  `documento.ps1` - PowerShell encriptado
+-  `documento.hta` - HTML Application para phishing
 
 ---
 
-## 🎯 Ventajas de Seguridad
+##  Ventajas de Seguridad
 
 ### Evasión de AV Mejorada
 1. **Icono Legítimo**: Ejecutable parece documento PDF/Word
@@ -78,13 +78,13 @@ cd e:\repos\C2R2-v2\dropper
 5. **XOR Encryption**: Payload encriptado en memoria
 
 ### Social Engineering
-- ✅ **Realismo**: Iconos de alta calidad (256x256)
-- ✅ **Contexto**: Nombres apropiados (Factura, Contrato, etc.)
-- ✅ **Decoy**: Abre documento real para distraer
+-  **Realismo**: Iconos de alta calidad (256x256)
+-  **Contexto**: Nombres apropiados (Factura, Contrato, etc.)
+-  **Decoy**: Abre documento real para distraer
 
 ---
 
-## 📁 Estructura del Directorio
+##  Estructura del Directorio
 
 ```
 dropper/
@@ -96,7 +96,7 @@ dropper/
 ├── download_icon.py            # Descargador de iconos
 ├── test_droppers.py            # Suite de pruebas unitarias
 │
-├── build_with_icon.ps1         # 🌟 SCRIPT TODO-EN-UNO
+├── build_with_icon.ps1         #  SCRIPT TODO-EN-UNO
 ├── generate_lnk.ps1            # Generador de LNK
 ├── simple_dropper.bat          # Template BAT
 ├── advanced_dropper.ps1        # Template PowerShell
@@ -110,7 +110,7 @@ dropper/
 
 ---
 
-## 🧪 Pruebas Unitarias
+##  Pruebas Unitarias
 
 ### Ejecutar Pruebas
 ```powershell
@@ -119,12 +119,12 @@ python test_droppers.py
 ```
 
 ### Cobertura de Pruebas
-- ✅ Generación de nombres aleatorios
-- ✅ XOR encryption/decryption
-- ✅ Sintaxis de BAT/PS1/HTA
-- ✅ Integración con build.rs
-- ✅ Anti-sandbox features
-- ✅ User-Agent spoofing
+-  Generación de nombres aleatorios
+-  XOR encryption/decryption
+-  Sintaxis de BAT/PS1/HTA
+-  Integración con build.rs
+-  Anti-sandbox features
+-  User-Agent spoofing
 
 ### Resultado Esperado
 ```
@@ -140,7 +140,7 @@ Saltadas: 1
 
 ---
 
-## 🎨 Iconos Disponibles
+##  Iconos Disponibles
 
 | Tipo | Uso Recomendado | Ejemplo |
 |------|-----------------|---------|
@@ -154,7 +154,7 @@ Saltadas: 1
 
 ---
 
-## 🔧 Troubleshooting Rápido
+##  Troubleshooting Rápido
 
 ### Problema: Python no encontrado
 ```powershell
@@ -185,7 +185,7 @@ cargo build --release
 
 ---
 
-## 📈 Próximos Pasos
+##  Próximos Pasos
 
 ### 1. Compilar y Probar
 ```powershell
@@ -224,7 +224,7 @@ ls *.lnk
 
 ---
 
-## 🎓 Recursos Adicionales
+##  Recursos Adicionales
 
 ### Documentación
 - `ICON_USAGE_GUIDE.md` - Guía completa con ejemplos
@@ -243,13 +243,13 @@ ls *.lnk
 
 ---
 
-## 💡 Tips Pro
+##  Tips Pro
 
-1. **Nombres Realistas**: 
-   - ✅ `Factura_Empresa_Nov_2024.pdf.lnk`
-   - ❌ `malware.exe.lnk`
+1. **Nombres Realistas**:
+   -  `Factura_Empresa_Nov_2024.pdf.lnk`
+   -  `malware.exe.lnk`
 
-2. **Timing de Distribución**: 
+2. **Timing de Distribución**:
    - Lunes por la mañana (emails de trabajo)
    - Fin de mes (facturas)
 
@@ -270,4 +270,4 @@ ls *.lnk
 .\build_with_icon.ps1 -IconType pdf -DropperType all -Release
 ```
 
-🎯 **Resultado**: Agent compilado con icono + 4 tipos de droppers generados
+ **Resultado**: Agent compilado con icono + 4 tipos de droppers generados

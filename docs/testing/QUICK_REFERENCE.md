@@ -4,18 +4,18 @@
 
 The C2R2 server now properly handles commands with quoted arguments and paths containing spaces.
 
-## Before (Broken) ❌
+## Before (Broken)
 
 ```
 C2R2[1]> /cmd dir "C:\Program Files"
-❌ Error: Arguments split incorrectly
+ Error: Arguments split incorrectly
 ```
 
-## After (Fixed) ✅
+## After (Fixed)
 
 ```
 C2R2[1]> /cmd dir "C:\Program Files"
-✅ Works correctly - directory listing displayed
+ Works correctly - directory listing displayed
 ```
 
 ## Quick Usage Guide
@@ -48,12 +48,12 @@ C2R2[1]> /cmd dir "C:\Program Files"
 
 ## Key Features
 
-✅ Respects both single and double quotes
-✅ Handles paths with spaces correctly
-✅ Backward compatible (commands without quotes still work)
-✅ Maintains command obfuscation
-✅ No security vulnerabilities introduced
-✅ Fully tested and documented
+ Respects both single and double quotes
+ Handles paths with spaces correctly
+ Backward compatible (commands without quotes still work)
+ Maintains command obfuscation
+ No security vulnerabilities introduced
+ Fully tested and documented
 
 ## Build Instructions
 
@@ -83,7 +83,7 @@ Manual test scenarios are in `COMMAND_PARSING_TESTS.md`
 
 ## Status
 
-✅ **READY FOR PRODUCTION USE**
+ **READY FOR PRODUCTION USE**
 - All tests pass
 - Security approved
 - Fully documented

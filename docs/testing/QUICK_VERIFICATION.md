@@ -19,8 +19,8 @@ if e.kind() == ErrorKind::TimedOut || e.kind() == ErrorKind::WouldBlock {
 }
 ```
 
-✅ If you see `continue;` → Fix is applied  
-❌ If you see `Err(_) => break` → Old code still present
+ If you see `continue;` → Fix is applied
+ If you see `Err(_) => break` → Old code still present
 
 ### Step 2: Build and Deploy (15 minutes)
 
@@ -70,13 +70,13 @@ Deploy `test-reconnection-fix.exe` to test machine.
 
 ## What to Look For
 
-### ✅ Success Indicators
+###  Success Indicators
 - Client ID stays at [1]
 - No disconnection messages
 - Connection time unchanged after 6+ minutes
 - Commands execute successfully at any time
 
-### ❌ Failure Indicators
+###  Failure Indicators
 - Client ID increments ([1] → [2] → [3])
 - "Cliente [X] desconectado" messages
 - Connection time resets every ~5 minutes
@@ -120,11 +120,11 @@ Run and watch for:
 
 ## Success Definition
 
-✅ Agent stays connected as [1] for 10+ minutes  
-✅ No reconnection messages  
-✅ Commands work after 10+ minutes idle
+ Agent stays connected as [1] for 10+ minutes
+ No reconnection messages
+ Commands work after 10+ minutes idle
 
 ---
 
-**Time Required:** ~30 minutes total  
+**Time Required:** ~30 minutes total
 **Pass Criteria:** Client ID remains stable for 10+ minutes

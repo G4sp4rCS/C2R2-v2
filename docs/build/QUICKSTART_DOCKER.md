@@ -1,8 +1,8 @@
-# 🚀 Guía de Inicio Rápido - Docker Build
+#  Guía de Inicio Rápido - Docker Build
 
 Esta guía te ayudará a compilar todo C2R2-v2 en menos de 5 minutos.
 
-## ⚡ Compilación Super Rápida
+##  Compilación Super Rápida
 
 ```bash
 # 1. Clonar el repositorio
@@ -20,7 +20,7 @@ docker-compose up --build
 ls -lh dist/
 ```
 
-## 📦 ¿Qué obtienes?
+##  ¿Qué obtienes?
 
 Después de la compilación, en el directorio `dist/` encontrarás:
 
@@ -39,7 +39,7 @@ dist/
 └── BUILD_INFO.txt        # ← Información de compilación
 ```
 
-## 🎯 Ejemplos Prácticos
+##  Ejemplos Prácticos
 
 ### Ejemplo 1: Testing Local
 
@@ -97,7 +97,7 @@ cd dist
 # Transferir agent-prod.exe a Windows remoto
 ```
 
-## 🔧 Comandos Útiles
+##  Comandos Útiles
 
 ```bash
 # Compilar con parámetros en línea
@@ -115,14 +115,14 @@ docker rmi c2r2-builder:latest
 rm -rf dist/
 ```
 
-## 📖 Documentación Completa
+##  Documentación Completa
 
 Para más detalles, consulta:
 - **[DOCKER.md](DOCKER.md)** - Guía completa de Docker
-- **[README.md](README.md)** - Documentación principal
+- **[README principal](../../README.md)** - Documentación principal
 - **[BUILD.md](BUILD.md)** - Modos de compilación
 
-## ⚠️ Notas Importantes
+##  Notas Importantes
 
 - **Desarrollo vs Producción**: Usa `PRODUCTION_MODE=false` para testing y `true` para operaciones reales
 - **IP del Servidor**: Usa `127.0.0.1` para local, IP privada para LAN, IP pública para Internet
@@ -131,4 +131,4 @@ Para más detalles, consulta:
 
 ---
 
-**🔥 ¡A hackear! (de forma legal y ética, por supuesto)**
+** ¡A hackear! (de forma legal y ética, por supuesto)**

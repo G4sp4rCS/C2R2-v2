@@ -106,7 +106,7 @@ fn apply_random_case(input: &str, probability: f32) -> String {
 fn insert_obfuscation_chars(input: &str, probability: f32) -> String {
     let mut rng = rand::thread_rng();
     let mut result = String::new();
-    
+
     for (i, c) in input.chars().enumerate() {
         result.push(c);
         // Don't insert after last character or after special chars
@@ -114,7 +114,7 @@ fn insert_obfuscation_chars(input: &str, probability: f32) -> String {
             result.push('^');
         }
     }
-    
+
     result
 }
 
@@ -126,7 +126,7 @@ fn parse_command_args(command: &str) -> Vec<String> {
     let mut in_double_quotes = false;
     let mut in_single_quotes = false;
     let mut chars = command.chars().peekable();
-    
+
     while let Some(ch) = chars.next() {
         match ch {
             '"' if !in_single_quotes => {
@@ -150,12 +150,12 @@ fn parse_command_args(command: &str) -> Vec<String> {
             }
         }
     }
-    
+
     // Add final argument if any
     if !current_arg.is_empty() {
         args.push(current_arg);
     }
-    
+
     args
 }
 
@@ -164,14 +164,14 @@ fn reconstruct_command_args(args: &[String]) -> String {
     if args.is_empty() {
         return String::new();
     }
-    
+
     let mut result = String::new();
-    
+
     for (i, arg) in args.iter().enumerate() {
         if i > 0 {
             result.push(' ');
         }
-        
+
         // Quote if argument contains spaces
         if arg.contains(' ') {
             result.push('"');
@@ -181,7 +181,7 @@ fn reconstruct_command_args(args: &[String]) -> String {
             result.push_str(arg);
         }
     }
-    
+
     result
 }
 
@@ -192,7 +192,7 @@ fn add_quotes_to_args(command: &str) -> String {
     if args.is_empty() {
         return command.to_string();
     }
-    
+
     let mut result = args[0].to_string();
     for arg in args.iter().skip(1) {
         // Add quotes if not already quoted and contains special chars
@@ -202,7 +202,7 @@ fn add_quotes_to_args(command: &str) -> String {
             result.push_str(&format!(" {}", arg));
         }
     }
-    
+
     result
 }
 
@@ -210,7 +210,7 @@ fn add_quotes_to_args(command: &str) -> String {
 /// Example: "C:\Windows\System32" -> "%windir%\System32"
 fn substitute_env_vars(command: &str) -> String {
     let mut result = command.to_string();
-    
+
     // Common Windows path substitutions
     let substitutions = [
         ("C:\\Windows", "%windir%"),
@@ -221,68 +221,68 @@ fn substitute_env_vars(command: &str) -> String {
         ("C:\\Program Files (x86)", "%ProgramFiles(x86)%"),
         ("C:\\Users", "%SystemDrive%\\Users"),
     ];
-    
+
     for (path, env_var) in &substitutions {
         result = result.replace(path, env_var);
     }
-    
+
     result
 }
 
 /// Main obfuscation function
 /// Applies various obfuscation techniques to a Windows command
-/// 
+///
 /// # Examples
-/// 
+///
 /// ```
 /// let obfuscated = obfuscate_command("whoami", &ObfuscatorConfig::default());
 /// // Result might be: "wH^o^A^mi" (varies due to randomization)
 /// ```
-/// 
+///
 /// ```
 /// let obfuscated = obfuscate_command("curl http://example.com", &ObfuscatorConfig::high());
 /// // Result might be: "cU^r^L \"http://example.com\"" (varies due to randomization)
 /// ```
 pub fn obfuscate_command(command: &str, config: &ObfuscatorConfig) -> String {
     let mut result = command.to_string();
-    
+
     // Apply environment variable substitution first
     if config.env_var_substitution {
         result = substitute_env_vars(&result);
     }
-    
+
     // Parse command respecting quotes to get proper arguments
     let args = parse_command_args(&result);
     if args.is_empty() {
         return result;
     }
-    
+
     let mut obfuscated_args = Vec::new();
-    
+
     for (i, arg) in args.iter().enumerate() {
         let mut obfuscated_arg = arg.to_string();
-        
+
         // Apply random case (except for paths and quoted strings)
         if !arg.contains('\\') && !arg.contains('/') && !arg.starts_with('%') {
             obfuscated_arg = apply_random_case(&obfuscated_arg, config.random_case_prob);
         }
-        
+
         // Apply character insertion to the command name and some arguments
         if i == 0 || (i > 0 && !arg.contains(':') && !arg.contains('\\') && !arg.contains('/')) {
             obfuscated_arg = insert_obfuscation_chars(&obfuscated_arg, config.char_insertion_prob);
         }
-        
+
         obfuscated_args.push(obfuscated_arg);
     }
-    
+
     // Reconstruct command with proper quoting
     result = reconstruct_command_args(&obfuscated_args);
-    
+
     // Apply quote insertion for paths if enabled
     if config.quote_insertion {
         result = add_quotes_to_args(&result);
     }
-    
+
     result
 }
 

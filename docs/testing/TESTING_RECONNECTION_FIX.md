@@ -38,7 +38,7 @@ cargo run --release -- build-agent \
 
 3. **Observe initial connection:**
    ```
-   C2R2> 
+   C2R2>
    ? Nuevo cliente [1] desde 192.168.1.1:xxxxx
    ```
    Note the client ID (should be 1)
@@ -53,14 +53,14 @@ cargo run --release -- build-agent \
    ```
 
 6. **Expected Result:**
-   - ✅ Client [1] still connected (same ID)
-   - ✅ No disconnection messages during the 6 minutes
-   - ✅ No reconnection with new ID
-   
+   -  Client [1] still connected (same ID)
+   -  No disconnection messages during the 6 minutes
+   -  No reconnection with new ID
+
 7. **Failure Indicators:**
-   - ❌ "Cliente [1] desconectado" message
-   - ❌ "Nuevo cliente [2]" message
-   - ❌ Client ID changed in `/list`
+   -  "Cliente [1] desconectado" message
+   -  "Nuevo cliente [2]" message
+   -  Client ID changed in `/list`
 
 ### Test 2: Command Execution After Timeout Period (20 minutes)
 
@@ -77,10 +77,10 @@ cargo run --release -- build-agent \
    ```
 
 4. **Expected Result:**
-   - ✅ Command executes successfully
-   - ✅ Response received promptly
-   - ✅ Client still shows ID 1
-   - ✅ No disconnection/reconnection
+   -  Command executes successfully
+   -  Response received promptly
+   -  Client still shows ID 1
+   -  No disconnection/reconnection
 
 5. **Wait another 10 minutes** without commands
 
@@ -90,9 +90,9 @@ cargo run --release -- build-agent \
    ```
 
 7. **Expected Result:**
-   - ✅ Command executes successfully
-   - ✅ Client ID still 1
-   - ✅ Total connection time: 21+ minutes
+   -  Command executes successfully
+   -  Client ID still 1
+   -  Total connection time: 21+ minutes
 
 ### Test 3: Multiple Timeout Cycles (45 minutes)
 
@@ -107,9 +107,9 @@ cargo run --release -- build-agent \
    - Note the client ID each time
 
 4. **Expected Results:**
-   - ✅ Same client ID throughout entire 45 minutes
-   - ✅ No disconnection messages
-   - ✅ Connection timestamp remains same as initial
+   -  Same client ID throughout entire 45 minutes
+   -  No disconnection messages
+   -  Connection timestamp remains same as initial
 
 5. **Send a command after 45 minutes:**
    ```bash
@@ -118,8 +118,8 @@ cargo run --release -- build-agent \
    ```
 
 6. **Expected Result:**
-   - ✅ Command executes successfully
-   - ✅ Client ID still 1
+   -  Command executes successfully
+   -  Client ID still 1
 
 ### Test 4: Real Disconnection Handling
 
@@ -134,10 +134,10 @@ cargo run --release -- build-agent \
 4. **Restart the server**
 
 5. **Expected Result:**
-   - ✅ Agent detects disconnection (not timeout)
-   - ✅ Agent reconnects with exponential backoff
-   - ✅ New client ID assigned (this is expected for real disconnection)
-   - ✅ Reconnection successful
+   -  Agent detects disconnection (not timeout)
+   -  Agent reconnects with exponential backoff
+   -  New client ID assigned (this is expected for real disconnection)
+   -  Reconnection successful
 
 ### Test 5: Network Interruption
 
@@ -159,30 +159,30 @@ cargo run --release -- build-agent \
    ```
 
 5. **Expected Result:**
-   - ✅ Agent detects connection failure (via TCP keepalive)
-   - ✅ Agent reconnects after backoff period
-   - ✅ Not immediate reconnection (exponential backoff in effect)
+   -  Agent detects connection failure (via TCP keepalive)
+   -  Agent reconnects after backoff period
+   -  Not immediate reconnection (exponential backoff in effect)
 
 ## Success Criteria
 
 The fix is successful if:
 
-1. ✅ Agent remains connected with same client ID for 45+ minutes without commands
-2. ✅ Commands execute successfully at any time (even after 10+ minutes idle)
-3. ✅ No automatic disconnections every ~5 minutes
-4. ✅ No incrementing client IDs without real disconnection
-5. ✅ Real disconnections still detected and handled correctly
-6. ✅ TCP keepalive still functions for dead connection detection
+1.  Agent remains connected with same client ID for 45+ minutes without commands
+2.  Commands execute successfully at any time (even after 10+ minutes idle)
+3.  No automatic disconnections every ~5 minutes
+4.  No incrementing client IDs without real disconnection
+5.  Real disconnections still detected and handled correctly
+6.  TCP keepalive still functions for dead connection detection
 
 ## Failure Indicators
 
 The fix has failed if:
 
-1. ❌ Agent disconnects after ~5 minutes (or any regular interval)
-2. ❌ Client ID increments without network/server interruption
-3. ❌ Pattern of disconnection/reconnection repeats
-4. ❌ Commands fail after idle periods
-5. ❌ Multiple client IDs shown for same agent
+1.  Agent disconnects after ~5 minutes (or any regular interval)
+2.  Client ID increments without network/server interruption
+3.  Pattern of disconnection/reconnection repeats
+4.  Commands fail after idle periods
+5.  Multiple client IDs shown for same agent
 
 ## Logging and Debugging
 
@@ -310,7 +310,7 @@ $lastClientId = 1
 
 while (((Get-Date) - $startTime).TotalSeconds -lt $testDuration) {
     Start-Sleep -Seconds $checkInterval
-    
+
     # Parse server output for disconnection messages
     if (Test-Path $serverOutput) {
         $newDisconnections = (Get-Content $serverOutput | Select-String "desconectado").Count
@@ -319,21 +319,21 @@ while (((Get-Date) - $startTime).TotalSeconds -lt $testDuration) {
             $disconnections = $newDisconnections
         }
     }
-    
+
     Write-Host "Check at $((Get-Date) - $startTime): $disconnections disconnections"
 }
 
 Write-Host "`nTest completed!"
 Write-Host "Total disconnections: $disconnections"
 if ($disconnections -eq 0) {
-    Write-Host "✓ PASS: No disconnections detected" -ForegroundColor Green
+    Write-Host " PASS: No disconnections detected" -ForegroundColor Green
 } else {
-    Write-Host "✗ FAIL: $disconnections disconnections occurred" -ForegroundColor Red
+    Write-Host " FAIL: $disconnections disconnections occurred" -ForegroundColor Red
 }
 ```
 
 ---
 
-**Last Updated:** November 2024  
-**Related Document:** RECONNECTION_FIX.md  
+**Last Updated:** November 2024
+**Related Document:** RECONNECTION_FIX.md
 **Status:** Active Testing Guide

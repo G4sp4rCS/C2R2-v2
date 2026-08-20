@@ -4,13 +4,13 @@
 
 Las **tarjetas de crédito** de Firefox usan un sistema de encriptación **diferente** al de las contraseñas:
 
-### Contraseñas (✅ FUNCIONANDO)
+### Contraseñas ( FUNCIONANDO)
 - **Algoritmo**: NSS PK11SDR (3DES-CBC)
 - **Almacenamiento**: `logins.json` + `key4.db`
 - **Prefijo**: `0x30` (ASN.1 SEQUENCE)
 - **Descifrado**: Posible con `libnss3.so`
 
-### Tarjetas de Crédito (❌ NO DESCIFRABLE)
+### Tarjetas de Crédito ( NO DESCIFRABLE)
 - **Algoritmo**: OSKeyStore (API nativa del SO)
   * Windows: DPAPI (Data Protection API)
   * macOS: Keychain Services
@@ -44,14 +44,14 @@ async encrypt(plainText) {
 ## Análisis del Formato Encriptado
 
 ```bash
-❯ python3 debug_card_format.py harvested/firefox/foqs9fmi.default-release/autofill-profiles.json
+ python3 debug_card_format.py harvested/firefox/foqs9fmi.default-release/autofill-profiles.json
 
 [Card #1]
   Name: pepito
   Encrypted (bytes): 44 bytes
   Hex dump (first 32 bytes):
     ea 90 84 42 75 f7 8a 21 e9 32 af 17 a6 37 10 5f d4 e5 64 b3 28 c1 5c c9 f3 5a 42 e8 4e 85 b8 f3
-  ⚠️ Prefijo desconocido: ea908442
+   Prefijo desconocido: ea908442
 ```
 
 - **Prefijo `0xea908442`**: Magic number del formato OSKeyStore
@@ -61,8 +61,8 @@ async encrypt(plainText) {
 ## Limitación Técnica
 
 Para descifrar tarjetas necesitarías:
-1. ✅ Exfiltrar `autofill-profiles.json` (Ya funciona)
-2. ❌ Acceso al **OS keystore** del usuario víctima
+1.  Exfiltrar `autofill-profiles.json` (Ya funciona)
+2.  Acceso al **OS keystore** del usuario víctima
    - Windows: Leer DPAPI master key (requiere privilegios SYSTEM + usuario loggeado)
    - Linux: Acceder a gnome-keyring (requiere sesión activa + keyring unlocked)
    - macOS: Acceder a Keychain (requiere autenticación)
@@ -73,11 +73,11 @@ Para descifrar tarjetas necesitarías:
 
 | Stealer | Contraseñas Firefox | Tarjetas Firefox |
 |---------|-------------------|-----------------|
-| FickerStealer | ✅ Exfiltra raw | ❌ Ignora |
-| Satan-Stealer | ❌ Ignora Firefox | ❌ Ignora |
-| Hannibal | ✅ Descifra | ❌ Ignora |
-| RedLine | ✅ Descifra | ❌ Ignora |
-| **Nuestro C2R2** | ✅ Descifra NSS | ⚠️ Exfiltra metadata |
+| FickerStealer |  Exfiltra raw |  Ignora |
+| Satan-Stealer |  Ignora Firefox |  Ignora |
+| Hannibal |  Descifra |  Ignora |
+| RedLine |  Descifra |  Ignora |
+| **Nuestro C2R2** |  Descifra NSS |  Exfiltra metadata |
 
 **Ningún stealer profesional descifra tarjetas de Firefox** porque técnicamente es inviable.
 
@@ -96,38 +96,38 @@ Para descifrar tarjetas necesitarías:
 ```
 
 ### Información Útil
-- ✅ **Nombre del titular**: "pepito"
-- ✅ **Tipo de tarjeta**: Visa
-- ✅ **Fecha expiración**: 1/2034
-- ✅ **Últimos 4 dígitos**: 1111
-- ❌ Número completo: Encriptado con OSKeyStore
+-  **Nombre del titular**: "pepito"
+-  **Tipo de tarjeta**: Visa
+-  **Fecha expiración**: 1/2034
+-  **Últimos 4 dígitos**: 1111
+-  Número completo: Encriptado con OSKeyStore
 
 ## Estadísticas de Uso
 
 Según Mozilla Telemetry:
-- 🔐 **Contraseñas guardadas**: ~87% usuarios
-- 💳 **Tarjetas guardadas**: <8% usuarios
+-  **Contraseñas guardadas**: ~87% usuarios
+-  **Tarjetas guardadas**: <8% usuarios
 
 **Conclusión**: El 92% de los usuarios NO guardan tarjetas en Firefox, así que la limitación es mínima.
 
 ## Recomendación Final
 
 ### Para Passwords (99% cobertura)
-✅ **FUNCIONA PERFECTAMENTE**
+ **FUNCIONA PERFECTAMENTE**
 - Exfiltración raw de `key4.db` + `logins.json`
 - Descifrado server-side con NSS
 - Tested y verificado
 
 ### Para Credit Cards (limitación conocida)
-⚠️ **EXFILTRACIÓN PARCIAL**
+ **EXFILTRACIÓN PARCIAL**
 - Metadata útil (nombre, tipo, exp, últimos 4 dígitos)
 - Número completo NO descifrable (OSKeyStore)
 - **Impacto mínimo**: <8% usuarios
 
 ### Alternativas (NO RECOMENDADAS)
-1. ❌ Escalar privilegios a SYSTEM + leer DPAPI
-2. ❌ Keylogger en formularios de tarjetas
-3. ❌ Screenshot cuando usuario autocompleta tarjeta
+1.  Escalar privilegios a SYSTEM + leer DPAPI
+2.  Keylogger en formularios de tarjetas
+3.  Screenshot cuando usuario autocompleta tarjeta
 
 ## Archivos Relevantes
 
@@ -147,4 +147,4 @@ Según Mozilla Telemetry:
 
 ---
 
-**TLDR**: Firefox passwords ✅ funcionan perfectamente. Firefox credit cards ⚠️ solo metadata (número completo imposible de descifrar remotamente). Ningún stealer profesional lo hace.
+**TLDR**: Firefox passwords  funcionan perfectamente. Firefox credit cards  solo metadata (número completo imposible de descifrar remotamente). Ningún stealer profesional lo hace.

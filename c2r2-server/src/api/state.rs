@@ -8,6 +8,7 @@ use std::time::Instant;
 use tokio::sync::{broadcast, mpsc, RwLock};
 
 use super::models::{AgentInfo, ServerEvent};
+use super::GolstaClient;
 
 pub type ClientId = u64;
 
@@ -41,6 +42,9 @@ pub struct ApiState {
 
     /// Verbose mode
     pub verbose: bool,
+
+    /// Private Golsta backend adapter. None when no integration token is configured.
+    pub golsta: Option<GolstaClient>,
 }
 
 /// Agent state stored in the API
@@ -51,7 +55,7 @@ pub struct AgentState {
 }
 
 impl ApiState {
-    pub fn new(api_password: String, verbose: bool) -> Self {
+    pub fn new(api_password: String, verbose: bool, golsta: Option<GolstaClient>) -> Self {
         let (event_tx, _) = broadcast::channel(1024);
 
         Self {
@@ -62,6 +66,7 @@ impl ApiState {
             api_password,
             start_time: Instant::now(),
             verbose,
+            golsta,
         }
     }
 

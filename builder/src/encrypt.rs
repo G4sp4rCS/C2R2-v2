@@ -75,7 +75,7 @@ pub fn generate_agent(
     c2_server: &str,
     production: bool,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    println!(" Generando configuración del agente...");
+    println!("🔧 Generando configuración del agente...");
 
     // Check if source code is available
     let (workspace_root, agent_relative_path) = match find_workspace_with_source() {
@@ -206,12 +206,12 @@ pub fn generate_agent(
 
     // Agregar flags de feature según el modo
     if production {
-        println!(" Modo PRODUCCIÓN: sin consola, sin debug prints");
+        println!("🔒 Modo PRODUCCIÓN: sin consola, sin debug prints");
         cargo_args.push("--no-default-features");
         cargo_args.push("--features");
         cargo_args.push("production");
     } else {
-        println!(" Modo DESARROLLO: con consola y debug prints");
+        println!("🐛 Modo DESARROLLO: con consola y debug prints");
         // dev is default, no need to specify
     }
 
@@ -228,7 +228,7 @@ pub fn generate_agent(
         // Copiar ejecutable
         let dest_path = format!("{}.exe", output_name);
         if std::fs::copy(&exe_path, &dest_path).is_ok() {
-            println!(" Ejecutable copiado como: {}", dest_path);
+            println!("📦 Ejecutable copiado como: {}", dest_path);
         } else {
             println!(
                 "⚠️  No se pudo copiar el ejecutable, está en: {}",
@@ -236,7 +236,7 @@ pub fn generate_agent(
             );
         }
     } else {
-        println!(" Error durante la compilación:");
+        println!("❌ Error durante la compilación:");
         println!("STDERR: {}", String::from_utf8_lossy(&output.stderr));
         println!("STDOUT: {}", String::from_utf8_lossy(&output.stdout));
         return Err("Compilación fallida".into());

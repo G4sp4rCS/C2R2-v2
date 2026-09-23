@@ -77,6 +77,11 @@ dropper/*_wrapper.py
 dropper/_runtime_hook*.py
 dropper/sample_invoice.pdf
 
+
+## =========================== Research / Conference Talk ===========================
+ekoparty-conference-talk/*
+/.grok/
+
 # ===========================
 # IDEs
 # ===========================

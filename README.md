@@ -7,7 +7,7 @@
 
 A modular offensive security framework written in Rust, designed for authorized penetration testing and red team operations.
 
-## Legal Disclaimer
+## ⚠️ LEGAL DISCLAIMER
 
 **FOR EDUCATIONAL AND AUTHORIZED SECURITY TESTING PURPOSES ONLY**
 
@@ -16,18 +16,18 @@ This tool is provided for security researchers, penetration testers, and educati
 **The authors and contributors assume NO LIABILITY for misuse or damages caused by this software.**
 
 By using C2R2-v2, you agree to:
-- Use it only on systems you own or have written authorization to test
-- Comply with all applicable laws and regulations
-- Take full responsibility for your actions
-- Never use it for illegal or malicious purposes
+- ✅ Use it only on systems you own or have written authorization to test
+- ✅ Comply with all applicable laws and regulations
+- ✅ Take full responsibility for your actions
+- ❌ NEVER use it for illegal or malicious purposes
 
 **Unauthorized access to computer systems is a crime. You have been warned.**
 
 ---
 
-## Documentation
+## 📖 Documentation
 
-The documentation is organized under [`docs/`](docs/):
+**Complete documentation is available in the [`/docs`](docs/) directory:**
 
 ### Getting Started
 | Document | Description |
@@ -76,13 +76,13 @@ The documentation is organized under [`docs/`](docs/):
 
 ---
 
-## What is C2R2-v2?
+## 🎯 What is C2R2-v2?
 
 C2R2-v2 (Command & Control Rust Reloaded) is a modular offensive security suite inspired by professional frameworks like Havoc C2 and Cobalt Strike. Built entirely in Rust, it combines memory safety with powerful capabilities for authorized security testing.
 
 ---
 
-## Features
+## 🚀 Features
 
 ### Core Capabilities
 
@@ -112,37 +112,37 @@ C2R2-v2 (Command & Control Rust Reloaded) is a modular offensive security suite 
 ### Available Commands
 
 ```
-Client Management:
+📋 Client Management:
    /list                      - List all connected clients
    /select <id>               - Select a client by ID
    /deselect                  - Deselect current client
    /info <id>                 - Show detailed client information
 
-Command Execution:
+💻 Command Execution:
    /cmd <command>             - Execute command on selected client
    /cmd_all <command>         - Execute command on ALL clients
 
-File Operations:
+📁 File Operations:
    /download <remote_path>    - Download file from agent
    /upload <local> <remote>   - Upload file to agent
 
-Advanced Operations:
-   /harvest                   - Harvest credentials from browsers/apps
+🔧 Advanced Operations:
+   /harvest                   - Upload and run modules/golsta.exe
    /elevate <command>         - Execute command with admin privileges (UAC prompt)
    /persist <method>          - Establish persistence (registry|task|wmi|startup)
    /persist_remove            - Remove all persistence mechanisms
    /beacon <int:jit>          - Configure beacon timing (e.g., 60:30)
 
-Server:
+ℹ️  Server:
    /help                      - Show command help
    /exit, /quit               - Shutdown server
 ```
 
-For command usage and examples, see the [quick reference](docs/testing/QUICK_REFERENCE.md).
+For detailed command usage and examples, see the [Usage Guide](docs/USAGE.md).
 
 ---
 
-## Architecture
+## 🏗️ Architecture
 
 C2R2-v2 follows a modular client-server architecture with encrypted communications:
 
@@ -197,7 +197,7 @@ For detailed architecture documentation, see [Architecture Guide](docs/ARCHITECT
 
 ---
 
-## Quick Start
+## 🔧 Quick Start
 
 ### Prerequisites
 
@@ -205,7 +205,7 @@ For detailed architecture documentation, see [Architecture Guide](docs/ARCHITECT
 - MinGW-w64 (`sudo apt install mingw-w64`)
 - Windows target (`rustup target add x86_64-pc-windows-gnu`)
 
-**Build instructions:** [Build and deployment documentation](docs/build/)
+**Full installation instructions:** [Installation Guide](docs/INSTALLATION.md)
 
 ### Building
 
@@ -230,7 +230,7 @@ All binaries will be in the `dist/` directory. See **[Docker Guide](docs/guides/
 
 ```bash
 # 1. Build stealer module
-./scripts/build/build-stealer.sh
+./build-stealer.sh
 
 # 2. Encrypt module
 cd builder
@@ -253,10 +253,10 @@ cargo build --release
 
 **📖 Build Modes:** See [Evasion Documentation](docs/features/EVASION.md) for detailed documentation on development vs production builds.
 
-**Important:** Always use the `--production` flag for real deployments:
-- No console window
-- No debug output
-- Production configuration enabled
+⚠️ **Important**: Always use `--production` flag for real deployments to ensure stealth:
+- ✅ No console window
+- ✅ No debug output
+- ✅ 100% stealthy operation
 
 #### Option 3: Binary Patching (For GitHub Releases) 🎯
 
@@ -306,6 +306,17 @@ C2R2 [1]> /cmd whoami
 C2R2 [1]> /harvest
 ```
 
+`/harvest` expects a separately built `c2r2-server/modules/golsta.exe`. The
+server uploads that PE over the existing TLS session, the agent runs it once,
+waits for completion, and removes it. Golsta delivers its results to its
+private collector; C2R2 then exposes collector health, result metadata, and
+archive downloads through `/api/golsta/*`.
+
+Both backends must receive the same `GOLSTA_INTEGRATION_TOKEN`. The Golsta
+panel should remain bound to loopback and C2R2 can point to it with
+`--golsta-url` (default: `http://127.0.0.1:18080`). Golsta's source tree is not
+a C2R2 dependency and is never copied into this repository.
+
 #### Internet Deployment (Port Forwarding)
 
 For deploying over the internet with port forwarding (e.g., Raspberry Pi):
@@ -323,11 +334,11 @@ For deploying over the internet with port forwarding (e.g., Raspberry Pi):
 - **[Network Deployment Guide](docs/guides/NETWORK_DEPLOYMENT.md)** - Comprehensive network configuration
 - **[Connection Troubleshooting](docs/troubleshooting/CONNECTION.md)** - Common connection problems
 
-**Quick usage reference:** [Usage Documentation](docs/testing/QUICK_REFERENCE.md)
+**Complete usage guide:** [Usage Documentation](docs/USAGE.md)
 
 ---
 
-## Security Features
+## 🛡️ Security Features
 
 ### Evasion Techniques
 
@@ -341,7 +352,7 @@ For deploying over the internet with port forwarding (e.g., Raspberry Pi):
 
 ### Operational Security
 
-See the [security documentation](docs/security/) for:
+See [Security Guide](docs/SECURITY.md) for:
 - OPSEC best practices
 - Detection evasion strategies
 - Incident response procedures
@@ -404,17 +415,17 @@ Harvests credentials and sensitive data from:
 - **Gaming**: Steam, Epic Games
 - **Data Types**: Passwords, cookies, autofill, credit cards
 
-For module development notes, see the [features documentation](docs/features/).
+For module development and API reference, see [Modules Documentation](docs/MODULES.md).
 
 ---
 
-## Contributing
+## 🤝 Contributing
 
-Contributions are welcome. Please review the project documentation before submitting pull requests.
+Contributions are welcome! Please read our [Contributing Guidelines](docs/CONTRIBUTING.md) before submitting pull requests.
 
 ### Development
 
-See the [architecture documentation](docs/architecture/) for:
+See the [Development Guide](docs/DEVELOPMENT.md) for:
 - Project structure
 - Development setup
 - Coding standards
@@ -423,7 +434,7 @@ See the [architecture documentation](docs/architecture/) for:
 
 ---
 
-##  License
+## 📝 License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
@@ -431,7 +442,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ---
 
-##  Acknowledgments
+## 🙏 Acknowledgments
 
 C2R2-v2 is inspired by:
 - [Havoc C2](https://github.com/HavocFramework/Havoc) - Modern C2 framework
@@ -443,7 +454,7 @@ Special thanks to the Rust community and security research community for their t
 
 ---
 
-##  Contact & Support
+## 📧 Contact & Support
 
 - **Issues**: [GitHub Issues](https://github.com/G4sp4rCS/C2R2-v2/issues)
 - **Discussions**: [GitHub Discussions](https://github.com/G4sp4rCS/C2R2-v2/discussions)
@@ -451,7 +462,7 @@ Special thanks to the Rust community and security research community for their t
 
 ---
 
-##  Version History
+## 📚 Version History
 
 See [CHANGELOG.md](CHANGELOG.md) for version history and release notes.
 
@@ -459,5 +470,4 @@ See [CHANGELOG.md](CHANGELOG.md) for version history and release notes.
 
 ---
 
-** Remember: With great power comes great responsibility. Use this tool ethically and legally. Always obtain proper authorization before testing any systems.**
-
+**⚠️ Remember: With great power comes great responsibility. Use this tool ethically and legally. Always obtain proper authorization before testing any systems.**

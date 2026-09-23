@@ -8,7 +8,7 @@ fn main() {
         // Añadir icono personalizado si existe
         if std::path::Path::new("icon.ico").exists() {
             res.set_icon("icon.ico");
-            println!("cargo:warning= Usando icono personalizado: icon.ico");
+            println!("cargo:warning=✅ Usando icono personalizado: icon.ico");
         } else {
             println!(
                 "cargo:warning=⚠️  No se encontró icon.ico - compilando sin icono personalizado"

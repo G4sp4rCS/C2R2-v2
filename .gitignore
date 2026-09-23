@@ -30,9 +30,24 @@ agent/src/stealer/
 c2r2-server/modules/*.enc
 c2r2-server/modules/*.key
 
+<<<<<<< HEAD
 # ===========================
 # Docker / Build Output
 # ===========================
+=======
+# JetBrains IDE (RustRover, IntelliJ, CLion, etc.)
+.idea/
+
+# VSCode
+.vscode/
+
+# Local agent/session configuration
+.grok/
+c2r2-server/modules/stealer.enc
+c2r2-server/modules/stealer.key
+
+# Docker build output
+>>>>>>> c91d9a7f4ae0e377b6e588ce3dd50af442df4b6f
 dist/
 build/
 *.spec

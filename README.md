@@ -7,7 +7,7 @@
 
 A modular offensive security framework written in Rust, designed for authorized penetration testing and red team operations.
 
-## ⚠️ LEGAL DISCLAIMER
+## Legal Disclaimer
 
 **FOR EDUCATIONAL AND AUTHORIZED SECURITY TESTING PURPOSES ONLY**
 
@@ -16,19 +16,20 @@ This tool is provided for security researchers, penetration testers, and educati
 **The authors and contributors assume NO LIABILITY for misuse or damages caused by this software.**
 
 By using C2R2-v2, you agree to:
-- ✅ Use it only on systems you own or have written authorization to test
-- ✅ Comply with all applicable laws and regulations  
-- ✅ Take full responsibility for your actions
-- ❌ NEVER use it for illegal or malicious purposes
+- Use it only on systems you own or have written authorization to test
+- Comply with all applicable laws and regulations
+- Take full responsibility for your actions
+- Never use it for illegal or malicious purposes
 
 **Unauthorized access to computer systems is a crime. You have been warned.**
 
 ---
 
-## 📖 Documentation
+## Documentation
 
-**Complete documentation is available in the [`/docs`](docs/) directory:**
+The documentation is organized under [`docs/`](docs/):
 
+<<<<<<< HEAD
 ### Getting Started
 | Document | Description |
 |----------|-------------|
@@ -73,19 +74,29 @@ By using C2R2-v2, you agree to:
 | [Connection Issues](docs/troubleshooting/CONNECTION.md) | Agent connection and network problems |
 | [Build Issues](docs/troubleshooting/BUILD.md) | Compilation and cross-compilation fixes |
 | [Problemas Comunes (ES)](docs/troubleshooting/SOLUCION_PROBLEMAS_ES.md) | Spanish troubleshooting guide |
+=======
+- **[Build and deployment](docs/build/)** - Docker, cross-compilation and Raspberry Pi setup
+- **[Architecture](docs/architecture/)** - System design and component boundaries
+- **[Features](docs/features/)** - Feature-specific implementation notes
+- **[Security](docs/security/)** - Security and hardening notes
+- **[Troubleshooting](docs/troubleshooting/)** - Fixes and operational diagnostics
+- **[Testing](docs/testing/)** - Verification procedures and test notes
+- **[Archive](docs/archive/)** - Historical implementation summaries
+>>>>>>> c91d9a7f4ae0e377b6e588ce3dd50af442df4b6f
 
 ---
 
-## 🎯 What is C2R2-v2?
+## What is C2R2-v2?
 
 C2R2-v2 (Command & Control Rust Reloaded) is a modular offensive security suite inspired by professional frameworks like Havoc C2 and Cobalt Strike. Built entirely in Rust, it combines memory safety with powerful capabilities for authorized security testing.
 
 ---
 
-## 🚀 Features
+## Features
 
 ### Core Capabilities
 
+<<<<<<< HEAD
 - ✅ **Lightweight Agent** - ~60KB binary with minimal dependencies
 - ✅ **Multi-Client Support** - Handle multiple agents simultaneously
 - ✅ **TLS Encrypted Communication** - All traffic encrypted with TLS 1.3
@@ -108,41 +119,62 @@ C2R2-v2 (Command & Control Rust Reloaded) is a modular offensive security suite 
 - 🎯 **Anti-Analysis** - Comprehensive VM, sandbox, and debugger detection (production mode only)
 - 📊 **Structured Logging** - Comprehensive activity logging
 - 🎨 **Colored CLI** - Beautiful terminal interface with tables
+=======
+- **Lightweight Agent** - ~60KB binary with minimal dependencies
+- **Multi-Client Support** - Handle multiple agents simultaneously
+- **Beacon Communication** - Configurable intervals with jitter for stealth
+- **Command Execution** - Remote shell with automatic obfuscation
+- **File Operations** - Bidirectional file transfer (upload/download)
+- **Persistence** - Multiple mechanisms (Registry, Tasks, WMI, Startup)
+- **Credential Harvesting** - Multi-browser and application credential stealing
+- **Cross-Compilation** - Build Windows agents from Linux/WSL
+- **Modular Architecture** - Load capabilities on-demand via encrypted modules
+- **Docker Build System** - One-command compilation of all components
+
+### Advanced Features
+
+- **Direct Syscalls** - Bypass userland hooks (EDR evasion)
+- **Command Obfuscation** - ArgFuscator-style obfuscation for all commands
+- **Module Encryption** - AES-256-GCM encrypted capability modules
+- **Anti-Analysis** - Comprehensive VM, sandbox, and debugger detection (production mode only)
+- **Structured Logging** - Comprehensive activity logging
+- **Colored CLI** - Terminal interface with tables
+>>>>>>> c91d9a7f4ae0e377b6e588ce3dd50af442df4b6f
 
 ### Available Commands
 
 ```
-📋 Client Management:
+Client Management:
    /list                      - List all connected clients
    /select <id>               - Select a client by ID
    /deselect                  - Deselect current client
    /info <id>                 - Show detailed client information
 
-💻 Command Execution:
+Command Execution:
    /cmd <command>             - Execute command on selected client
    /cmd_all <command>         - Execute command on ALL clients
 
-📁 File Operations:
+File Operations:
    /download <remote_path>    - Download file from agent
    /upload <local> <remote>   - Upload file to agent
 
-🔧 Advanced Operations:
+Advanced Operations:
    /harvest                   - Harvest credentials from browsers/apps
    /elevate <command>         - Execute command with admin privileges (UAC prompt)
    /persist <method>          - Establish persistence (registry|task|wmi|startup)
    /persist_remove            - Remove all persistence mechanisms
    /beacon <int:jit>          - Configure beacon timing (e.g., 60:30)
 
-ℹ️  Server:
+Server:
    /help                      - Show command help
    /exit, /quit               - Shutdown server
 ```
 
-For detailed command usage and examples, see the [Usage Guide](docs/USAGE.md).
+For command usage and examples, see the [quick reference](docs/testing/QUICK_REFERENCE.md).
 
 ---
 
-## 🏗️ Architecture
+## Architecture
 
 C2R2-v2 follows a modular client-server architecture with encrypted communications:
 
@@ -183,6 +215,7 @@ C2R2-v2 follows a modular client-server architecture with encrypted communicatio
 - **Builder** - Tool for agent generation and module encryption
 - **Stealer** - Modular credential harvesting capability
 
+<<<<<<< HEAD
 **Server Ports:**
 - **Port 22**: SSH for team client connections (tunneled API access)
 - **Port 4444** (default): TLS port for agent connections
@@ -194,10 +227,13 @@ C2R2-v2 follows a modular client-server architecture with encrypted communicatio
 - API port only accessible via SSH tunnel (not exposed)
 
 For detailed architecture documentation, see [Architecture Guide](docs/ARCHITECTURE.md).
+=======
+For architecture details, see the [architecture documentation](docs/architecture/).
+>>>>>>> c91d9a7f4ae0e377b6e588ce3dd50af442df4b6f
 
 ---
 
-## 🔧 Quick Start
+## Quick Start
 
 ### Prerequisites
 
@@ -205,7 +241,7 @@ For detailed architecture documentation, see [Architecture Guide](docs/ARCHITECT
 - MinGW-w64 (`sudo apt install mingw-w64`)
 - Windows target (`rustup target add x86_64-pc-windows-gnu`)
 
-**Full installation instructions:** [Installation Guide](docs/INSTALLATION.md)
+**Build instructions:** [Build and deployment documentation](docs/build/)
 
 ### Building
 
@@ -224,13 +260,17 @@ The fastest way to build everything:
 docker-compose up --build
 ```
 
+<<<<<<< HEAD
 All binaries will be in the `dist/` directory. See **[Docker Guide](docs/guides/DOCKER.md)** for detailed instructions.
+=======
+All binaries will be in the `dist/` directory. See the [Docker Guide](docs/build/DOCKER.md) for detailed instructions.
+>>>>>>> c91d9a7f4ae0e377b6e588ce3dd50af442df4b6f
 
 #### Option 2: Manual Build
 
 ```bash
 # 1. Build stealer module
-./build-stealer.sh
+./scripts/build/build-stealer.sh
 
 # 2. Encrypt module
 cd builder
@@ -251,12 +291,16 @@ cargo build --release
 ./target/release/c2r2-server --generate-certs
 ```
 
+<<<<<<< HEAD
 **📖 Build Modes:** See [Evasion Documentation](docs/features/EVASION.md) for detailed documentation on development vs production builds.
+=======
+**Build modes:** See [BUILD.md](docs/build/BUILD.md) for development and production build details.
+>>>>>>> c91d9a7f4ae0e377b6e588ce3dd50af442df4b6f
 
-⚠️ **Important**: Always use `--production` flag for real deployments to ensure stealth:
-- ✅ No console window
-- ✅ No debug output
-- ✅ 100% stealthy operation
+**Important:** Always use the `--production` flag for real deployments:
+- No console window
+- No debug output
+- Production configuration enabled
 
 #### Option 3: Binary Patching (For GitHub Releases) 🎯
 
@@ -318,16 +362,22 @@ For deploying over the internet with port forwarding (e.g., Raspberry Pi):
 # 5. Build agent with PUBLIC IP: --server "YOUR_PUBLIC_IP:4444"
 ```
 
+<<<<<<< HEAD
 **📖 Having connection issues?** See:
 - **[Raspberry Pi Setup Guide](docs/guides/RASPBERRY_PI_SETUP.md)** - Complete setup for Pi with port forwarding
 - **[Network Deployment Guide](docs/guides/NETWORK_DEPLOYMENT.md)** - Comprehensive network configuration
 - **[Connection Troubleshooting](docs/troubleshooting/CONNECTION.md)** - Common connection problems
+=======
+**Having connection issues?** See:
+- **[Raspberry Pi setup guide](docs/build/RASPBERRY_PI_SETUP.md)** - Setup with port forwarding
+- **[Troubleshooting](docs/troubleshooting/)** - Common connection problems
+>>>>>>> c91d9a7f4ae0e377b6e588ce3dd50af442df4b6f
 
-**Complete usage guide:** [Usage Documentation](docs/USAGE.md)
+**Quick usage reference:** [Usage Documentation](docs/testing/QUICK_REFERENCE.md)
 
 ---
 
-## 🛡️ Security Features
+## Security Features
 
 ### Evasion Techniques
 
@@ -341,7 +391,7 @@ For deploying over the internet with port forwarding (e.g., Raspberry Pi):
 
 ### Operational Security
 
-See [Security Guide](docs/SECURITY.md) for:
+See the [security documentation](docs/security/) for:
 - OPSEC best practices
 - Detection evasion strategies
 - Incident response procedures
@@ -349,6 +399,7 @@ See [Security Guide](docs/SECURITY.md) for:
 
 ---
 
+<<<<<<< HEAD
 ## 🖥️ Team Client
 
 C2R2 includes a graphical Team Client for operators to connect to the C2 server remotely via SSH-tunneled API, similar to Havoc's Team Client architecture.
@@ -393,6 +444,9 @@ For detailed instructions, see the [Team Client README](team-client/README.md).
 ---
 
 ## 📦 Modules
+=======
+## Modules
+>>>>>>> c91d9a7f4ae0e377b6e588ce3dd50af442df4b6f
 
 ### Stealer Module
 
@@ -404,17 +458,17 @@ Harvests credentials and sensitive data from:
 - **Gaming**: Steam, Epic Games
 - **Data Types**: Passwords, cookies, autofill, credit cards
 
-For module development and API reference, see [Modules Documentation](docs/MODULES.md).
+For module development notes, see the [features documentation](docs/features/).
 
 ---
 
-## 🤝 Contributing
+## Contributing
 
-Contributions are welcome! Please read our [Contributing Guidelines](docs/CONTRIBUTING.md) before submitting pull requests.
+Contributions are welcome. Please review the project documentation before submitting pull requests.
 
 ### Development
 
-See the [Development Guide](docs/DEVELOPMENT.md) for:
+See the [architecture documentation](docs/architecture/) for:
 - Project structure
 - Development setup
 - Coding standards
@@ -423,7 +477,7 @@ See the [Development Guide](docs/DEVELOPMENT.md) for:
 
 ---
 
-## 📝 License
+##  License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
@@ -431,7 +485,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ---
 
-## 🙏 Acknowledgments
+##  Acknowledgments
 
 C2R2-v2 is inspired by:
 - [Havoc C2](https://github.com/HavocFramework/Havoc) - Modern C2 framework
@@ -443,7 +497,7 @@ Special thanks to the Rust community and security research community for their t
 
 ---
 
-## 📧 Contact & Support
+##  Contact & Support
 
 - **Issues**: [GitHub Issues](https://github.com/G4sp4rCS/C2R2-v2/issues)
 - **Discussions**: [GitHub Discussions](https://github.com/G4sp4rCS/C2R2-v2/discussions)
@@ -451,7 +505,7 @@ Special thanks to the Rust community and security research community for their t
 
 ---
 
-## 📚 Version History
+##  Version History
 
 See [CHANGELOG.md](CHANGELOG.md) for version history and release notes.
 
@@ -459,5 +513,5 @@ See [CHANGELOG.md](CHANGELOG.md) for version history and release notes.
 
 ---
 
-**⚠️ Remember: With great power comes great responsibility. Use this tool ethically and legally. Always obtain proper authorization before testing any systems.**
+** Remember: With great power comes great responsibility. Use this tool ethically and legally. Always obtain proper authorization before testing any systems.**
 

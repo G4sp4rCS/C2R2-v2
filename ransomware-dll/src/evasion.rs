@@ -5,17 +5,26 @@
 pub fn check_debugger() -> bool {
     use winapi::um::debugapi::IsDebuggerPresent;
 
+<<<<<<< HEAD
     unsafe { IsDebuggerPresent() != 0 }
+=======
+    unsafe {
+        IsDebuggerPresent() != 0
+    }
+>>>>>>> c91d9a7f4ae0e377b6e588ce3dd50af442df4b6f
 }
 
 #[cfg(target_os = "windows")]
 pub fn check_analysis_tools() -> bool {
     use std::ffi::CStr;
+<<<<<<< HEAD
     use winapi::shared::minwindef::FALSE;
     use winapi::um::handleapi::CloseHandle;
     use winapi::um::tlhelp32::{
         CreateToolhelp32Snapshot, Process32First, Process32Next, PROCESSENTRY32, TH32CS_SNAPPROCESS,
     };
+=======
+>>>>>>> c91d9a7f4ae0e377b6e588ce3dd50af442df4b6f
 
     // List of common analysis tools
     let blacklist = [

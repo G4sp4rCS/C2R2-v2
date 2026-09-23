@@ -49,7 +49,7 @@ mod stealer;
 ///
 /// Returns multi-line text with sections for:
 /// - Passwords
-/// - Cookies  
+/// - Cookies
 /// - Autofill data
 /// - Credit cards
 /// - Discord tokens

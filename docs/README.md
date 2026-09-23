@@ -1,11 +1,18 @@
-# C2R2-v2 Documentation
+# Documentation
 
-Welcome to the C2R2-v2 (Command & Control Rust Reloaded) documentation. This is a modular offensive security framework written in Rust, designed for authorized security testing and educational purposes.
+This directory contains the project documentation grouped by purpose.
 
-## ⚠️ Legal Disclaimer
+## Sections
 
-**FOR EDUCATIONAL AND AUTHORIZED SECURITY TESTING PURPOSES ONLY**
+- [Build and deployment](build/)
+- [Architecture](architecture/)
+- [Features](features/)
+- [Security](security/)
+- [Troubleshooting](troubleshooting/)
+- [Testing](testing/)
+- [Archive](archive/)
 
+<<<<<<< HEAD
 This tool is provided for security researchers, penetration testers, and educational purposes. Any unauthorized use of this software to compromise systems you do not own or have explicit permission to test is illegal and unethical.
 
 The authors and contributors assume no liability for misuse or damages caused by this software. By using C2R2-v2, you agree to use it only on systems you own or have written authorization to test.
@@ -205,3 +212,6 @@ MIT License - See [LICENSE](../LICENSE) for details.
 ---
 
 **⚠️ Remember: With great power comes great responsibility. Use this tool ethically and legally.**
+=======
+Build scripts live under [`scripts/`](../scripts/). Generated and analysis artifacts are kept under [`artifacts/`](../artifacts/).
+>>>>>>> c91d9a7f4ae0e377b6e588ce3dd50af442df4b6f

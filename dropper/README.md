@@ -17,7 +17,7 @@ Este directorio contiene componentes para crear un dropper realista que pase des
 - **Desventajas**: Requiere AutoIt o compilador
 
 ### 3. HTA + VBScript (Phishing Email)
-- **Archivo**: `documento.hta` 
+- **Archivo**: `documento.hta`
 - **Funcionalidad**: Página web que parece Word/PDF + descarga payload
 - **Ventajas**: Excelente para phishing, muy sigiloso
 - **Desventajas**: Requiere convencer al usuario de abrir HTA

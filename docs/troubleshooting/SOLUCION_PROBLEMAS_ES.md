@@ -1,12 +1,12 @@
 # Guía de Solución de Problemas - Raspberry Pi y Port Forwarding
 
-## 🎯 Problema: "El agente no alcanza el servidor en Raspberry Pi con port forward"
+##  Problema: "El agente no alcanza el servidor en Raspberry Pi con port forward"
 
 Esta guía resuelve el problema cuando un agente no puede conectarse al servidor C2R2 en una Raspberry Pi con port forwarding configurado en el router.
 
 ---
 
-## ✅ Respuesta Rápida
+##  Respuesta Rápida
 
 **Sí, debería funcionar.** El problema más común es que el servidor no está escuchando en todas las interfaces de red.
 
@@ -31,7 +31,7 @@ cargo run --release -- build-agent \
 
 ---
 
-## 🔍 Diagnóstico Completo
+##  Diagnóstico Completo
 
 ### Paso 1: Verificar que el servidor esté corriendo correctamente
 
@@ -117,18 +117,18 @@ nc -zv 203.0.113.50 4444  # Tu IP pública
 
 ### Paso 6: Construir el agente correctamente
 
-**⚠️ IMPORTANTE:** Usa tu **IP PÚBLICA**, NO la IP local de la Raspberry Pi.
+** IMPORTANTE:** Usa tu **IP PÚBLICA**, NO la IP local de la Raspberry Pi.
 
 ```bash
 cd builder
 
-# ✅ CORRECTO - con IP pública
+#  CORRECTO - con IP pública
 cargo run --release -- build-agent \
   --name mi-agente \
   --server "203.0.113.50:4444" \
   --production
 
-# ❌ INCORRECTO - con IP local (solo funciona en LAN)
+#  INCORRECTO - con IP local (solo funciona en LAN)
 cargo run --release -- build-agent \
   --name mi-agente \
   --server "192.168.1.100:4444" \
@@ -137,7 +137,7 @@ cargo run --release -- build-agent \
 
 ---
 
-## 🔧 Problemas Comunes y Soluciones
+##  Problemas Comunes y Soluciones
 
 ### Problema 1: El servidor muestra 127.0.0.1:4444
 
@@ -165,9 +165,9 @@ cargo run --release -- build-agent \
    ```bash
    # Usar puerto 8443 en lugar de 4444
    ./c2r2-server --bind 0.0.0.0 --port 8443
-   
+
    # Actualizar port forwarding en el router a 8443
-   
+
    # Reconstruir agente con nuevo puerto:
    cargo run --release -- build-agent \
      --name mi-agente-8443 \
@@ -241,7 +241,7 @@ cargo run --release -- build-agent \
 
 ---
 
-## 📋 Lista de Verificación
+##  Lista de Verificación
 
 Antes de reportar problemas, verifica:
 
@@ -271,17 +271,17 @@ Antes de reportar problemas, verifica:
 
 ---
 
-## 📖 Documentación Completa
+##  Documentación Completa
 
 Para información más detallada, consulta:
 
-- **[Guía de Configuración para Raspberry Pi](RASPBERRY_PI_SETUP.md)** (inglés) - Guía paso a paso completa
-- **[Guía de Despliegue en Red](docs/NETWORK_DEPLOYMENT.md)** (inglés) - Configuración avanzada y escenarios
-- **[Solución de Problemas](docs/NETWORK_DEPLOYMENT.md#troubleshooting)** (inglés) - Problemas comunes y soluciones
+- **[Guía de Configuración para Raspberry Pi](../build/RASPBERRY_PI_SETUP.md)** (inglés) - Guía paso a paso completa
+- **[Guía de Despliegue en Red](../build/)** (inglés) - Configuración avanzada y escenarios
+- **[Solución de Problemas](./)** (inglés) - Problemas comunes y soluciones
 
 ---
 
-## 🎓 Entendiendo el Flujo de Conexión
+##  Entendiendo el Flujo de Conexión
 
 ```
 ┌──────────────┐
@@ -312,7 +312,7 @@ Para información más detallada, consulta:
 
 ---
 
-## 🆘 ¿Aún tienes problemas?
+##  ¿Aún tienes problemas?
 
 1. **Activar modo verbose:**
    ```bash
@@ -328,10 +328,10 @@ Para información más detallada, consulta:
    ```bash
    # En Raspberry Pi
    nc -l -p 4444
-   
+
    # Desde internet
    nc TU_IP_PUBLICA 4444
-   
+
    # Escribir mensajes para probar comunicación bidireccional
    ```
 
@@ -342,6 +342,6 @@ Para información más detallada, consulta:
 
 ---
 
-**Última actualización:** Noviembre 2024  
-**Versión:** 2.0  
+**Última actualización:** Noviembre 2024
+**Versión:** 2.0
 **Solo para fines educativos y pruebas autorizadas**

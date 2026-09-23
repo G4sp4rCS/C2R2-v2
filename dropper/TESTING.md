@@ -2,7 +2,7 @@
 
 Este documento describe cómo probar el sistema de droppers de C2R2-v2.
 
-## 🧪 Tipos de Pruebas
+##  Tipos de Pruebas
 
 ### 1. Pruebas Unitarias (`test_droppers.py`)
 
@@ -14,16 +14,16 @@ python3 test_droppers.py
 ```
 
 **Cobertura:**
-- ✅ Generación de nombres aleatorios (100% únicos)
-- ✅ Encriptación/desencriptación XOR
-- ✅ Generación de droppers BAT
-- ✅ Generación de droppers PowerShell
-- ✅ Generación de droppers HTA
-- ✅ Sintaxis de scripts BAT/PS1
-- ✅ Existencia de generador LNK
-- ✅ Sistema de iconos
-- ✅ Integración con build.rs
-- ✅ Características de seguridad (anti-sandbox, user-agent)
+-  Generación de nombres aleatorios (100% únicos)
+-  Encriptación/desencriptación XOR
+-  Generación de droppers BAT
+-  Generación de droppers PowerShell
+-  Generación de droppers HTA
+-  Sintaxis de scripts BAT/PS1
+-  Existencia de generador LNK
+-  Sistema de iconos
+-  Integración con build.rs
+-  Características de seguridad (anti-sandbox, user-agent)
 
 **Resultado esperado:**
 ```
@@ -47,16 +47,16 @@ python3 test_integration.py
 ```
 
 **Cobertura:**
-- ✅ Generación completa de dropper BAT
-- ✅ Generación completa de dropper PowerShell
-- ✅ Generación completa de dropper HTA
-- ✅ Generación simultánea de todos los tipos
-- ✅ Integridad de cifrado XOR
-- ✅ Distribución de nombres aleatorios
-- ✅ Disponibilidad de URLs de iconos
-- ✅ Características de seguridad (PS1 y BAT)
-- ✅ Funcionalidad de CLI
-- ✅ Sintaxis de todos los scripts
+-  Generación completa de dropper BAT
+-  Generación completa de dropper PowerShell
+-  Generación completa de dropper HTA
+-  Generación simultánea de todos los tipos
+-  Integridad de cifrado XOR
+-  Distribución de nombres aleatorios
+-  Disponibilidad de URLs de iconos
+-  Características de seguridad (PS1 y BAT)
+-  Funcionalidad de CLI
+-  Sintaxis de todos los scripts
 
 **Resultado esperado:**
 ```
@@ -68,10 +68,10 @@ Exitosas: 10
 Fallidas: 0
 Errores: 0
 
-✅ TODAS LAS PRUEBAS DE INTEGRACIÓN PASARON
+ TODAS LAS PRUEBAS DE INTEGRACIÓN PASARON
 ```
 
-## 🚀 Pruebas Manuales
+##  Pruebas Manuales
 
 ### Generar Droppers de Prueba
 
@@ -111,30 +111,30 @@ python3 builder.py \
 ### Verificar Contenido
 
 **BAT Dropper debe contener:**
-- ✅ `@echo off`
-- ✅ URL del payload
-- ✅ Comando PowerShell
-- ✅ User-Agent Mozilla
-- ✅ Timeout/delay
-- ✅ Decoy PDF embebido
+-  `@echo off`
+-  URL del payload
+-  Comando PowerShell
+-  User-Agent Mozilla
+-  Timeout/delay
+-  Decoy PDF embebido
 
 **PowerShell Dropper debe contener:**
-- ✅ Payload encriptado en Base64
-- ✅ Clave XOR
-- ✅ Check de RAM (`TotalPhysicalMemory`)
-- ✅ Check de uptime (`LastBootUpTime`)
-- ✅ Desencriptación XOR (`-bxor`)
-- ✅ URL del decoy
+-  Payload encriptado en Base64
+-  Clave XOR
+-  Check de RAM (`TotalPhysicalMemory`)
+-  Check de uptime (`LastBootUpTime`)
+-  Desencriptación XOR (`-bxor`)
+-  URL del decoy
 
 **HTA Dropper debe contener:**
-- ✅ `<!DOCTYPE html>`
-- ✅ `<HTA:APPLICATION>`
-- ✅ VBScript (`type="text/vbscript"`)
-- ✅ `CreateObject("WScript.Shell")`
-- ✅ URL del payload
-- ✅ Interfaz de carga animada
+-  `<!DOCTYPE html>`
+-  `<HTA:APPLICATION>`
+-  VBScript (`type="text/vbscript"`)
+-  `CreateObject("WScript.Shell")`
+-  URL del payload
+-  Interfaz de carga animada
 
-## 📊 Métricas de Calidad
+##  Métricas de Calidad
 
 ### Tamaños de Archivo
 - BAT: ~750-800 bytes
@@ -162,7 +162,7 @@ User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36
 for($i=0;$i -lt $b.Length;$i++){$r[$i]=$b[$i] -bxor $kb[$i%$kb.Length]}
 ```
 
-## 🔍 Debugging
+##  Debugging
 
 ### Ver logs detallados de pruebas:
 
@@ -199,7 +199,7 @@ with open('test.ps1', 'r') as f:
             break
 ```
 
-## 🐛 Troubleshooting
+##  Troubleshooting
 
 ### Problema: Tests fallan por falta de Pillow
 
@@ -229,7 +229,7 @@ pip install pillow requests
 4. Aumentar delays
 5. Ofuscar más el código PowerShell
 
-## ✅ Checklist de Testing Completo
+##  Checklist de Testing Completo
 
 Antes de un deployment, verificar:
 
@@ -246,7 +246,7 @@ Antes de un deployment, verificar:
 - [ ] Archivos generados tienen tamaños esperados
 - [ ] Sintaxis es válida (BAT/PS1/HTA)
 
-## 📚 Recursos Adicionales
+##  Recursos Adicionales
 
 ### Herramientas de Testing
 
@@ -279,9 +279,9 @@ Para probar en entorno real (VM recomendada):
 3. **Verificar que el decoy se abre**
 4. **Verificar que el payload se descarga**
 
-⚠️ **ADVERTENCIA:** Solo testear en entornos controlados y autorizados.
+ **ADVERTENCIA:** Solo testear en entornos controlados y autorizados.
 
-## 🎓 Ejemplos de Uso
+##  Ejemplos de Uso
 
 ### Test Rápido (Smoke Test)
 
@@ -303,7 +303,7 @@ ls -lh /tmp/test.*
 # Limpiar
 rm /tmp/test.* /tmp/agent.exe
 
-echo "✅ Smoke test completado"
+echo " Smoke test completado"
 ```
 
 ### Test Automatizado Completo
@@ -323,14 +323,14 @@ TEST2=$?
 
 echo ""
 echo "=== Results ==="
-echo "Unit Tests: $([ $TEST1 -eq 0 ] && echo '✅ PASS' || echo '❌ FAIL')"
-echo "Integration Tests: $([ $TEST2 -eq 0 ] && echo '✅ PASS' || echo '❌ FAIL')"
+echo "Unit Tests: $([ $TEST1 -eq 0 ] && echo ' PASS' || echo ' FAIL')"
+echo "Integration Tests: $([ $TEST2 -eq 0 ] && echo ' PASS' || echo ' FAIL')"
 
-[ $TEST1 -eq 0 ] && [ $TEST2 -eq 0 ] && echo "✅ ALL TESTS PASSED" || echo "❌ SOME TESTS FAILED"
+[ $TEST1 -eq 0 ] && [ $TEST2 -eq 0 ] && echo " ALL TESTS PASSED" || echo " SOME TESTS FAILED"
 exit $(($TEST1 + $TEST2))
 ```
 
-## 📞 Soporte
+##  Soporte
 
 Si encuentras problemas:
 
@@ -346,6 +346,6 @@ Si encuentras problemas:
 
 ---
 
-**Última actualización:** 2024-11-20  
-**Versión:** 2.0.0  
+**Última actualización:** 2024-11-20
+**Versión:** 2.0.0
 **Autor:** G4sp4rCS

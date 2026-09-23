@@ -2,7 +2,7 @@
 
 Módulo de encriptación de archivos para C2R2-v2, implementado como biblioteca dinámica (DLL) que puede ser cargada bajo demanda por el agente.
 
-## ⚠️ ADVERTENCIA LEGAL
+##  ADVERTENCIA LEGAL
 
 **ESTE MÓDULO ES SOLO PARA FINES EDUCATIVOS Y DE INVESTIGACIÓN EN SEGURIDAD**
 
@@ -84,7 +84,7 @@ El módulo ahora muestra ventanas nativas de Windows durante el proceso de encri
 Implementa múltiples técnicas de evasión antes de ejecutar:
 
 **Anti-Debugging:**
-- Detecta `IsDebuggerPresent()` 
+- Detecta `IsDebuggerPresent()`
 - El ransomware no se ejecuta si detecta un debugger
 
 **Anti-Analysis Tools:**
@@ -147,10 +147,10 @@ Esto genera:
 ### ¿Ejecución en memoria?
 
 **No completamente**. La implementación actual:
-1. ✅ La DLL se transmite encriptada
-2. ✅ La DLL se desencripta en memoria
-3. ⚠️ Se escribe temporalmente a disco para `LoadLibraryA`
-4. ✅ Se elimina inmediatamente después
+1.  La DLL se transmite encriptada
+2.  La DLL se desencripta en memoria
+3.  Se escribe temporalmente a disco para `LoadLibraryA`
+4.  Se elimina inmediatamente después
 
 Para **verdadera ejecución en memoria** (Reflective DLL Injection) se necesitaría:
 - Parser PE manual

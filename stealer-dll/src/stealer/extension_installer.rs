@@ -166,8 +166,12 @@ impl ExtensionInstaller {
         let (ext_key, _) = hkcu.create_subkey(&ext_key_path)?;
 
         // Agregar nuestra extensión (forzar instalación)
+<<<<<<< HEAD
         let value = format!(
             "{};file:///{}",
+=======
+        let value = format!("{};file:///{}",
+>>>>>>> c91d9a7f4ae0e377b6e588ce3dd50af442df4b6f
             self.extension_id,
             self.extension_path.to_string_lossy().replace("\\", "/")
         );

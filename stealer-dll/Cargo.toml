@@ -32,11 +32,11 @@ libloading = "0.8"
 
 [target.'cfg(windows)'.dependencies]
 winapi = { version = "0.3", features = [
-    "dpapi", 
-    "wincrypt", 
-    "errhandlingapi", 
-    "processthreadsapi", 
-    "psapi", 
+    "dpapi",
+    "wincrypt",
+    "errhandlingapi",
+    "processthreadsapi",
+    "psapi",
     "winnt",
     "winbase",
     # Features para memory injection

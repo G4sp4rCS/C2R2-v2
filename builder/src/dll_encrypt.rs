@@ -3,6 +3,7 @@ use std::fs;
 use std::path::Path;
 
 /// Encripta un archivo con XOR usando una clave
+<<<<<<< HEAD
 pub fn encrypt_dll(
     dll_path: &Path,
     output_path: &Path,
@@ -19,6 +20,16 @@ pub fn encrypt_dll(
     let encrypted = xor_encrypt(&dll_bytes, key);
 
     println!("💾 Guardando DLL encriptada en: {}", output_path.display());
+=======
+pub fn encrypt_dll(dll_path: &Path, output_path: &Path, key: &[u8]) -> Result<(), Box<dyn std::error::Error>> {
+    println!(" Leyendo DLL: {}", dll_path.display());
+    let dll_bytes = fs::read(dll_path)?;
+
+    println!(" Encriptando {} bytes con XOR (key length: {})", dll_bytes.len(), key.len());
+    let encrypted = xor_encrypt(&dll_bytes, key);
+
+    println!(" Guardando DLL encriptada en: {}", output_path.display());
+>>>>>>> c91d9a7f4ae0e377b6e588ce3dd50af442df4b6f
     fs::write(output_path, encrypted)?;
 
     Ok(())

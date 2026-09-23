@@ -317,8 +317,8 @@ mod tests {
     fn test_elevation_service_available() {
         // Test si el servicio está disponible
         match ElevationServiceClient::new() {
-            Ok(_) => println!("✅ Elevation Service disponible"),
-            Err(e) => println!("❌ Elevation Service NO disponible: {}", e),
+            Ok(_) => println!(" Elevation Service disponible"),
+            Err(e) => println!(" Elevation Service NO disponible: {}", e),
         }
     }
 }

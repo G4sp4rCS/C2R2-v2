@@ -10,13 +10,9 @@ fn main() {
             res.set_icon("icon.ico");
             println!("cargo:warning= Usando icono personalizado: icon.ico");
         } else {
-<<<<<<< HEAD
             println!(
                 "cargo:warning=⚠️  No se encontró icon.ico - compilando sin icono personalizado"
             );
-=======
-            println!("cargo:warning=  No se encontró icon.ico - compilando sin icono personalizado");
->>>>>>> c91d9a7f4ae0e377b6e588ce3dd50af442df4b6f
             println!("cargo:warning=   Coloca un archivo icon.ico en agent/ para añadir icono");
         }
 
@@ -38,12 +34,8 @@ fn main() {
         res.set("InternalName", "SecurityHealth");
 
         res.compile().unwrap();
-<<<<<<< HEAD
         println!(
             "cargo:warning=✅ Recursos compilados exitosamente (manifest + icono + metadatos)"
         );
-=======
-        println!("cargo:warning= Recursos compilados exitosamente (manifest + icono + metadatos)");
->>>>>>> c91d9a7f4ae0e377b6e588ce3dd50af442df4b6f
     }
 }

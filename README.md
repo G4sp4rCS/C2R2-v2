@@ -29,7 +29,6 @@ By using C2R2-v2, you agree to:
 
 The documentation is organized under [`docs/`](docs/):
 
-<<<<<<< HEAD
 ### Getting Started
 | Document | Description |
 |----------|-------------|
@@ -74,15 +73,6 @@ The documentation is organized under [`docs/`](docs/):
 | [Connection Issues](docs/troubleshooting/CONNECTION.md) | Agent connection and network problems |
 | [Build Issues](docs/troubleshooting/BUILD.md) | Compilation and cross-compilation fixes |
 | [Problemas Comunes (ES)](docs/troubleshooting/SOLUCION_PROBLEMAS_ES.md) | Spanish troubleshooting guide |
-=======
-- **[Build and deployment](docs/build/)** - Docker, cross-compilation and Raspberry Pi setup
-- **[Architecture](docs/architecture/)** - System design and component boundaries
-- **[Features](docs/features/)** - Feature-specific implementation notes
-- **[Security](docs/security/)** - Security and hardening notes
-- **[Troubleshooting](docs/troubleshooting/)** - Fixes and operational diagnostics
-- **[Testing](docs/testing/)** - Verification procedures and test notes
-- **[Archive](docs/archive/)** - Historical implementation summaries
->>>>>>> c91d9a7f4ae0e377b6e588ce3dd50af442df4b6f
 
 ---
 
@@ -96,7 +86,6 @@ C2R2-v2 (Command & Control Rust Reloaded) is a modular offensive security suite 
 
 ### Core Capabilities
 
-<<<<<<< HEAD
 - ✅ **Lightweight Agent** - ~60KB binary with minimal dependencies
 - ✅ **Multi-Client Support** - Handle multiple agents simultaneously
 - ✅ **TLS Encrypted Communication** - All traffic encrypted with TLS 1.3
@@ -119,27 +108,6 @@ C2R2-v2 (Command & Control Rust Reloaded) is a modular offensive security suite 
 - 🎯 **Anti-Analysis** - Comprehensive VM, sandbox, and debugger detection (production mode only)
 - 📊 **Structured Logging** - Comprehensive activity logging
 - 🎨 **Colored CLI** - Beautiful terminal interface with tables
-=======
-- **Lightweight Agent** - ~60KB binary with minimal dependencies
-- **Multi-Client Support** - Handle multiple agents simultaneously
-- **Beacon Communication** - Configurable intervals with jitter for stealth
-- **Command Execution** - Remote shell with automatic obfuscation
-- **File Operations** - Bidirectional file transfer (upload/download)
-- **Persistence** - Multiple mechanisms (Registry, Tasks, WMI, Startup)
-- **Credential Harvesting** - Multi-browser and application credential stealing
-- **Cross-Compilation** - Build Windows agents from Linux/WSL
-- **Modular Architecture** - Load capabilities on-demand via encrypted modules
-- **Docker Build System** - One-command compilation of all components
-
-### Advanced Features
-
-- **Direct Syscalls** - Bypass userland hooks (EDR evasion)
-- **Command Obfuscation** - ArgFuscator-style obfuscation for all commands
-- **Module Encryption** - AES-256-GCM encrypted capability modules
-- **Anti-Analysis** - Comprehensive VM, sandbox, and debugger detection (production mode only)
-- **Structured Logging** - Comprehensive activity logging
-- **Colored CLI** - Terminal interface with tables
->>>>>>> c91d9a7f4ae0e377b6e588ce3dd50af442df4b6f
 
 ### Available Commands
 
@@ -215,7 +183,6 @@ C2R2-v2 follows a modular client-server architecture with encrypted communicatio
 - **Builder** - Tool for agent generation and module encryption
 - **Stealer** - Modular credential harvesting capability
 
-<<<<<<< HEAD
 **Server Ports:**
 - **Port 22**: SSH for team client connections (tunneled API access)
 - **Port 4444** (default): TLS port for agent connections
@@ -227,9 +194,6 @@ C2R2-v2 follows a modular client-server architecture with encrypted communicatio
 - API port only accessible via SSH tunnel (not exposed)
 
 For detailed architecture documentation, see [Architecture Guide](docs/ARCHITECTURE.md).
-=======
-For architecture details, see the [architecture documentation](docs/architecture/).
->>>>>>> c91d9a7f4ae0e377b6e588ce3dd50af442df4b6f
 
 ---
 
@@ -260,11 +224,7 @@ The fastest way to build everything:
 docker-compose up --build
 ```
 
-<<<<<<< HEAD
 All binaries will be in the `dist/` directory. See **[Docker Guide](docs/guides/DOCKER.md)** for detailed instructions.
-=======
-All binaries will be in the `dist/` directory. See the [Docker Guide](docs/build/DOCKER.md) for detailed instructions.
->>>>>>> c91d9a7f4ae0e377b6e588ce3dd50af442df4b6f
 
 #### Option 2: Manual Build
 
@@ -291,11 +251,7 @@ cargo build --release
 ./target/release/c2r2-server --generate-certs
 ```
 
-<<<<<<< HEAD
 **📖 Build Modes:** See [Evasion Documentation](docs/features/EVASION.md) for detailed documentation on development vs production builds.
-=======
-**Build modes:** See [BUILD.md](docs/build/BUILD.md) for development and production build details.
->>>>>>> c91d9a7f4ae0e377b6e588ce3dd50af442df4b6f
 
 **Important:** Always use the `--production` flag for real deployments:
 - No console window
@@ -362,16 +318,10 @@ For deploying over the internet with port forwarding (e.g., Raspberry Pi):
 # 5. Build agent with PUBLIC IP: --server "YOUR_PUBLIC_IP:4444"
 ```
 
-<<<<<<< HEAD
 **📖 Having connection issues?** See:
 - **[Raspberry Pi Setup Guide](docs/guides/RASPBERRY_PI_SETUP.md)** - Complete setup for Pi with port forwarding
 - **[Network Deployment Guide](docs/guides/NETWORK_DEPLOYMENT.md)** - Comprehensive network configuration
 - **[Connection Troubleshooting](docs/troubleshooting/CONNECTION.md)** - Common connection problems
-=======
-**Having connection issues?** See:
-- **[Raspberry Pi setup guide](docs/build/RASPBERRY_PI_SETUP.md)** - Setup with port forwarding
-- **[Troubleshooting](docs/troubleshooting/)** - Common connection problems
->>>>>>> c91d9a7f4ae0e377b6e588ce3dd50af442df4b6f
 
 **Quick usage reference:** [Usage Documentation](docs/testing/QUICK_REFERENCE.md)
 
@@ -399,7 +349,6 @@ See the [security documentation](docs/security/) for:
 
 ---
 
-<<<<<<< HEAD
 ## 🖥️ Team Client
 
 C2R2 includes a graphical Team Client for operators to connect to the C2 server remotely via SSH-tunneled API, similar to Havoc's Team Client architecture.
@@ -444,9 +393,6 @@ For detailed instructions, see the [Team Client README](team-client/README.md).
 ---
 
 ## 📦 Modules
-=======
-## Modules
->>>>>>> c91d9a7f4ae0e377b6e588ce3dd50af442df4b6f
 
 ### Stealer Module
 

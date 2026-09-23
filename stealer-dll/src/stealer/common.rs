@@ -46,14 +46,10 @@ pub fn base64_decode(input: &str) -> Result<Vec<u8>, ()> {
     const CHARS: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
 
     let mut result = Vec::new();
-<<<<<<< HEAD
     let input_bytes: Vec<u8> = input
         .bytes()
         .filter(|&b| b != b'=' && !b.is_ascii_whitespace())
         .collect();
-=======
-    let input_bytes: Vec<u8> = input.bytes().filter(|&b| b != b'=' && !b.is_ascii_whitespace()).collect();
->>>>>>> c91d9a7f4ae0e377b6e588ce3dd50af442df4b6f
 
     for chunk in input_bytes.chunks(4) {
         let mut buf = [0u8; 4];

@@ -168,20 +168,12 @@ fn parse_firefox_logins(
                         let username = base64_decode(&user_b64)
                             .ok()
                             .and_then(|bytes| String::from_utf8(bytes).ok())
-<<<<<<< HEAD
                             .unwrap_or_else(|| user_b64.clone()); // Si falla decode, usar raw
-=======
-                            .unwrap_or_else(|| user_b64.clone());  // Si falla decode, usar raw
->>>>>>> c91d9a7f4ae0e377b6e588ce3dd50af442df4b6f
 
                         let password = base64_decode(&pass_b64)
                             .ok()
                             .and_then(|bytes| String::from_utf8(bytes).ok())
-<<<<<<< HEAD
                             .unwrap_or_else(|| pass_b64.clone()); // Si falla decode, usar raw
-=======
-                            .unwrap_or_else(|| pass_b64.clone());  // Si falla decode, usar raw
->>>>>>> c91d9a7f4ae0e377b6e588ce3dd50af442df4b6f
 
                         credentials.push(Credential {
                             browser: "Firefox".to_string(),

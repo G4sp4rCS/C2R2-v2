@@ -39,12 +39,8 @@ pub fn encrypt_data_chacha(data: &[u8], key: &[u8; 32]) -> Result<Vec<u8>, Strin
     let nonce_bytes = generate_nonce();
     let nonce = Nonce::from_slice(&nonce_bytes);
 
-<<<<<<< HEAD
     let ciphertext = cipher
         .encrypt(nonce, data)
-=======
-    let ciphertext = cipher.encrypt(nonce, data)
->>>>>>> c91d9a7f4ae0e377b6e588ce3dd50af442df4b6f
         .map_err(|e| format!("ChaCha20 encryption failed: {:?}", e))?;
 
     // Prepend nonce to ciphertext

@@ -189,7 +189,6 @@ pub fn generate_agent(
         c2_server
     )?;
 
-<<<<<<< HEAD
     println!("✅ Configuración escrita en {}", config_file_path.display());
     println!("🌐 Servidor C2 configurado: {}", c2_server);
 
@@ -204,15 +203,6 @@ pub fn generate_agent(
         "-p",
         "agent",
     ];
-=======
-    println!(" Configuración escrita en {}", config_file_path);
-    println!(" Servidor C2 configurado: {}", c2_server);
-
-    // Compilar el agente con features apropiadas
-    println!(" Compilando agente para Windows...");
-
-    let mut cargo_args = vec!["build", "--release", "--target", "x86_64-pc-windows-gnu", "-p", "agent"];
->>>>>>> c91d9a7f4ae0e377b6e588ce3dd50af442df4b6f
 
     // Agregar flags de feature según el modo
     if production {
@@ -231,18 +221,9 @@ pub fn generate_agent(
         .output()?;
 
     if output.status.success() {
-<<<<<<< HEAD
         println!("✅ Compilación exitosa!");
         let exe_path = workspace_root.join("target/x86_64-pc-windows-gnu/release/agent.exe");
         println!("🏃 Ejecutable generado en {}", exe_path.display());
-=======
-        println!(" Compilación exitosa!");
-        let exe_path = format!(
-            "{}/target/x86_64-pc-windows-gnu/release/agent.exe",
-            workspace_root
-        );
-        println!(" Ejecutable generado en {}", exe_path);
->>>>>>> c91d9a7f4ae0e377b6e588ce3dd50af442df4b6f
 
         // Copiar ejecutable
         let dest_path = format!("{}.exe", output_name);
@@ -250,13 +231,8 @@ pub fn generate_agent(
             println!(" Ejecutable copiado como: {}", dest_path);
         } else {
             println!(
-<<<<<<< HEAD
                 "⚠️  No se pudo copiar el ejecutable, está en: {}",
                 exe_path.display()
-=======
-                "  No se pudo copiar el ejecutable, está en: {}",
-                exe_path
->>>>>>> c91d9a7f4ae0e377b6e588ce3dd50af442df4b6f
             );
         }
     } else {

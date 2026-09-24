@@ -6,6 +6,24 @@ use std::io::Write;
 use std::path::PathBuf;
 use std::process::Command;
 
+struct ConfigRestore {
+    path: PathBuf,
+    original: Option<Vec<u8>>,
+}
+
+impl Drop for ConfigRestore {
+    fn drop(&mut self) {
+        match &self.original {
+            Some(contents) => {
+                let _ = std::fs::write(&self.path, contents);
+            }
+            None => {
+                let _ = std::fs::remove_file(&self.path);
+            }
+        }
+    }
+}
+
 /// Checks if we're running in a development environment with source code available
 /// Returns Some((workspace_root, agent_path)) if source code is available, None otherwise
 fn find_workspace_with_source() -> Option<(PathBuf, PathBuf)> {
@@ -116,6 +134,22 @@ pub fn generate_agent(
 
     // Generar config.rs con marcador para binary patching
     let config_file_path = config_dir.join("config.rs");
+    let original_config = match std::fs::read(&config_file_path) {
+        Ok(contents) => Some(contents),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => None,
+        Err(error) => {
+            return Err(format!(
+                "No se pudo leer la configuración existente {}: {}",
+                config_file_path.display(),
+                error
+            )
+            .into())
+        }
+    };
+    let _config_restore = ConfigRestore {
+        path: config_file_path.clone(),
+        original: original_config,
+    };
     let mut config_file = File::create(&config_file_path)?;
 
     // Crear cadena con marcador + IP:PORT + padding nulo (total 96 bytes)
@@ -195,11 +229,13 @@ pub fn generate_agent(
     // Compilar el agente con features apropiadas
     println!("🔨 Compilando agente para Windows...");
 
+    let target = agent_target();
+    println!("🎯 Target del agente: {}", target);
     let mut cargo_args = vec![
         "build",
         "--release",
         "--target",
-        "x86_64-pc-windows-gnu",
+        target.as_str(),
         "-p",
         "agent",
     ];
@@ -215,32 +251,51 @@ pub fn generate_agent(
         // dev is default, no need to specify
     }
 
-    let output = Command::new("cargo")
+    let status = Command::new("cargo")
         .args(&cargo_args)
         .current_dir(&workspace_root)
-        .output()?;
+        .status()?;
 
-    if output.status.success() {
+    if status.success() {
         println!("✅ Compilación exitosa!");
-        let exe_path = workspace_root.join("target/x86_64-pc-windows-gnu/release/agent.exe");
+        let exe_path = workspace_root
+            .join("target")
+            .join(&target)
+            .join("release")
+            .join("agent.exe");
         println!("🏃 Ejecutable generado en {}", exe_path.display());
 
         // Copiar ejecutable
         let dest_path = format!("{}.exe", output_name);
-        if std::fs::copy(&exe_path, &dest_path).is_ok() {
-            println!("📦 Ejecutable copiado como: {}", dest_path);
-        } else {
-            println!(
-                "⚠️  No se pudo copiar el ejecutable, está en: {}",
-                exe_path.display()
-            );
+        if let Some(parent) = std::path::Path::new(&dest_path).parent() {
+            std::fs::create_dir_all(parent)?;
         }
+        std::fs::copy(&exe_path, &dest_path).map_err(|error| {
+            format!(
+                "No se pudo copiar {} a {}: {}",
+                exe_path.display(),
+                dest_path,
+                error
+            )
+        })?;
+        println!("📦 Ejecutable copiado como: {}", dest_path);
     } else {
-        println!("❌ Error durante la compilación:");
-        println!("STDERR: {}", String::from_utf8_lossy(&output.stderr));
-        println!("STDOUT: {}", String::from_utf8_lossy(&output.stdout));
-        return Err("Compilación fallida".into());
+        return Err(format!("Compilación fallida ({})", status).into());
     }
 
     Ok(())
+}
+
+fn agent_target() -> String {
+    if let Ok(target) = std::env::var("C2R2_AGENT_TARGET") {
+        if !target.trim().is_empty() {
+            return target;
+        }
+    }
+
+    if cfg!(target_os = "windows") {
+        "x86_64-pc-windows-msvc".to_string()
+    } else {
+        "x86_64-pc-windows-gnu".to_string()
+    }
 }

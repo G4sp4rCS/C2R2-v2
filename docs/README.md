@@ -41,7 +41,8 @@ The authors and contributors assume no liability for misuse or damages caused by
 | [Evasion Techniques](features/EVASION.md) | Anti-sandbox, anti-VM, and AV bypass |
 | [Persistence Mechanisms](features/PERSISTENCE.md) | Registry, scheduled tasks, WMI, startup |
 | [Credential Stealer](features/STEALER.md) | Browser, Discord, Telegram, wallet harvesting |
-| [Private Golsta Backend](features/GOLSTA_BACKEND_INTEGRATION.md) | Backend contract, deployment, validation, and rollback |
+| [Native Golsta Collector](features/GOLSTA_BACKEND_INTEGRATION.md) | GLST contract, deployment, validation, and rollback |
+| [Native Golsta Collector](features/GOLSTA_C2R2_NATIVE_INTEGRATION.md) | In-process GLST receiver, storage, and API integration |
 | [Ransomware Module](features/RANSOMWARE.md) | File encryption capabilities |
 | [Dropper System](features/DROPPER.md) | Social engineering and payload delivery |
 | [Privilege Escalation](features/ELEVATE.md) | UAC bypass and elevation techniques |

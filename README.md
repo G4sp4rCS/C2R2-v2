@@ -308,16 +308,18 @@ C2R2 [1]> /harvest
 
 `/harvest` expects a separately built `c2r2-server/modules/golsta.exe`. The
 server uploads that PE over the existing TLS session, the agent runs it once,
-waits for completion, and removes it. Golsta delivers its results to its
-private collector; C2R2 then exposes collector health, result metadata, and
-archive downloads through `/api/golsta/*`. The interactive server records the
-archive inventory before dispatch and prints every new result in the CLI as
-soon as the collector publishes it.
+waits for completion, and removes it. C2R2 now runs the native Golsta TLS
+collector in the same process, decrypts the `GLST` packet, validates the ZIP,
+stores it atomically, and exposes health, metadata, and archive downloads
+through `/api/golsta/*`. The interactive server records the archive inventory
+before dispatch and prints every new result in the CLI as soon as the
+collector receives it.
 
-Both backends must receive the same `GOLSTA_INTEGRATION_TOKEN`. The Golsta
-panel should remain bound to loopback and C2R2 can point to it with
-`--golsta-url` (default: `http://127.0.0.1:18080`). Golsta's source tree is not
-a C2R2 dependency and is never copied into this repository.
+The native collector listens on `0.0.0.0:9090` by default and stores archives
+under `golsta-loot/`. Use `--golsta-bind`, `--golsta-port`, `--golsta-loot`, and
+`--golsta-secret` when the unchanged Golsta client was built with different
+values. No `GOLSTA_INTEGRATION_TOKEN`, `--golsta-url`, or separate backend is
+required.
 
 #### Internet Deployment (Port Forwarding)
 

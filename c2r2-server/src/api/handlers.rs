@@ -9,7 +9,6 @@ use axum::{
     response::Response,
     Json,
 };
-use futures::TryStreamExt;
 use std::sync::Arc;
 
 use super::models::*;
@@ -353,15 +352,7 @@ pub async fn golsta_status(
         .golsta
         .as_ref()
         .ok_or(StatusCode::SERVICE_UNAVAILABLE)?;
-    client
-        .health()
-        .await
-        .map(ApiResponse::success)
-        .map(Json)
-        .map_err(|error| {
-            tracing::warn!("Golsta status error: {}", error);
-            StatusCode::BAD_GATEWAY
-        })
+    Ok(Json(ApiResponse::success(client.health())))
 }
 
 pub async fn golsta_harvests(
@@ -373,15 +364,7 @@ pub async fn golsta_harvests(
         .golsta
         .as_ref()
         .ok_or(StatusCode::SERVICE_UNAVAILABLE)?;
-    client
-        .harvests()
-        .await
-        .map(ApiResponse::success)
-        .map(Json)
-        .map_err(|error| {
-            tracing::warn!("Golsta harvest index error: {}", error);
-            StatusCode::BAD_GATEWAY
-        })
+    Ok(Json(ApiResponse::success(client.harvests())))
 }
 
 pub async fn download_golsta_archive(
@@ -394,13 +377,15 @@ pub async fn download_golsta_archive(
         .golsta
         .as_ref()
         .ok_or(StatusCode::SERVICE_UNAVAILABLE)?;
-    let upstream = client.archive(&id).await.map_err(|error| {
-        tracing::warn!("Golsta archive error: {}", error);
-        StatusCode::BAD_GATEWAY
-    })?;
-    let content_length = upstream.content_length();
-    let stream = upstream.bytes_stream().map_err(std::io::Error::other);
-    let mut response = Response::new(Body::from_stream(stream));
+    let archive = client
+        .archive(&id)
+        .map_err(|error| {
+            tracing::warn!("Golsta archive error: {}", error);
+            StatusCode::BAD_GATEWAY
+        })?
+        .ok_or(StatusCode::NOT_FOUND)?;
+    let content_length = archive.len();
+    let mut response = Response::new(Body::from(archive));
     response.headers_mut().insert(
         header::CONTENT_TYPE,
         HeaderValue::from_static("application/zip"),
@@ -417,10 +402,8 @@ pub async fn download_golsta_archive(
         header::X_CONTENT_TYPE_OPTIONS,
         HeaderValue::from_static("nosniff"),
     );
-    if let Some(length) = content_length {
-        if let Ok(value) = HeaderValue::from_str(&length.to_string()) {
-            response.headers_mut().insert(header::CONTENT_LENGTH, value);
-        }
+    if let Ok(value) = HeaderValue::from_str(&content_length.to_string()) {
+        response.headers_mut().insert(header::CONTENT_LENGTH, value);
     }
     Ok(response)
 }

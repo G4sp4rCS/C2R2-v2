@@ -2,10 +2,10 @@
 
 > **v2.2 integration note:** `/harvest` now deploys the externally built
 > `c2r2-server/modules/golsta.exe`, waits for it to finish, and removes it from
-> the agent. Golsta reports to its private collector; C2R2 exposes the
-> collector's health, result index, and archive downloads through its own
-> authenticated `/api/golsta/*` routes. The legacy DLL flow below is retained
-> as historical implementation documentation.
+> the agent. C2R2 runs the native Golsta collector in-process, validates and
+> stores the encrypted archive, and exposes the result index and downloads
+> through authenticated `/api/golsta/*` routes. The legacy DLL flow below is
+> retained as historical implementation documentation.
 
 This document describes the stealer module capabilities for harvesting credentials and sensitive data from compromised systems.
 

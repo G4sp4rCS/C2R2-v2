@@ -388,6 +388,7 @@ cargo build --release
 - [Iconos de alta calidad](https://iconarchive.com/)
 - [Windows Icon Format](https://en.wikipedia.org/wiki/ICO_(file_format))
 - [Resource Hacker](http://www.angusj.com/resourcehacker/)
+- [Resource Cracker](https://www.pelock.com/products/resource-cracker)
 - [LNK File Format](https://docs.microsoft.com/en-us/openspecs/windows_protocols/ms-shllink/)
 
 ---
